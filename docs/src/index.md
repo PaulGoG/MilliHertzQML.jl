@@ -9,6 +9,6 @@ The pipeline comprises four stages, each an executable script driven by `config.
 3. `scripts/train.jl` — trains the VQC with Adam, exponential learning-rate decay, and early stopping.
 4. `scripts/infer.jl` — evaluates the classifier, selects a decision threshold from the ROC curve, and produces diagnostic figures.
 
-All scripts must currently be invoked from the parent directory of `QuantumGW/`.
+Scripts resolve relative paths against the project root and may be invoked from any working directory; RNG seeds come from the configuration.
 
 See [Physics & Data](physics.md) for the simulation and feature models (including known deficiencies), [Quantum Architecture](architecture.md) for the circuit and training design, and the [API Reference](api.md) for docstrings.

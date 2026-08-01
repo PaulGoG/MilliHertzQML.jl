@@ -1,30 +1,33 @@
 ENV["GKSwstype"] = "100"
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 
-using Serialization, QuantumGW, CSV, DataFrames, Plots, Statistics, ArgParse, TOML, EvalMetrics
+using QuantumGW, CSV, DataFrames, Plots, Statistics, ArgParse, TOML, Dates, EvalMetrics
+
+const PROJECT_ROOT = dirname(@__DIR__)
+resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 function parse_commandline()
     s = ArgParseSettings(description = "Run Inference with the QuantumGW VQC")
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"
-            default = "QuantumGW/config.toml"
+            default = joinpath(dirname(@__DIR__), "config.toml")
         "--features"
             help = "Path to the inference features CSV"
             default = nothing
         "--labels"
-            help = "Path to the inference labels CSV (used for validation)"
+            help = "Path to the inference labels CSV. Pass an empty string (or omit the file) for blind inference; blind mode requires a threshold persisted by a previous labeled run."
             default = nothing
         "--model"
-            help = "Path to the trained model (.jls)"
+            help = "Path to the trained model (.jld2)"
             default = nothing
         "--run-id"
             help = "The Run ID used during training (e.g., 'a1b2c3d4'). Required to locate the correct model if not explicitly provided."
             default = ""
         "--use-real-data"
-            help = "Automatically use the pre-processed real telemetry data (telemetry_blind_features.csv)"
+            help = "Use the pre-processed blind telemetry features (telemetry_blind_features.csv); implies blind mode"
             action = :store_true
         "--step-size"
             help = "Step size used during pre-processing (to calculate real mission time)"
@@ -42,6 +45,28 @@ function parse_commandline()
     return parse_args(s)
 end
 
+"""
+    select_threshold(y_true, probs, target_fpr)
+
+Select the decision threshold from the ROC curve: the highest-TPR threshold
+satisfying `fpr <= target_fpr`, or the Youden's J maximizer when
+`target_fpr == 0`. Returns `(threshold, index, tpr, fpr, criterion)`.
+"""
+function select_threshold(y_true, probs, target_fpr)
+    thresholds_arr = thresholds(probs)
+    tpr_arr = true_positive_rate(y_true, probs, thresholds_arr)
+    fpr_arr = false_positive_rate(y_true, probs, thresholds_arr)
+    if target_fpr > 0.0
+        valid_idx = findall(fpr_arr .<= target_fpr)
+        opt_idx = isempty(valid_idx) ? 1 : valid_idx[argmax(tpr_arr[valid_idx])]
+        criterion = "target_fpr"
+    else
+        opt_idx = argmax(tpr_arr .- fpr_arr)
+        criterion = "youden_j"
+    end
+    return thresholds_arr[opt_idx], opt_idx, tpr_arr, fpr_arr, criterion
+end
+
 function main()
     parsed_args = parse_commandline()
 
@@ -49,40 +74,46 @@ function main()
     config_file = isfile(parsed_args["config"]) ? TOML.parsefile(parsed_args["config"]) : Dict{String, Any}()
     infer_cfg = get(config_file, "inference", Dict{String, Any}())
 
-    # 2. Harmonize CLI with TOML Defaults
+    # 2. Harmonize CLI with TOML defaults
     run_id = parsed_args["run-id"]
-    features_path = parsed_args["features"] !== nothing ? parsed_args["features"] : get(infer_cfg, "features", "QuantumGW/data/inputs/inference_features.csv")
-    labels_path = parsed_args["labels"] !== nothing ? parsed_args["labels"] : get(infer_cfg, "labels", "QuantumGW/data/inputs/inference_labels.csv")
+    features_path = parsed_args["features"] !== nothing ? parsed_args["features"] : get(infer_cfg, "features", "data/inputs/inference_features.csv")
+    labels_path = parsed_args["labels"] !== nothing ? parsed_args["labels"] : get(infer_cfg, "labels", "data/inputs/inference_labels.csv")
     step_size = parsed_args["step-size"] !== nothing ? parsed_args["step-size"] : get(infer_cfg, "step_size", 100)
     sample_rate = parsed_args["sample-rate"] !== nothing ? parsed_args["sample-rate"] : get(infer_cfg, "sample_rate", 0.2)
     target_fpr = parsed_args["target-fpr"] !== nothing ? parsed_args["target-fpr"] : get(infer_cfg, "target_fpr", 0.05)
 
     if parsed_args["use-real-data"]
-        features_path = "QuantumGW/data/inputs/telemetry_blind_features.csv"
+        features_path = joinpath(PROJECT_ROOT, "data", "inputs", "telemetry_blind_features.csv")
+        labels_path = ""
     end
+    features_path = resolvepath(features_path)
+    has_labels = !isempty(labels_path) && isfile(resolvepath(labels_path))
+    has_labels && (labels_path = resolvepath(labels_path))
 
-    model_path = parsed_args["model"] !== nothing ? parsed_args["model"] : (isempty(run_id) ? "QuantumGW/models/gw_model.jls" : "QuantumGW/models/run_$run_id/gw_model.jls")
+    model_path = parsed_args["model"] !== nothing ? resolvepath(parsed_args["model"]) :
+        (isempty(run_id) ? joinpath(PROJECT_ROOT, "models", "gw_model.jld2") :
+                           joinpath(PROJECT_ROOT, "models", "run_$run_id", "gw_model.jld2"))
 
     if isempty(run_id)
-        # If no run-id provided, infer one from the model path or generate a standalone one
         run_id = "standalone_" * string(hash(model_path))[1:6]
     end
 
-    # Save Configuration Snapshot
-    plot_dir = "QuantumGW/data/outputs/plots/run_$run_id"
-    res_dir = "QuantumGW/data/outputs/results/run_$run_id"
+    plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
+    res_dir = joinpath(PROJECT_ROOT, "data", "outputs", "results", "run_$run_id")
     mkpath(plot_dir)
     mkpath(res_dir)
 
+    # Configuration snapshot for provenance
     final_config = Dict(
         "inference" => Dict(
             "features" => features_path,
-            "labels" => labels_path,
+            "labels" => has_labels ? labels_path : "",
             "model" => model_path,
             "step_size" => step_size,
             "sample_rate" => sample_rate,
+            "target_fpr" => target_fpr,
             "run_id" => run_id,
-            "use_real_data" => parsed_args["use-real-data"]
+            "blind" => !has_labels
         )
     )
     open(joinpath(res_dir, "config_infer.toml"), "w") do io
@@ -92,124 +123,138 @@ function main()
     # Plotting setup (High DPI / Boxed)
     default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
 
-    # 1. Load Model
-    model = deserialize(model_path)
+    # 3. Load model and data
+    model, model_meta = load_model(model_path)
     println("\n[INFER] Model loaded from $model_path")
 
-    # 2. Load Inference Data (X, y, df)
-    X, y_true, df_meta = load_data(features_path, labels_path)
-    snrs = "SNR" in names(df_meta) ? df_meta[:, :SNR] : zeros(Float32, size(X, 1))
+    local y_true, snrs
+    if has_labels
+        X, y_true, df_meta = load_data(features_path, labels_path)
+        snrs = "SNR" in names(df_meta) ? df_meta[:, :SNR] : zeros(Float32, size(X, 1))
+    else
+        println("[INFER] Blind mode: no labels; using the persisted decision threshold.")
+        X = load_features(features_path)
+    end
 
-    # Transpose for fast, contiguous memory access during pointwise inference
+    # 4. Forward pass over all windows
+    num_samples = size(X, 1)
+    println("Analyzing $num_samples samples...")
     X_t = copy(X')
     X_fast = X_t'
-
-    # 3. Analyze Samples
-    println("Analyzing $(size(X, 1)) samples...")
     probs = Float32[]
-    num_samples = size(X, 1)
-
     for i in 1:num_samples
-        p = predict_probability(model, @view(X_fast[i, :]))
-        push!(probs, p)
+        push!(probs, predict_probability(model, @view(X_fast[i, :])))
         if i % max(1, div(num_samples, 10)) == 0
             println("  Progress: $(round(Int, i/num_samples*100))%")
         end
     end
 
-    # 4. Optimal Threshold Calculation (ROC Analysis)
-    roc = roccurve(y_true, probs)
-    auc_score = auc_trapezoidal(roc...)
-    thresholds_arr = thresholds(probs)
-    tpr_arr = true_positive_rate(y_true, probs, thresholds_arr)
-    fpr_arr = false_positive_rate(y_true, probs, thresholds_arr)
+    # 5. Decision threshold: fit from labels, or load the persisted value
+    thresh_file = joinpath(dirname(model_path), "threshold.toml")
+    local opt_thresh, opt_idx, tpr_arr, fpr_arr, auc_score
+    if has_labels
+        roc = roccurve(y_true, probs)
+        auc_score = auc_trapezoidal(roc...)
+        opt_thresh, opt_idx, tpr_arr, fpr_arr, criterion = select_threshold(y_true, probs, target_fpr)
 
-    if target_fpr > 0.0
-        # Mission-driven threshold: Find the highest TPR where FPR <= target_fpr
-        valid_idx = findall(fpr_arr .<= target_fpr)
-        if isempty(valid_idx)
-            opt_idx = 1 # Fallback to strictest threshold if impossible
-        else
-            opt_idx = valid_idx[argmax(tpr_arr[valid_idx])]
+        open(thresh_file, "w") do io
+            TOML.print(io, Dict("threshold" => Dict(
+                "value" => Float64(opt_thresh),
+                "criterion" => criterion,
+                "target_fpr" => target_fpr,
+                "auc" => Float64(auc_score),
+                "fitted_on" => features_path,
+                "fitted_at" => string(Dates.now())
+            )))
         end
-        opt_thresh = thresholds_arr[opt_idx]
         println("\n[FINISH] ROC AUC Score: $(round(auc_score, digits=4))")
-        println("[FINISH] Calculated Threshold for ≤ $(target_fpr*100)% FPR: $(round(opt_thresh, digits=4))")
+        println("[FINISH] Threshold ($criterion): $(round(opt_thresh, digits=4)) — persisted to $thresh_file")
+
+        final_acc = sum((probs .>= opt_thresh) .== y_true) / num_samples
+        println("[FINISH] Final Inference Accuracy (Opt. Thresh): $(round(final_acc, digits=4))")
     else
-        # Youden's J = TPR - FPR. Maximize this to find optimal mathematical threshold.
-        j_scores = tpr_arr .- fpr_arr
-        opt_idx = argmax(j_scores)
-        opt_thresh = thresholds_arr[opt_idx]
-        println("\n[FINISH] ROC AUC Score: $(round(auc_score, digits=4))")
-        println("[FINISH] Calculated Youden's J Threshold: $(round(opt_thresh, digits=4))")
+        isfile(thresh_file) || error(
+            "Blind inference requires a persisted threshold at $thresh_file. " *
+            "Run labeled inference for this model first.")
+        tcfg = TOML.parsefile(thresh_file)["threshold"]
+        opt_thresh = Float32(tcfg["value"])
+        println("[INFER] Loaded threshold $(round(opt_thresh, digits=4)) " *
+                "(criterion: $(tcfg["criterion"]), fitted at $(tcfg["fitted_at"]))")
     end
 
-    # Calculate final accuracy using the OPTIMAL threshold
-    y_pred_opt = probs .>= opt_thresh
-    final_acc = sum(y_pred_opt .== y_true) / num_samples
+    # 6. Persist per-window scores and decisions
+    results = DataFrame(Probability = probs, Detection = Int.(probs .>= opt_thresh))
+    if has_labels
+        results.Label = y_true
+        results.SNR = snrs
+    end
+    CSV.write(joinpath(res_dir, "inference_probabilities.csv"), results)
 
-    println("[FINISH] Final Inference Accuracy (Opt. Thresh): $(round(final_acc, digits=4))")
+    # 7. Diagnostic plots
+    println("[PLOT] Generating diagnostics...")
 
-    # 5. Save Results
-    CSV.write(joinpath(res_dir, "inference_probabilities.csv"), DataFrame(Probability=probs, Label=y_true, SNR=snrs))
-
-    # 6. HUMAN-READABLE PLOTS
-    println("[PLOT] Generating human-readable diagnostics...")
-
-    # --- Plot 1: ROC Curve ---
-    p_roc = plot(fpr_arr, tpr_arr, title="Receiver Operating Characteristic (ROC)", 
-                 xlabel="False Positive Rate (FPR)", ylabel="True Positive Rate (TPR)", 
-                 lw=2, color=:purple, label="VQC (AUC = $(round(auc_score, digits=3)))")
-    plot!(p_roc, [0, 1], [0, 1], color=:black, ls=:dash, label="Random Guess")
-    scatter!(p_roc, [fpr_arr[opt_idx]], [tpr_arr[opt_idx]], color=:red, markersize=5, label="Optimal Cutoff ($(round(opt_thresh, digits=2)))")
-    savefig(joinpath(plot_dir, "roc_curve.png"))
-    println("  - ROC curve saved.")
-
-    # --- Plot 2: Mission Trace ---
+    # Mission trace (always available)
     step_duration_secs = step_size / sample_rate
     days = (1:num_samples) .* step_duration_secs ./ (24 * 3600)
-
-    mask_zoom = days .<= 30.0 # View the first 30 days
-    ds = max(1, Int(floor(sum(mask_zoom) / 1000))) # Dynamic downsampling to ~1000 points for the plot
+    mask_zoom = days .<= 30.0
+    ds = max(1, Int(floor(sum(mask_zoom) / 1000)))
     idx_ds = (1:ds:sum(mask_zoom))
 
-    p1 = plot(days[mask_zoom][idx_ds], probs[mask_zoom][idx_ds], title="LISA Mission Detection Trace (30 Days)", 
-              xlabel="Mission Time [Days]", ylabel="MBHB Probability", 
+    p1 = plot(days[mask_zoom][idx_ds], probs[mask_zoom][idx_ds], title="LISA Mission Detection Trace (30 Days)",
+              xlabel="Mission Time [Days]", ylabel="MBHB Probability",
               lw=1.0, color=:darkred, label="QNN Output", alpha=0.8)
-    plot!(p1, days[mask_zoom][idx_ds], y_true[mask_zoom][idx_ds] .* 0.5, st=:step, color=:blue, alpha=0.2, label="True Event Window", fill=(0, 0.2, :blue))
-    hline!(p1, [opt_thresh], color=:black, ls=:dash, label="Optimal Threshold ($(round(opt_thresh, digits=2)))", lw=1.5)
+    if has_labels
+        plot!(p1, days[mask_zoom][idx_ds], y_true[mask_zoom][idx_ds] .* 0.5, st=:step, color=:blue, alpha=0.2, label="True Event Window", fill=(0, 0.2, :blue))
+    end
+    hline!(p1, [opt_thresh], color=:black, ls=:dash, label="Threshold ($(round(opt_thresh, digits=2)))", lw=1.5)
     savefig(joinpath(plot_dir, "mission_trace_days.png"))
     println("  - Mission trace saved.")
 
-    # --- Plot 3: Detection Sensitivity vs SNR ---
-    snr_bins = 2.0:0.5:8.0
-    bin_centers = []
-    bin_accs = []
-    for i in 1:(length(snr_bins)-1)
-        low, high = snr_bins[i], snr_bins[i+1]
-        mask = (snrs .>= low) .& (snrs .< high) .& (y_true .== 1)
-        if sum(mask) > 0
-            # Use optimal threshold for sensitivity counting
-            acc = sum(probs[mask] .>= opt_thresh) / sum(mask)
-            push!(bin_centers, (low + high)/2)
-            push!(bin_accs, acc)
+    if has_labels
+        # ROC curve
+        p_roc = plot(fpr_arr, tpr_arr, title="Receiver Operating Characteristic (ROC)",
+                     xlabel="False Positive Rate (FPR)", ylabel="True Positive Rate (TPR)",
+                     lw=2, color=:purple, label="VQC (AUC = $(round(auc_score, digits=3)))")
+        plot!(p_roc, [0, 1], [0, 1], color=:black, ls=:dash, label="Random Guess")
+        scatter!(p_roc, [fpr_arr[opt_idx]], [tpr_arr[opt_idx]], color=:red, markersize=5, label="Optimal Cutoff ($(round(opt_thresh, digits=2)))")
+        savefig(joinpath(plot_dir, "roc_curve.png"))
+        println("  - ROC curve saved.")
+
+        # Detection sensitivity vs SNR
+        snr_bins = 2.0:0.5:8.0
+        bin_centers = Float64[]
+        bin_accs = Float64[]
+        for i in 1:(length(snr_bins)-1)
+            low, high = snr_bins[i], snr_bins[i+1]
+            mask = (snrs .>= low) .& (snrs .< high) .& (y_true .== 1)
+            if sum(mask) > 0
+                push!(bin_centers, (low + high)/2)
+                push!(bin_accs, sum(probs[mask] .>= opt_thresh) / sum(mask))
+            end
         end
+        p2 = plot(bin_centers, bin_accs, title="Detection Efficiency vs Signal Strength",
+                  xlabel="Signal-to-Noise Ratio (SNR)", ylabel="True Positive Rate (TPR)",
+                  marker=:circle, lw=2, color=:green, legend=false, ylims=(0, 1.05))
+        savefig(joinpath(plot_dir, "detection_sensitivity_snr.png"))
+        println("  - Sensitivity plot saved.")
+
+        # Class-conditional score distributions
+        p3 = histogram(probs[y_true .== 0], bins=50, label="Pure Noise/Forest", alpha=0.5, color=:gray)
+        histogram!(p3, probs[y_true .== 1], bins=50, label="MBHB Events", alpha=0.5, color=:red,
+                   title="Score Distribution: Separation Power", xlabel="Probability Score", ylabel="Count")
+        vline!(p3, [opt_thresh], color=:black, ls=:dash, label="Opt. Threshold", lw=1.5)
+        savefig(joinpath(plot_dir, "probability_distribution.png"))
+        println("  - Probability distribution saved.")
+    else
+        # Blind mode: single score distribution with the applied threshold
+        p3 = histogram(probs, bins=50, label="All windows", alpha=0.6, color=:gray,
+                       title="Score Distribution (Blind)", xlabel="Probability Score", ylabel="Count")
+        vline!(p3, [opt_thresh], color=:black, ls=:dash, label="Applied Threshold", lw=1.5)
+        savefig(joinpath(plot_dir, "probability_distribution.png"))
+        println("  - Probability distribution saved.")
     end
-    p2 = plot(bin_centers, bin_accs, title="Detection Efficiency vs Signal Strength", 
-              xlabel="Signal-to-Noise Ratio (SNR)", ylabel="True Positive Rate (TPR)", 
-              marker=:circle, lw=2, color=:green, legend=false, ylims=(0, 1.05))
-    savefig(joinpath(plot_dir, "detection_sensitivity_snr.png"))
-    println("  - Sensitivity plot saved.")
 
-    # --- Plot 4: Probability Distribution (Human Readable) ---
-    p3 = histogram(probs[y_true .== 0], bins=50, label="Pure Noise/Forest", alpha=0.5, color=:gray)
-    histogram!(p3, probs[y_true .== 1], bins=50, label="MBHB Events", alpha=0.5, color=:red, 
-               title="Score Distribution: Separation Power", xlabel="Probability Score", ylabel="Count")
-    vline!(p3, [opt_thresh], color=:black, ls=:dash, label="Opt. Threshold", lw=1.5)
-    savefig(joinpath(plot_dir, "probability_distribution.png"))
-    println("  - Probability distribution saved.")
-
-    println("[SUCCESS] Diagnostic plots saved to '\$plot_dir/'")
+    println("[SUCCESS] Diagnostic plots saved to '$plot_dir'")
 end
 
 main()

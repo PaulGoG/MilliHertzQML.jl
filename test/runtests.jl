@@ -1,6 +1,6 @@
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 using Test
 using QuantumGW
 using Yao
@@ -73,24 +73,46 @@ Random.seed!(1234)
 
     # 5. Data Loading & Normalization
     @testset "Data Normalization" begin
-        # Create a dummy CSV
-        mkpath("QuantumGW/data/tests")
-        feat_path = "QuantumGW/data/tests/test_feats.csv"
-        lab_path = "QuantumGW/data/tests/test_labs.csv"
+        mktempdir() do dir
+            feat_path = joinpath(dir, "test_feats.csv")
+            lab_path = joinpath(dir, "test_labs.csv")
 
-        df_f = DataFrame(PLow=[0.0, 50.0], PHigh=[0.0, 50.0], Ent=[0.0, 10.0], Std=[0.0, 7.0])
-        df_l = DataFrame(Label=[0, 1])
+            df_f = DataFrame(PLow=[0.0, 50.0], PHigh=[0.0, 50.0], Ent=[0.0, 10.0], Std=[0.0, 7.0])
+            df_l = DataFrame(Label=[0, 1])
 
-        CSV.write(feat_path, df_f)
-        CSV.write(lab_path, df_l)
+            CSV.write(feat_path, df_f)
+            CSV.write(lab_path, df_l)
 
-        X, y = load_data(feat_path, lab_path)
+            X, y = load_data(feat_path, lab_path)
 
-        # Check scaling to [0, 2π]
-        @test all(X .>= 0.0)
-        @test all(X .<= 2π + 1e-5)
-        @test isapprox(X[2, 1], 2π, atol=1e-5) # 50.0 should map to 2π
+            # Check scaling to [0, 2π]
+            @test all(X .>= 0.0)
+            @test all(X .<= 2π + 1e-5)
+            @test isapprox(X[2, 1], 2π, atol=1e-5) # 50.0 should map to 2π
 
-        rm(feat_path); rm(lab_path); rm("QuantumGW/data/tests", recursive=true)
+            # Label-free path must produce the identical feature matrix
+            @test load_features(feat_path) == X
+        end
+    end
+
+    # 6. Model Persistence (JLD2 round trip)
+    @testset "Model Persistence" begin
+        mktempdir() do dir
+            model = VariationalQuantumClassifier(4, 3)
+            x = rand(Float32, 4)
+            p_ref = predict_probability(model, x)
+
+            path = joinpath(dir, "model.jld2")
+            meta_in = Dict("run_id" => "test", "seed" => 1234)
+            save_model(path, model; metadata = meta_in)
+
+            loaded, meta_out = load_model(path)
+            @test loaded.n_qubits == model.n_qubits
+            @test loaded.n_layers == model.n_layers
+            @test loaded.params == model.params
+            @test meta_out["run_id"] == "test"
+            @test meta_out["seed"] == 1234
+            @test isapprox(predict_probability(loaded, x), p_ref; atol = 1e-6)
+        end
     end
 end

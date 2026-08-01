@@ -1,9 +1,12 @@
 ENV["GKSwstype"] = "100"
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 
 using Random, Statistics, FFTW, Plots, ArgParse, HDF5, CSV, DataFrames, TOML, UUIDs
+
+const PROJECT_ROOT = dirname(@__DIR__)
+resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 # Publication-ready plotting setup
 default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
@@ -13,7 +16,7 @@ function parse_commandline()
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"
-            default = "QuantumGW/config.toml"
+            default = joinpath(dirname(@__DIR__), "config.toml")
         "--days"
             help = "Number of days of continuous telemetry to simulate"
             arg_type = Float64
@@ -112,8 +115,10 @@ function main()
     n_mbhb = parsed_args["n-mbhb"] !== nothing ? parsed_args["n-mbhb"] : get(gen_cfg, "n_mbhb", 5)
     n_gbs = parsed_args["n-gbs"] !== nothing ? parsed_args["n-gbs"] : get(gen_cfg, "n_gbs", 50)
     n_emris = parsed_args["n-emris"] !== nothing ? parsed_args["n-emris"] : get(gen_cfg, "n_emris", 5)
-    out_file = parsed_args["output"] !== nothing ? parsed_args["output"] : get(gen_cfg, "output", "QuantumGW/data/inputs/simulated_telemetry.h5")
+    out_file = resolvepath(parsed_args["output"] !== nothing ? parsed_args["output"] : get(gen_cfg, "output", "data/inputs/simulated_telemetry.h5"))
     run_id = isempty(parsed_args["run-id"]) ? string(uuid4())[1:8] : parsed_args["run-id"]
+    seed = get(gen_cfg, "seed", 42)
+    Random.seed!(seed)
 
     n_total = Int(round(days * 24 * 3600 * fs))
     t_arr = range(0, days * 24 * 3600, length=n_total)
@@ -199,11 +204,20 @@ function main()
     CSV.write(label_file, DataFrame(Label=labels, SNR=snrs))
     println("  - Labels saved to: $label_file")
 
+    # Configuration snapshot for provenance (records the seed actually used)
+    snapshot = Dict("generation" => Dict(
+        "days" => days, "fs" => fs, "n_mbhb" => n_mbhb, "n_gbs" => n_gbs,
+        "n_emris" => n_emris, "output" => out_file, "seed" => seed,
+        "run_id" => run_id))
+    open(replace(out_file, ".h5" => "_generation.toml"), "w") do io
+        TOML.print(io, snapshot)
+    end
+
     println("Generating trace plot...")
     ds = max(1, Int(round(n_total / 5000)))
     t_days = t_arr ./ (24*3600)
 
-    plot_dir = "QuantumGW/data/outputs/plots/run_$run_id"
+    plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
     mkpath(plot_dir)
 
     p = plot(t_days[1:ds:end], strain[1:ds:end], title="Simulated Continuous Telemetry",

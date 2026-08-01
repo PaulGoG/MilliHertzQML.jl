@@ -107,10 +107,9 @@ Executes a single optimization step (forward + backward pass) using Zygote.
 Updates the `model.params` in-place.
 """
 function train_step!(model::VariationalQuantumClassifier, opt_state, X_batch, y_batch)
-    grads = Zygote.gradient(model) do m
+    val, grads = Zygote.withgradient(model) do m
         loss_function(m, X_batch, y_batch)
     end
-    val = loss_function(model, X_batch, y_batch)
     Flux.update!(opt_state, model.params, grads[1].params)
     return val
 end

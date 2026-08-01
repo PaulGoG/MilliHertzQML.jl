@@ -1,6 +1,6 @@
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 using BenchmarkTools
 using QuantumGW
 using Yao

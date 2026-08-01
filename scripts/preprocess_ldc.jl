@@ -1,16 +1,18 @@
-ENV["GKSwstype"] = "100"
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 
 using HDF5, CSV, DataFrames, Statistics, QuantumGW, ArgParse, TOML
+
+const PROJECT_ROOT = dirname(@__DIR__)
+resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 function parse_commandline()
     s = ArgParseSettings(description = "Pre-process raw HDF5 telemetry into QNN features")
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"
-            default = "QuantumGW/config.toml"
+            default = joinpath(dirname(@__DIR__), "config.toml")
         "--h5-file"
             help = "Path to the raw HDF5 telemetry file"
             default = nothing
@@ -44,7 +46,7 @@ function main()
     pre_cfg = get(config_file, "preprocessing", Dict{String, Any}())
 
     # 2. Harmonize CLI with TOML Defaults
-    h5_path = parsed_args["h5-file"] !== nothing ? parsed_args["h5-file"] : get(pre_cfg, "h5_file", "QuantumGW/data/inputs/simulated_telemetry.h5")
+    h5_path = resolvepath(parsed_args["h5-file"] !== nothing ? parsed_args["h5-file"] : get(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"))
     window_size = parsed_args["window-size"] !== nothing ? parsed_args["window-size"] : get(pre_cfg, "window_size", 1000)
     step_size = parsed_args["step-size"] !== nothing ? parsed_args["step-size"] : get(pre_cfg, "step_size", 100)
     fs = parsed_args["sample-rate"] !== nothing ? parsed_args["sample-rate"] : get(pre_cfg, "sample_rate", 0.2)
@@ -83,12 +85,14 @@ function main()
     local raw_snrs
     if has_labels
         println("[*] Loading raw point-wise labels...")
-        label_df = CSV.read(parsed_args["label-file"], DataFrame)
+        label_df = CSV.read(resolvepath(parsed_args["label-file"]), DataFrame)
         raw_labels = label_df[:, :Label]
         raw_snrs = "SNR" in names(label_df) ? label_df[:, :SNR] : zeros(Float32, n_points)
     end
 
     # 4. Sliding Window Feature Extraction
+    n_points >= window_size || error(
+        "Telemetry too short: $n_points samples < window_size = $window_size.")
     n_windows = div(n_points - window_size, step_size) + 1
     println("[3/4] Extracting quantum features via sliding window (N = $n_windows)...")
 
@@ -121,7 +125,7 @@ function main()
 
     # 5. Save Results
     println("\n[4/4] Saving processed data to CSV...")
-    out_dir = "QuantumGW/data/inputs"
+    out_dir = joinpath(PROJECT_ROOT, "data", "inputs")
     mkpath(out_dir)
 
     prefix = parsed_args["output-prefix"] !== nothing ? parsed_args["output-prefix"] : output_prefix

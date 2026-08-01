@@ -1,10 +1,13 @@
 ENV["GKSwstype"] = "100"
 using Pkg
-Pkg.activate("QuantumGW", io=devnull)
-push!(LOAD_PATH, "QuantumGW/src")
+Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.instantiate(; io = devnull)
 
-using Random, QuantumGW, Flux, MLUtils, Statistics, Serialization, CSV, DataFrames, Plots, Dates
+using Random, QuantumGW, Flux, MLUtils, Statistics, CSV, DataFrames, Plots, Dates
 using UnicodePlots, Logging, LoggingExtras, Printf, ArgParse, UUIDs, TOML
+
+const PROJECT_ROOT = dirname(@__DIR__)
+resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 # Publication-ready plotting setup
 Plots.default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
@@ -14,7 +17,7 @@ function parse_commandline()
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"
-            default = "QuantumGW/config.toml"
+            default = joinpath(dirname(@__DIR__), "config.toml")
         "--train-features"
             help = "Path to the training features CSV"
             default = nothing
@@ -53,18 +56,21 @@ TEST_MODE = parsed_args["test-mode"]
 MAX_EPOCHS = TEST_MODE ? 20 : (parsed_args["epochs"] !== nothing ? parsed_args["epochs"] : get(train_cfg, "epochs", 100))
 BATCH_SIZE = parsed_args["batch-size"] !== nothing ? parsed_args["batch-size"] : get(train_cfg, "batch_size", 32)
 
-train_features_path = parsed_args["train-features"] !== nothing ? parsed_args["train-features"] : get(train_cfg, "train_features", "QuantumGW/data/inputs/train_features.csv")
-train_labels_path = parsed_args["train-labels"] !== nothing ? parsed_args["train-labels"] : get(train_cfg, "train_labels", "QuantumGW/data/inputs/train_labels.csv")
+train_features_path = resolvepath(parsed_args["train-features"] !== nothing ? parsed_args["train-features"] : get(train_cfg, "train_features", "data/inputs/train_features.csv"))
+train_labels_path = resolvepath(parsed_args["train-labels"] !== nothing ? parsed_args["train-labels"] : get(train_cfg, "train_labels", "data/inputs/train_labels.csv"))
 
 if parsed_args["use-real-data"]
-    train_features_path = "QuantumGW/data/inputs/telemetry_train_features.csv"
-    train_labels_path = "QuantumGW/data/inputs/telemetry_train_labels.csv"
+    train_features_path = joinpath(PROJECT_ROOT, "data", "inputs", "telemetry_train_features.csv")
+    train_labels_path = joinpath(PROJECT_ROOT, "data", "inputs", "telemetry_train_labels.csv")
 end
+
+SEED = get(train_cfg, "seed", 42)
+Random.seed!(SEED)
 
 # --- Run ID & Directory Setup ---
 run_id = isempty(parsed_args["run-id"]) ? string(uuid4())[1:8] : parsed_args["run-id"]
-run_dir = "QuantumGW/models/run_$run_id"
-plot_dir = "QuantumGW/data/outputs/plots/run_$run_id"
+run_dir = joinpath(PROJECT_ROOT, "models", "run_$run_id")
+plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
 mkpath(run_dir)
 mkpath(plot_dir)
 
@@ -77,7 +83,8 @@ final_config = Dict(
         "train_labels" => train_labels_path,
         "test_mode" => TEST_MODE,
         "use_real_data" => parsed_args["use-real-data"],
-        "run_id" => run_id
+        "run_id" => run_id,
+        "seed" => SEED
     )
 )
 open(joinpath(run_dir, "config.toml"), "w") do io
@@ -85,10 +92,8 @@ open(joinpath(run_dir, "config.toml"), "w") do io
 end
 
 # --- Setup Logging ---
-log_file = open(joinpath(run_dir, "training.log"), "w")
 file_logger = FileLogger(joinpath(run_dir, "training.log"))
-logger = TeeLogger(global_logger(), file_logger)
-global_logger(logger)
+global_logger(TeeLogger(global_logger(), file_logger))
 
 println("\n================================================================================")
 println("  🚀 STARTING NEW TRAINING RUN | ID: [ $run_id ]")
@@ -198,15 +203,15 @@ for epoch in 1:MAX_EPOCHS
     end
     avg_train_loss = epoch_train_loss / length(train_loader)
 
-    # Validation
+    # Validation (loss averaged per batch, accuracy weighted per sample)
     epoch_val_loss = 0.0f0
-    epoch_val_acc = 0.0f0
+    val_correct = 0.0f0
     for (Xval_t, yval) in val_loader
         epoch_val_loss += loss_function(model, Xval_t', yval)
-        epoch_val_acc += accuracy(model, Xval_t', yval)
+        val_correct += accuracy(model, Xval_t', yval) * length(yval)
     end
     avg_val_loss = epoch_val_loss / length(val_loader)
-    avg_val_acc = epoch_val_acc / length(val_loader)
+    avg_val_acc = val_correct / length(y_test)
 
     push!(history_train_loss, avg_train_loss)
     push!(history_val_loss, avg_val_loss)
@@ -224,7 +229,10 @@ for epoch in 1:MAX_EPOCHS
     if avg_val_loss < best_val_loss
         global best_val_loss = avg_val_loss
         global epochs_no_improve = 0
-        serialize(joinpath(run_dir, "gw_model_best.jls"), model)
+        save_model(joinpath(run_dir, "gw_model_best.jld2"), model;
+                   metadata = Dict("run_id" => run_id, "seed" => SEED,
+                                   "epoch" => epoch, "val_loss" => avg_val_loss,
+                                   "config" => final_config))
     else
         global epochs_no_improve += 1
     end
@@ -235,9 +243,10 @@ for epoch in 1:MAX_EPOCHS
     end
 end
 
-if isfile(joinpath(run_dir, "gw_model_best.jls"))
-    model = deserialize(joinpath(run_dir, "gw_model_best.jls"))
-    serialize(joinpath(run_dir, "gw_model.jls"), model)
+if isfile(joinpath(run_dir, "gw_model_best.jld2"))
+    best_meta = Dict{String, Any}()
+    model, best_meta = load_model(joinpath(run_dir, "gw_model_best.jld2"))
+    save_model(joinpath(run_dir, "gw_model.jld2"), model; metadata = best_meta)
 end
 
 println("\n[FINISH] Training Complete. Final Evaluation...")
@@ -251,6 +260,4 @@ p2 = Plots.plot(history_val_acc, title="VQC Validation Accuracy", xlabel="Epoch"
 Plots.plot(p1, p2, layout=(2,1), size=(1000, 800))
 Plots.savefig(joinpath(plot_dir, "training_metrics.png"))
 
-flush(log_file)
-close(log_file)
 println("[SUCCESS] Training results and logs saved to: $run_dir")

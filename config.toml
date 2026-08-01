@@ -1,10 +1,13 @@
+# Paths are resolved relative to the project root unless absolute.
+
 [generation]
 days = 30.0     # simulated mission duration [days]; > 2.0 required for MBHB injection
 fs = 0.2        # sampling frequency [Hz]
 n_mbhb = 5      # number of injected MBHB events; >= 0
 n_gbs = 50      # number of background galactic binaries; >= 0
 n_emris = 5     # number of background EMRIs; >= 0
-output = "QuantumGW/data/inputs/simulated_telemetry.h5"   # output HDF5 path
+seed = 42       # RNG seed for the simulation
+output = "data/inputs/simulated_telemetry.h5"   # output HDF5 path
 
 [preprocessing]
 window_size = 1000   # sliding-window length [samples]
@@ -13,13 +16,15 @@ sample_rate = 0.2    # sampling frequency of the input telemetry [Hz]
 output_prefix = "telemetry"   # prefix of the output feature/label CSVs
 
 [training]
-train_features = "QuantumGW/data/inputs/train_features.csv"   # training feature CSV
-train_labels = "QuantumGW/data/inputs/train_labels.csv"       # training label CSV
+train_features = "data/inputs/train_features.csv"   # training feature CSV
+train_labels = "data/inputs/train_labels.csv"       # training label CSV
 epochs = 100      # maximum training epochs; >= 1
 batch_size = 32   # mini-batch size; >= 1
+seed = 42         # RNG seed for the data split and initialization
 
 [inference]
-features = "QuantumGW/data/inputs/inference_features.csv"   # inference feature CSV
-labels = "QuantumGW/data/inputs/inference_labels.csv"       # inference label CSV
+features = "data/inputs/inference_features.csv"   # inference feature CSV
+labels = "data/inputs/inference_labels.csv"       # inference label CSV; "" for blind mode
 step_size = 100      # window step used during preprocessing [samples]
 sample_rate = 0.2    # sampling frequency of the original telemetry [Hz]
+target_fpr = 0.05    # maximum false-positive rate for threshold selection; 0.0 selects Youden's J

@@ -10,7 +10,8 @@ QuantumGW/
 │   ├── QuantumGW.jl        # Module definition and exports
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, BCE loss, gradient step
-│   └── data.jl             # Feature extraction and normalization
+│   ├── data.jl             # Feature extraction and normalization
+│   └── persistence.jl      # JLD2 model save/load (parameters + hyperparameters)
 ├── scripts/
 │   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels)
 │   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV)
@@ -40,7 +41,7 @@ julia --project=QuantumGW -e 'using Pkg; Pkg.instantiate()'
 
 ## Usage
 
-All scripts currently resolve paths relative to the working directory and must be invoked from the parent directory of `QuantumGW/` (see Status). Configuration defaults come from `config.toml`; CLI flags override them. Each run is assigned a run identifier under which models, plots, and a configuration snapshot are stored.
+Scripts resolve relative paths against the project root and may be invoked from any working directory. Configuration defaults come from `config.toml`; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
@@ -65,6 +66,8 @@ julia QuantumGW/scripts/infer.jl \
 
 `--test-mode` restricts training to 5000 samples and 20 epochs for rapid validation.
 
+Labeled inference fits the decision threshold from the ROC curve and persists it as `threshold.toml` next to the model. Blind inference (`--labels ""` or `--use-real-data`) requires that persisted threshold and produces per-window scores and decisions without labels.
+
 ## Testing and Benchmarks
 
 ```bash
@@ -84,10 +87,10 @@ julia --project=QuantumGW/docs QuantumGW/docs/make.jl
 | Component | State |
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass |
-| Telemetry simulator | Functional, with known physics defects (confusion-noise spectrum, injection SNR definition, chirp aliasing near merger, injection/label alignment for early merger times) |
+| Telemetry simulator | Functional and seeded, with known physics defects (confusion-noise spectrum, injection SNR definition, chirp aliasing near merger, injection/label alignment for early merger times) |
 | Feature extraction | Functional on simulator output only; fixed normalization scales are incompatible with physical-strain-amplitude LDC data |
-| Training script | Runs; evaluation protocol leaks information (random split over overlapping windows, validation set reused as test set) |
-| Inference script | Runs with labeled data; the blind-data path is defective; decision threshold is fitted on the evaluated data |
-| Documentation | Tracks the current state; remediation of the defects above is planned |
+| Training script | Runs end-to-end (verified); evaluation protocol still leaks information (random split over overlapping windows, validation set reused as test set) |
+| Inference script | Runs with labeled and blind data; threshold persisted per run; threshold is still fitted on the evaluated dataset |
+| Documentation | Tracks the current state; remediation of the remaining defects is planned |
 
 The defects listed here are documented in detail, together with the remediation plan, in the workspace notes (outside this repository).

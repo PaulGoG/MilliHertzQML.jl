@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "770f4cf181eaa8e852b3911e132e8dee0fca9010"
+project_hash = "c380cf3b538aece00bab2c75722cdb2e86be3bb7"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -219,6 +219,23 @@ weakdeps = ["SparseArrays"]
 
     [deps.ChainRulesCore.extensions]
     ChainRulesCoreSparseArraysExt = "SparseArrays"
+
+[[deps.ChunkCodecCore]]
+git-tree-sha1 = "1a3ad7e16a321667698a19e77362b35a1e94c544"
+uuid = "0b6fb165-00bc-4d37-ab8b-79f91016dbe1"
+version = "1.0.1"
+
+[[deps.ChunkCodecLibZlib]]
+deps = ["ChunkCodecCore", "Zlib_jll"]
+git-tree-sha1 = "d4101e848e8d3f585d61d244c2fe0c80a70e6b3b"
+uuid = "4c0bbee4-addc-4d73-81a0-b6caacae83c8"
+version = "1.1.0"
+
+[[deps.ChunkCodecLibZstd]]
+deps = ["ChunkCodecCore", "Zstd_jll"]
+git-tree-sha1 = "34d9873079e4cb3d0c62926a225136824677073f"
+uuid = "55437552-ac27-4d47-9aa3-63184e8fd398"
+version = "1.0.0"
 
 [[deps.CliqueTrees]]
 deps = ["AbstractTrees", "FillArrays", "FixedSizeArrays", "Graphs", "LinearAlgebra", "Random", "SparseArrays"]
@@ -443,6 +460,12 @@ version = "0.9.5"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.7.0"
+
+[[deps.DrWatson]]
+deps = ["Dates", "FileIO", "JLD2", "LibGit2", "MacroTools", "Pkg", "Random", "Requires", "Scratch", "UnPack"]
+git-tree-sha1 = "5b6632df14cf24fc2cdb805aab24147001463336"
+uuid = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+version = "2.19.1"
 
 [[deps.EnzymeCore]]
 git-tree-sha1 = "990991b8aa76d17693a98e3a915ac7aa49f08d1a"
@@ -837,6 +860,16 @@ version = "1.10.0"
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
+
+[[deps.JLD2]]
+deps = ["ChunkCodecLibZlib", "ChunkCodecLibZstd", "FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "ScopedValues"]
+git-tree-sha1 = "9ebadf3f8f0de07031359917549bbdadc23f5dc3"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.6.5"
+weakdeps = ["UnPack"]
+
+    [deps.JLD2.extensions]
+    UnPackExt = "UnPack"
 
 [[deps.JLFzf]]
 deps = ["REPL", "Random", "fzf_jll"]
@@ -1532,9 +1565,9 @@ version = "1.4.0"
 
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
-git-tree-sha1 = "d7a4bff94f42208ce3cf6bc8e4e7d1d663e7ee8b"
+git-tree-sha1 = "144895f6166994730ee7ff8113b981fc360638f1"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
-version = "6.10.2+1"
+version = "6.10.2+2"
 
 [[deps.Qt6Declarative_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Qt6Base_jll", "Qt6ShaderTools_jll", "Qt6Svg_jll"]
@@ -1561,7 +1594,7 @@ uuid = "e99dba38-086e-5de3-a5b1-6e4c66e897c3"
 version = "6.10.2+1"
 
 [[deps.QuantumGW]]
-deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "LoggingExtras", "MLUtils", "Plots", "Random", "Serialization", "Statistics", "TOML", "Test", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
+deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "LinearAlgebra", "LoggingExtras", "MLUtils", "Plots", "Random", "Serialization", "Statistics", "TOML", "Test", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
 path = "."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
@@ -1913,6 +1946,11 @@ version = "1.6.1"
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 version = "1.11.0"
+
+[[deps.UnPack]]
+git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
+uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
