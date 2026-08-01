@@ -1,0 +1,93 @@
+# QuantumGW
+
+A variational quantum classifier (VQC) with data re-uploading for the detection of massive black hole binary (MBHB) coalescences in simulated LISA telemetry. The quantum circuit is simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The pipeline follows the classification approach of Isfan et al., *Class. Quantum Grav.* (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/PennyLane prototype with a Julia implementation.
+
+## File Structure
+
+```text
+QuantumGW/
+├── src/
+│   ├── QuantumGW.jl        # Module definition and exports
+│   ├── model.jl            # VQC struct, ansatz and feature-map construction
+│   ├── training.jl         # Forward pass, BCE loss, gradient step
+│   └── data.jl             # Feature extraction and normalization
+├── scripts/
+│   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels)
+│   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV)
+│   ├── train.jl            # Training loop with early stopping and terminal dashboard
+│   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
+├── test/
+│   └── runtests.jl         # Unit tests (model, gradients, features, normalization)
+├── benchmarks/
+│   └── benchmarks.jl       # BenchmarkTools performance measurements
+├── docs/                   # Documenter.jl sources (build/ is generated, not tracked)
+├── data/
+│   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
+│   └── outputs/            # Per-run plots and results (not tracked)
+├── models/                 # Per-run model checkpoints (not tracked)
+├── config.toml             # Pipeline defaults; overridden by CLI flags
+├── Project.toml            # Package manifest
+└── Manifest.toml           # Pinned dependency versions (tracked)
+```
+
+## Environment
+
+Julia ≥ 1.12. The manifest is authoritative:
+
+```bash
+julia --project=QuantumGW -e 'using Pkg; Pkg.instantiate()'
+```
+
+## Usage
+
+All scripts currently resolve paths relative to the working directory and must be invoked from the parent directory of `QuantumGW/` (see Status). Configuration defaults come from `config.toml`; CLI flags override them. Each run is assigned a run identifier under which models, plots, and a configuration snapshot are stored.
+
+```bash
+# 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
+julia QuantumGW/scripts/generate_data.jl --days 30.0
+
+# 2. Sliding-window feature extraction
+julia QuantumGW/scripts/preprocess_ldc.jl \
+    --h5-file QuantumGW/data/inputs/simulated_telemetry.h5 \
+    --label-file QuantumGW/data/inputs/simulated_telemetry_labels.csv \
+    --output-prefix telemetry_sim
+
+# 3. Training (Adam, exponential learning-rate decay, early stopping)
+julia QuantumGW/scripts/train.jl \
+    --train-features QuantumGW/data/inputs/telemetry_sim_features.csv \
+    --train-labels QuantumGW/data/inputs/telemetry_sim_labels.csv --epochs 50
+
+# 4. Inference and diagnostics (ROC, mission trace, sensitivity, score distributions)
+julia QuantumGW/scripts/infer.jl \
+    --features QuantumGW/data/inputs/telemetry_sim_features.csv \
+    --labels QuantumGW/data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID>
+```
+
+`--test-mode` restricts training to 5000 samples and 20 epochs for rapid validation.
+
+## Testing and Benchmarks
+
+```bash
+julia QuantumGW/test/runtests.jl        # unit tests
+julia QuantumGW/benchmarks/benchmarks.jl
+```
+
+Documentation builds with Documenter.jl:
+
+```bash
+julia --project=QuantumGW/docs QuantumGW/docs/make.jl
+# open QuantumGW/docs/build/index.html
+```
+
+## Component Status
+
+| Component | State |
+|---|---|
+| Core library (`src/`) | Functional; unit tests pass |
+| Telemetry simulator | Functional, with known physics defects (confusion-noise spectrum, injection SNR definition, chirp aliasing near merger, injection/label alignment for early merger times) |
+| Feature extraction | Functional on simulator output only; fixed normalization scales are incompatible with physical-strain-amplitude LDC data |
+| Training script | Runs; evaluation protocol leaks information (random split over overlapping windows, validation set reused as test set) |
+| Inference script | Runs with labeled data; the blind-data path is defective; decision threshold is fitted on the evaluated data |
+| Documentation | Tracks the current state; remediation of the defects above is planned |
+
+The defects listed here are documented in detail, together with the remediation plan, in the workspace notes (outside this repository).
