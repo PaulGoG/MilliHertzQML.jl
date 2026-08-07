@@ -1,7 +1,7 @@
-name = "QuantumGW"
+name = "MilliHertzQML"
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
-authors = ["QuantumGW Authors"]
+authors = ["Paul-Adrian Gogîță <gogitapaul@yahoo.ro>"]
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"

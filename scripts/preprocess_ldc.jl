@@ -2,7 +2,7 @@ using Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 
-using HDF5, CSV, DataFrames, Statistics, QuantumGW, ArgParse, TOML
+using HDF5, CSV, DataFrames, Statistics, MilliHertzQML, ArgParse, TOML
 
 const PROJECT_ROOT = dirname(@__DIR__)
 resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
@@ -106,7 +106,7 @@ function main()
 
         window = A_obs[start_idx:end_idx]
 
-        # Use the unified extract_features from QuantumGW
+        # Use the unified extract_features from MilliHertzQML
         p_low, p_high, entropy, psd_std = extract_features(window, fs)
 
         features[i, :] .= [p_low, p_high, entropy, psd_std]

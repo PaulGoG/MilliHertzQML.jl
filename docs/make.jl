@@ -1,14 +1,14 @@
 using Documenter
-using QuantumGW
+using MilliHertzQML
 
 makedocs(
-    sitename = "QuantumGW",
+    sitename = "MilliHertzQML",
     remotes = nothing,
     format = Documenter.HTML(
         prettyurls = false,
         size_threshold_ignore = ["api.md"],
     ),
-    modules = [QuantumGW],
+    modules = [MilliHertzQML],
     pages = [
         "Home" => "index.md",
         "Physics & Data" => "physics.md",

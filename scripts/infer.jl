@@ -3,13 +3,13 @@ using Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 
-using QuantumGW, CSV, DataFrames, Plots, Statistics, ArgParse, TOML, Dates, EvalMetrics
+using MilliHertzQML, CSV, DataFrames, Plots, Statistics, ArgParse, TOML, Dates, EvalMetrics
 
 const PROJECT_ROOT = dirname(@__DIR__)
 resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 function parse_commandline()
-    s = ArgParseSettings(description = "Run Inference with the QuantumGW VQC")
+    s = ArgParseSettings(description = "Run Inference with the MilliHertzQML VQC")
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"

@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "c380cf3b538aece00bab2c75722cdb2e86be3bb7"
+project_hash = "6036a76ffef548670a41115f2d368f7b38f255aa"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -1593,8 +1593,8 @@ git-tree-sha1 = "672c938b4b4e3e0169a07a5f227029d4905456f2"
 uuid = "e99dba38-086e-5de3-a5b1-6e4c66e897c3"
 version = "6.10.2+1"
 
-[[deps.QuantumGW]]
-deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "LinearAlgebra", "LoggingExtras", "MLUtils", "Plots", "Random", "Serialization", "Statistics", "TOML", "Test", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
+[[deps.MilliHertzQML]]
+deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "Dates", "DrWatson", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "JLD2", "LinearAlgebra", "Logging", "LoggingExtras", "MLUtils", "Plots", "Printf", "Random", "Statistics", "TOML", "Test", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
 path = "."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"

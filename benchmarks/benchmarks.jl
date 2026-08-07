@@ -2,7 +2,7 @@ using Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 using BenchmarkTools
-using QuantumGW
+using MilliHertzQML
 using Yao
 using Flux
 using Zygote

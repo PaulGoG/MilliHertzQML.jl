@@ -3,7 +3,7 @@ using Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 
-using Random, QuantumGW, Flux, MLUtils, Statistics, CSV, DataFrames, Plots, Dates
+using Random, MilliHertzQML, Flux, MLUtils, Statistics, CSV, DataFrames, Plots, Dates
 using UnicodePlots, Logging, LoggingExtras, Printf, ArgParse, UUIDs, TOML
 
 const PROJECT_ROOT = dirname(@__DIR__)
@@ -13,7 +13,7 @@ resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 Plots.default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
 
 function parse_commandline()
-    s = ArgParseSettings(description = "Train the QuantumGW Variational Quantum Classifier")
+    s = ArgParseSettings(description = "Train the MilliHertzQML Variational Quantum Classifier")
     @add_arg_table s begin
         "--config"
             help = "Path to the configuration file"
@@ -152,7 +152,7 @@ function update_dashboard(epoch, lr, train_loss, val_loss, val_acc, elapsed, tot
     print("\033[H")
 
     println("================================================================================")
-    println("  QuantumGW TRAINING DASHBOARD | Run ID: $run_id | Mode: $(TEST_MODE ? "TEST" : "FULL")")
+    println("  MilliHertzQML TRAINING DASHBOARD | Run ID: $run_id | Mode: $(TEST_MODE ? "TEST" : "FULL")")
     println("================================================================================")
 
     # Time Tracking

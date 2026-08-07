@@ -2,7 +2,7 @@ using Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 using Test
-using QuantumGW
+using MilliHertzQML
 using Yao
 using Flux
 using Statistics
@@ -13,7 +13,7 @@ using CSV
 
 Random.seed!(1234)
 
-@testset "QuantumGW Tests (Multi-Qubit VQC)" begin
+@testset "MilliHertzQML Tests (Multi-Qubit VQC)" begin
     # 1. Initialization
     @testset "Model Initialization" begin
         n_qubits = 4

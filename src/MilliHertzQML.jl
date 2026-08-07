@@ -1,4 +1,4 @@
-module QuantumGW
+module MilliHertzQML
 
 using Yao
 using Flux

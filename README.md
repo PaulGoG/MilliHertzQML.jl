@@ -1,13 +1,13 @@
-# QuantumGW
+# MilliHertzQML
 
 A variational quantum classifier (VQC) with data re-uploading for the detection of massive black hole binary (MBHB) coalescences in simulated LISA telemetry. The quantum circuit is simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The pipeline follows the classification approach of Isfan et al., *Class. Quantum Grav.* (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/PennyLane prototype with a Julia implementation.
 
 ## File Structure
 
 ```text
-QuantumGW/
+MilliHertzQML/
 ├── src/
-│   ├── QuantumGW.jl        # Module definition and exports
+│   ├── MilliHertzQML.jl        # Module definition and exports
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, BCE loss, gradient step
 │   ├── data.jl             # Feature extraction and normalization
@@ -36,7 +36,7 @@ QuantumGW/
 Julia ≥ 1.12. The manifest is authoritative:
 
 ```bash
-julia --project=QuantumGW -e 'using Pkg; Pkg.instantiate()'
+julia --project=MilliHertzQML -e 'using Pkg; Pkg.instantiate()'
 ```
 
 ## Usage
@@ -45,23 +45,23 @@ Scripts resolve relative paths against the project root and may be invoked from 
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
-julia QuantumGW/scripts/generate_data.jl --days 30.0
+julia MilliHertzQML/scripts/generate_data.jl --days 30.0
 
 # 2. Sliding-window feature extraction
-julia QuantumGW/scripts/preprocess_ldc.jl \
-    --h5-file QuantumGW/data/inputs/simulated_telemetry.h5 \
-    --label-file QuantumGW/data/inputs/simulated_telemetry_labels.csv \
+julia MilliHertzQML/scripts/preprocess_ldc.jl \
+    --h5-file MilliHertzQML/data/inputs/simulated_telemetry.h5 \
+    --label-file MilliHertzQML/data/inputs/simulated_telemetry_labels.csv \
     --output-prefix telemetry_sim
 
 # 3. Training (Adam, exponential learning-rate decay, early stopping)
-julia QuantumGW/scripts/train.jl \
-    --train-features QuantumGW/data/inputs/telemetry_sim_features.csv \
-    --train-labels QuantumGW/data/inputs/telemetry_sim_labels.csv --epochs 50
+julia MilliHertzQML/scripts/train.jl \
+    --train-features MilliHertzQML/data/inputs/telemetry_sim_features.csv \
+    --train-labels MilliHertzQML/data/inputs/telemetry_sim_labels.csv --epochs 50
 
 # 4. Inference and diagnostics (ROC, mission trace, sensitivity, score distributions)
-julia QuantumGW/scripts/infer.jl \
-    --features QuantumGW/data/inputs/telemetry_sim_features.csv \
-    --labels QuantumGW/data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID>
+julia MilliHertzQML/scripts/infer.jl \
+    --features MilliHertzQML/data/inputs/telemetry_sim_features.csv \
+    --labels MilliHertzQML/data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID>
 ```
 
 `--test-mode` restricts training to 5000 samples and 20 epochs for rapid validation.
@@ -71,15 +71,15 @@ Labeled inference fits the decision threshold from the ROC curve and persists it
 ## Testing and Benchmarks
 
 ```bash
-julia QuantumGW/test/runtests.jl        # unit tests
-julia QuantumGW/benchmarks/benchmarks.jl
+julia MilliHertzQML/test/runtests.jl        # unit tests
+julia MilliHertzQML/benchmarks/benchmarks.jl
 ```
 
 Documentation builds with Documenter.jl:
 
 ```bash
-julia --project=QuantumGW/docs QuantumGW/docs/make.jl
-# open QuantumGW/docs/build/index.html
+julia --project=MilliHertzQML/docs MilliHertzQML/docs/make.jl
+# open MilliHertzQML/docs/build/index.html
 ```
 
 ## Component Status
