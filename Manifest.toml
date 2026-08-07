@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "6036a76ffef548670a41115f2d368f7b38f255aa"
+project_hash = "0662a708beee8d0e14c59513980313096bd7af05"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -1260,6 +1260,12 @@ git-tree-sha1 = "bc95bf4149bf535c09602e3acdf950d9b4376227"
 uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
+[[deps.MilliHertzQML]]
+deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "Dates", "DrWatson", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "JLD2", "LinearAlgebra", "Logging", "LoggingExtras", "MLUtils", "Plots", "Printf", "Random", "Statistics", "TOML", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
+path = "."
+uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
+version = "0.1.0"
+
 [[deps.Missings]]
 deps = ["DataAPI"]
 git-tree-sha1 = "ec4f7fbeab05d7747bdf98eb74d130a2a2ed298d"
@@ -1592,12 +1598,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Qt6Base_jll", "Qt6Declarative_jll"
 git-tree-sha1 = "672c938b4b4e3e0169a07a5f227029d4905456f2"
 uuid = "e99dba38-086e-5de3-a5b1-6e4c66e897c3"
 version = "6.10.2+1"
-
-[[deps.MilliHertzQML]]
-deps = ["ArgParse", "BenchmarkTools", "CSV", "DSP", "DataFrames", "Dates", "DrWatson", "EvalMetrics", "FFTW", "Flux", "Functors", "HDF5", "JLD2", "LinearAlgebra", "Logging", "LoggingExtras", "MLUtils", "Plots", "Printf", "Random", "Statistics", "TOML", "Test", "UUIDs", "UnicodePlots", "Yao", "Zygote"]
-path = "."
-uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
-version = "0.1.0"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]

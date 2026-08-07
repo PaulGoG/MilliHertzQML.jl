@@ -1,6 +1,3 @@
-using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
-Pkg.instantiate(; io = devnull)
 using Test
 using MilliHertzQML
 using Yao
@@ -95,7 +92,40 @@ Random.seed!(1234)
         end
     end
 
-    # 6. Model Persistence (JLD2 round trip)
+    # 6. Input Validation (fail-fast interfaces)
+    @testset "Input Validation" begin
+        @test_throws ArgumentError VariationalQuantumClassifier(1, 2)
+        @test_throws ArgumentError VariationalQuantumClassifier(4, 0)
+
+        model = VariationalQuantumClassifier(4, 2)
+        @test_throws DimensionMismatch predict_probability(model, rand(Float32, 3))
+        @test_throws DimensionMismatch loss_function(model, rand(Float32, 4, 3), [0, 1, 0, 1])
+        @test_throws DimensionMismatch loss_function(model, rand(Float32, 4, 4), [0, 1])
+
+        # 16 samples at 0.2 Hz resolve no bins inside the 1-5 mHz band
+        @test_throws ArgumentError extract_features(randn(16), 0.2)
+    end
+
+    # 7. Feature Extraction Edge Cases
+    @testset "Feature Edge Cases" begin
+        # Constant (zero) signal must yield finite features, no NaN/Inf
+        feats = extract_features(zeros(Float64, 1000), 0.2)
+        @test all(isfinite, feats)
+
+        # Out-of-range feature values clamp to the encoding bounds [0, 2π]
+        mktempdir() do dir
+            feat_path = joinpath(dir, "f.csv")
+            lab_path = joinpath(dir, "l.csv")
+            CSV.write(feat_path, DataFrame(PLow=[-5.0, 500.0], PHigh=[-1.0, 100.0],
+                                           Ent=[-2.0, 50.0], Std=[-3.0, 20.0]))
+            CSV.write(lab_path, DataFrame(Label=[0, 1]))
+            X, _ = load_data(feat_path, lab_path)
+            @test all(X[1, :] .== 0.0f0)
+            @test all(isapprox.(X[2, :], Float32(2π); atol=1e-5))
+        end
+    end
+
+    # 8. Model Persistence (JLD2 round trip)
     @testset "Model Persistence" begin
         mktempdir() do dir
             model = VariationalQuantumClassifier(4, 3)

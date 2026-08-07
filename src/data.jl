@@ -67,8 +67,13 @@ function extract_features(x, sample_rate=0.2)
     freqs = rfftfreq(n_samples, sample_rate)
 
     # Base Band: Low (1mHz - 5mHz), High (5mHz - 100mHz)
-    p_low = mean(spec[(freqs .>= 1e-3) .& (freqs .<= 5e-3)])
-    p_high = mean(spec[(freqs .> 5e-3) .& (freqs .<= 1e-1)])
+    mask_low = (freqs .>= 1e-3) .& (freqs .<= 5e-3)
+    mask_high = (freqs .> 5e-3) .& (freqs .<= 1e-1)
+    (any(mask_low) && any(mask_high)) || throw(ArgumentError(
+        "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
+        "in the 1-5 mHz or 5-100 mHz analysis bands; use a longer window."))
+    p_low = mean(spec[mask_low])
+    p_high = mean(spec[mask_high])
 
     psd = spec.^2 .+ 1e-12
     p_norm = psd ./ sum(psd)

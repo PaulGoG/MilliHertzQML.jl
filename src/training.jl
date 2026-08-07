@@ -23,6 +23,8 @@ Implements Ensemble Measurement by averaging the expectation value of Z
 across all qubits to produce the final classification probability.
 """
 function predict_probability(model::VariationalQuantumClassifier, x)
+    length(x) == model.n_qubits || throw(DimensionMismatch(
+        "feature vector has length $(length(x)); expected n_qubits = $(model.n_qubits)."))
     dispatch_params!(model)
 
     steps = [build_step(model, x, i) for i in 1:model.n_layers]
@@ -63,6 +65,10 @@ Supports automatic differentiation by ensuring all stateful circuit updates
 are tracked via the `params` vector.
 """
 function loss_function(model::VariationalQuantumClassifier, X_batch, y_batch)
+    size(X_batch, 2) == model.n_qubits || throw(DimensionMismatch(
+        "feature dimension $(size(X_batch, 2)); expected n_qubits = $(model.n_qubits)."))
+    size(X_batch, 1) == length(y_batch) || throw(DimensionMismatch(
+        "$(size(X_batch, 1)) samples but $(length(y_batch)) labels."))
     l = 0.0f0
     n_qubits = model.n_qubits
     n_layers = model.n_layers
