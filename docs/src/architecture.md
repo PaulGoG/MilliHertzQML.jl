@@ -27,4 +27,4 @@ Retained here so the documentation reflects the code as it stands; remediation i
 1. **Evaluation leakage.** The train/validation split is a random shuffle over sliding windows with 90 % overlap, so nearly identical windows appear on both sides of the split; the validation set drives early stopping and is also reported as the test result.
 2. **Threshold selection.** The ROC-derived threshold is fitted on the same data on which accuracy is subsequently reported; it should be fitted on a held-out validation set instead.
 3. **Class imbalance.** Positive windows are of order 10 % of the data; accuracy at a fixed threshold is reported without precision/recall or false-alarm-rate context.
-4. **Configuration coverage.** Model hyperparameters (qubit count, layer count, learning rate, patience, decay, split ratio) are hardcoded in `scripts/train.jl` rather than exposed in `config.toml`.
+4. **Configuration coverage.** Model and optimizer hyperparameters are exposed in `config.toml` (`[model]`, `[training]`) and validated on load, but the feature-extraction constants (analysis-band edges and the `FEATURE_SCALES` clamps in `src/data.jl`) remain hardcoded.

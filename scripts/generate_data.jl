@@ -1,12 +1,7 @@
 ENV["GKSwstype"] = "100"
-using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
-Pkg.instantiate(; io = devnull)
+include(joinpath(@__DIR__, "common.jl"))
 
 using Random, Statistics, FFTW, Plots, ArgParse, HDF5, CSV, DataFrames, TOML, UUIDs
-
-const PROJECT_ROOT = dirname(@__DIR__)
-resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 # Publication-ready plotting setup
 default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
@@ -105,26 +100,27 @@ end
 function main()
     parsed_args = parse_commandline()
 
-    # 1. Load TOML
-    config_file = isfile(parsed_args["config"]) ? TOML.parsefile(parsed_args["config"]) : Dict{String, Any}()
+    # 1. Load and validate TOML configuration
+    config_file = load_config(parsed_args["config"])
     gen_cfg = get(config_file, "generation", Dict{String, Any}())
 
-    # 2. Harmonize CLI with TOML Defaults
-    days = parsed_args["days"] !== nothing ? parsed_args["days"] : get(gen_cfg, "days", 30.0)
-    fs = parsed_args["fs"] !== nothing ? parsed_args["fs"] : get(gen_cfg, "fs", 0.2)
-    n_mbhb = parsed_args["n-mbhb"] !== nothing ? parsed_args["n-mbhb"] : get(gen_cfg, "n_mbhb", 5)
-    n_gbs = parsed_args["n-gbs"] !== nothing ? parsed_args["n-gbs"] : get(gen_cfg, "n_gbs", 50)
-    n_emris = parsed_args["n-emris"] !== nothing ? parsed_args["n-emris"] : get(gen_cfg, "n_emris", 5)
-    out_file = resolvepath(parsed_args["output"] !== nothing ? parsed_args["output"] : get(gen_cfg, "output", "data/inputs/simulated_telemetry.h5"))
+    # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
+    days = override(parsed_args["days"], cfgget(gen_cfg, "days", 30.0; type = Float64, min = 0.0))
+    fs = override(parsed_args["fs"], cfgget(gen_cfg, "fs", 0.2; type = Float64, min = 1e-6))
+    n_mbhb = override(parsed_args["n-mbhb"], cfgget(gen_cfg, "n_mbhb", 5; type = Int, min = 0))
+    n_gbs = override(parsed_args["n-gbs"], cfgget(gen_cfg, "n_gbs", 50; type = Int, min = 0))
+    n_emris = override(parsed_args["n-emris"], cfgget(gen_cfg, "n_emris", 5; type = Int, min = 0))
+    out_file = resolvepath(override(parsed_args["output"],
+        cfgget(gen_cfg, "output", "data/inputs/simulated_telemetry.h5"; type = String)))
     run_id = isempty(parsed_args["run-id"]) ? string(uuid4())[1:8] : parsed_args["run-id"]
-    seed = get(gen_cfg, "seed", 42)
+    seed = cfgget(gen_cfg, "seed", 42; type = Int)
     Random.seed!(seed)
 
     n_total = Int(round(days * 24 * 3600 * fs))
     t_arr = range(0, days * 24 * 3600, length=n_total)
 
     println("================================================================================")
-    println("  🌌 GENERATING CONTINUOUS LISA TELEMETRY [ID: $run_id]")
+    println("  GENERATING CONTINUOUS LISA TELEMETRY [ID: $run_id]")
     println("================================================================================")
     println("  Duration : $days Days")
     println("  Samples  : $n_total")
@@ -207,7 +203,7 @@ function main()
     # Configuration snapshot for provenance (records the seed actually used)
     snapshot = Dict("generation" => Dict(
         "days" => days, "fs" => fs, "n_mbhb" => n_mbhb, "n_gbs" => n_gbs,
-        "n_emris" => n_emris, "output" => out_file, "seed" => seed,
+        "n_emris" => n_emris, "output" => rootrelative(out_file), "seed" => seed,
         "run_id" => run_id))
     open(replace(out_file, ".h5" => "_generation.toml"), "w") do io
         TOML.print(io, snapshot)

@@ -10,23 +10,31 @@ seed = 9999     # RNG seed for the simulation
 output = "data/inputs/simulated_telemetry_complex.h5"   # output HDF5 path
 
 [preprocessing]
-window_size = 1000   # sliding-window length [samples]
-step_size = 100      # sliding-window step [samples]; <= window_size
+window_size = 1000   # sliding-window length [samples]; >= 2
+step_size = 100      # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2    # sampling frequency of the input telemetry [Hz]
 output_prefix = "telemetry_complex"   # prefix of the output feature/label CSVs
+
+[model]
+n_qubits = 4    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_layers = 4    # data re-uploading layers; >= 1
 
 [training]
 train_features = "data/inputs/telemetry_complex_features.csv"   # training feature CSV
 train_labels = "data/inputs/telemetry_complex_labels.csv"       # training label CSV
-epochs = 50       # maximum training epochs; >= 1
-batch_size = 64   # mini-batch size; >= 1
-seed = 9999       # RNG seed for the data split and initialization
+epochs = 50                # maximum training epochs; >= 1
+batch_size = 64            # mini-batch size; >= 1
+learning_rate = 0.01       # initial Adam learning rate; > 0
+lr_decay = 0.95            # multiplicative learning-rate decay per epoch; in (0, 1]
+patience = 12              # early-stopping patience [epochs]; >= 1
+validation_fraction = 0.1  # held-out validation fraction; in [0.01, 0.5]
+test_mode_samples = 5000   # sample cap under --test-mode; >= 1
+test_mode_epochs = 20      # epoch cap under --test-mode; >= 1
+seed = 9999                # RNG seed for the data split and initialization
 
 [inference]
 features = "data/inputs/telemetry_complex_features.csv"   # inference feature CSV
 labels = "data/inputs/telemetry_complex_labels.csv"       # inference label CSV; "" for blind mode
-step_size = 100      # window step used during preprocessing [samples]
+step_size = 100      # window step used during preprocessing [samples]; >= 1
 sample_rate = 0.2    # sampling frequency of the original telemetry [Hz]
-target_fpr = 0.05    # maximum false-positive rate for threshold selection; 0.0 selects Youden's J
-
-
+target_fpr = 0.05    # maximum false-positive rate for threshold selection; in [0, 1]; 0.0 selects Youden's J

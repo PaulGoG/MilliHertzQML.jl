@@ -1,12 +1,7 @@
 ENV["GKSwstype"] = "100"
-using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
-Pkg.instantiate(; io = devnull)
+include(joinpath(@__DIR__, "common.jl"))
 
-using MilliHertzQML, CSV, DataFrames, Plots, Statistics, ArgParse, TOML, Dates, EvalMetrics
-
-const PROJECT_ROOT = dirname(@__DIR__)
-resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
+using MilliHertzQML, CSV, DataFrames, Plots, ArgParse, TOML, Dates, EvalMetrics
 
 function parse_commandline()
     s = ArgParseSettings(description = "Run Inference with the MilliHertzQML VQC")
@@ -24,11 +19,8 @@ function parse_commandline()
             help = "Path to the trained model (.jld2)"
             default = nothing
         "--run-id"
-            help = "The Run ID used during training (e.g., 'a1b2c3d4'). Required to locate the correct model if not explicitly provided."
+            help = "The Run ID used during training (e.g., 'a1b2c3d4'). Required to locate the model unless --model is given."
             default = ""
-        "--use-real-data"
-            help = "Use the pre-processed blind telemetry features (telemetry_blind_features.csv); implies blind mode"
-            action = :store_true
         "--step-size"
             help = "Step size used during pre-processing (to calculate real mission time)"
             arg_type = Int
@@ -40,7 +32,7 @@ function parse_commandline()
         "--target-fpr"
             help = "Target maximum False Positive Rate (e.g., 0.05 for 5% max false alarms). If 0.0, uses Youden's J index."
             arg_type = Float64
-            default = 0.05
+            default = nothing
     end
     return parse_args(s)
 end
@@ -70,29 +62,31 @@ end
 function main()
     parsed_args = parse_commandline()
 
-    # 1. Load TOML
-    config_file = isfile(parsed_args["config"]) ? TOML.parsefile(parsed_args["config"]) : Dict{String, Any}()
+    # 1. Load and validate TOML configuration
+    config_file = load_config(parsed_args["config"])
     infer_cfg = get(config_file, "inference", Dict{String, Any}())
 
-    # 2. Harmonize CLI with TOML defaults
+    # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
     run_id = parsed_args["run-id"]
-    features_path = parsed_args["features"] !== nothing ? parsed_args["features"] : get(infer_cfg, "features", "data/inputs/inference_features.csv")
-    labels_path = parsed_args["labels"] !== nothing ? parsed_args["labels"] : get(infer_cfg, "labels", "data/inputs/inference_labels.csv")
-    step_size = parsed_args["step-size"] !== nothing ? parsed_args["step-size"] : get(infer_cfg, "step_size", 100)
-    sample_rate = parsed_args["sample-rate"] !== nothing ? parsed_args["sample-rate"] : get(infer_cfg, "sample_rate", 0.2)
-    target_fpr = parsed_args["target-fpr"] !== nothing ? parsed_args["target-fpr"] : get(infer_cfg, "target_fpr", 0.05)
+    features_path = override(parsed_args["features"],
+        cfgget(infer_cfg, "features", "data/inputs/inference_features.csv"; type = String))
+    labels_path = override(parsed_args["labels"],
+        cfgget(infer_cfg, "labels", "data/inputs/inference_labels.csv"; type = String))
+    step_size = override(parsed_args["step-size"],
+        cfgget(infer_cfg, "step_size", 100; type = Int, min = 1))
+    sample_rate = override(parsed_args["sample-rate"],
+        cfgget(infer_cfg, "sample_rate", 0.2; type = Float64, min = 1e-6))
+    target_fpr = override(parsed_args["target-fpr"],
+        cfgget(infer_cfg, "target_fpr", 0.05; type = Float64, min = 0.0, max = 1.0))
 
-    if parsed_args["use-real-data"]
-        features_path = joinpath(PROJECT_ROOT, "data", "inputs", "telemetry_blind_features.csv")
-        labels_path = ""
-    end
     features_path = resolvepath(features_path)
     has_labels = !isempty(labels_path) && isfile(resolvepath(labels_path))
     has_labels && (labels_path = resolvepath(labels_path))
 
+    (parsed_args["model"] !== nothing || !isempty(run_id)) || throw(ArgumentError(
+        "no model specified: provide --model <path> or --run-id <id> of a training run."))
     model_path = parsed_args["model"] !== nothing ? resolvepath(parsed_args["model"]) :
-        (isempty(run_id) ? joinpath(PROJECT_ROOT, "models", "gw_model.jld2") :
-                           joinpath(PROJECT_ROOT, "models", "run_$run_id", "gw_model.jld2"))
+        joinpath(PROJECT_ROOT, "models", "run_$run_id", "gw_model.jld2")
 
     if isempty(run_id)
         run_id = "standalone_" * string(hash(model_path))[1:6]
@@ -106,9 +100,9 @@ function main()
     # Configuration snapshot for provenance
     final_config = Dict(
         "inference" => Dict(
-            "features" => features_path,
-            "labels" => has_labels ? labels_path : "",
-            "model" => model_path,
+            "features" => rootrelative(features_path),
+            "labels" => has_labels ? rootrelative(labels_path) : "",
+            "model" => rootrelative(model_path),
             "step_size" => step_size,
             "sample_rate" => sample_rate,
             "target_fpr" => target_fpr,
@@ -139,11 +133,9 @@ function main()
     # 4. Forward pass over all windows
     num_samples = size(X, 1)
     println("Analyzing $num_samples samples...")
-    X_t = copy(X')
-    X_fast = X_t'
     probs = Float32[]
     for i in 1:num_samples
-        push!(probs, predict_probability(model, @view(X_fast[i, :])))
+        push!(probs, predict_probability(model, @view(X[i, :])))
         if i % max(1, div(num_samples, 10)) == 0
             println("  Progress: $(round(Int, i/num_samples*100))%")
         end
@@ -163,7 +155,7 @@ function main()
                 "criterion" => criterion,
                 "target_fpr" => target_fpr,
                 "auc" => Float64(auc_score),
-                "fitted_on" => features_path,
+                "fitted_on" => rootrelative(features_path),
                 "fitted_at" => string(Dates.now())
             )))
         end

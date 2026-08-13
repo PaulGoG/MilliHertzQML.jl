@@ -34,23 +34,22 @@ Random.seed!(1234)
     @testset "Training & Gradients" begin
         model = VariationalQuantumClassifier(4, 2)
         X_batch = rand(Float32, 4, 4)
-        X_fast = copy(X_batch')'
         y_batch = [0, 1, 0, 1]
 
         opt_state = Flux.setup(Adam(0.1), model.params)
-        l_init = loss_function(model, X_fast, y_batch)
+        l_init = loss_function(model, X_batch, y_batch)
 
         # Test that gradient is not zero
         grads = Zygote.gradient(model) do m
-            loss_function(m, X_fast, y_batch)
+            loss_function(m, X_batch, y_batch)
         end
         @test any(abs.(grads[1].params) .> 0.0)
 
         for _ in 1:20
-            train_step!(model, opt_state, X_fast, y_batch)
+            train_step!(model, opt_state, X_batch, y_batch)
         end
 
-        l_final = loss_function(model, X_fast, y_batch)
+        l_final = loss_function(model, X_batch, y_batch)
         @test l_final < l_init
     end
 

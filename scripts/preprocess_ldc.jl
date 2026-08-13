@@ -1,11 +1,6 @@
-using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
-Pkg.instantiate(; io = devnull)
+include(joinpath(@__DIR__, "common.jl"))
 
 using HDF5, CSV, DataFrames, Statistics, MilliHertzQML, ArgParse, TOML
-
-const PROJECT_ROOT = dirname(@__DIR__)
-resolvepath(p) = isabspath(p) ? p : joinpath(PROJECT_ROOT, p)
 
 function parse_commandline()
     s = ArgParseSettings(description = "Pre-process raw HDF5 telemetry into QNN features")
@@ -41,16 +36,23 @@ end
 function main()
     parsed_args = parse_commandline()
 
-    # 1. Load TOML
-    config_file = isfile(parsed_args["config"]) ? TOML.parsefile(parsed_args["config"]) : Dict{String, Any}()
+    # 1. Load and validate TOML configuration
+    config_file = load_config(parsed_args["config"])
     pre_cfg = get(config_file, "preprocessing", Dict{String, Any}())
 
-    # 2. Harmonize CLI with TOML Defaults
-    h5_path = resolvepath(parsed_args["h5-file"] !== nothing ? parsed_args["h5-file"] : get(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"))
-    window_size = parsed_args["window-size"] !== nothing ? parsed_args["window-size"] : get(pre_cfg, "window_size", 1000)
-    step_size = parsed_args["step-size"] !== nothing ? parsed_args["step-size"] : get(pre_cfg, "step_size", 100)
-    fs = parsed_args["sample-rate"] !== nothing ? parsed_args["sample-rate"] : get(pre_cfg, "sample_rate", 0.2)
-    output_prefix = parsed_args["output-prefix"] !== nothing ? parsed_args["output-prefix"] : get(pre_cfg, "output_prefix", "telemetry")
+    # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
+    h5_path = resolvepath(override(parsed_args["h5-file"],
+        cfgget(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"; type = String)))
+    window_size = override(parsed_args["window-size"],
+        cfgget(pre_cfg, "window_size", 1000; type = Int, min = 2))
+    step_size = override(parsed_args["step-size"],
+        cfgget(pre_cfg, "step_size", 100; type = Int, min = 1))
+    fs = override(parsed_args["sample-rate"],
+        cfgget(pre_cfg, "sample_rate", 0.2; type = Float64, min = 1e-6))
+    output_prefix = override(parsed_args["output-prefix"],
+        cfgget(pre_cfg, "output_prefix", "telemetry"; type = String))
+    step_size <= window_size || throw(ArgumentError(
+        "step_size = $step_size exceeds window_size = $window_size."))
 
     println("================================================================================")
     println("  TELEMETRY PRE-PROCESSOR (HDF5 -> QNN Features)")
@@ -128,18 +130,17 @@ function main()
     out_dir = joinpath(PROJECT_ROOT, "data", "inputs")
     mkpath(out_dir)
 
-    prefix = parsed_args["output-prefix"] !== nothing ? parsed_args["output-prefix"] : output_prefix
-    feat_path = joinpath(out_dir, "$(prefix)_features.csv")
-    CSV.write(feat_path, DataFrame(features, [:PLow, :PHigh, :Entropy, :Log_PSD_Std]))
+    feat_path = joinpath(out_dir, "$(output_prefix)_features.csv")
+    CSV.write(feat_path, DataFrame(features, [:p_low, :p_high, :spectral_entropy, :log_psd_std]))
     println("  - Features saved to: $feat_path")
 
     if has_labels
-        lab_path = joinpath(out_dir, "$(prefix)_labels.csv")
+        lab_path = joinpath(out_dir, "$(output_prefix)_labels.csv")
         CSV.write(lab_path, DataFrame(Label=window_labels, SNR=window_snrs))
         println("  - Labels saved to: $lab_path")
     end
 
-    println("\n[SUCCESS] Pre-processing complete. Ready for Quantum Training.")
+    println("\n[SUCCESS] Pre-processing complete.")
 end
 
 main()

@@ -7,10 +7,7 @@ using Zygote
 using CSV
 using DataFrames
 using JLD2
-using MLUtils
 using Statistics
-using LinearAlgebra
-using Random
 using FFTW
 
 # Exports

@@ -3,7 +3,7 @@
 [![CI](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl)
 
-Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/PennyLane prototype with a Julia implementation.
+Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
 ## File Structure
 
@@ -16,6 +16,7 @@ MilliHertzQML/
 │   ├── data.jl             # Feature extraction and normalization
 │   └── persistence.jl      # JLD2 model save/load (parameters + hyperparameters)
 ├── scripts/
+│   ├── common.jl           # Shared preamble: activation, paths, validated config access
 │   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels)
 │   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV)
 │   ├── train.jl            # Training loop with early stopping and terminal dashboard
@@ -48,7 +49,7 @@ The tracked `Manifest.toml` pins the exact dependency versions.
 
 ## Usage
 
-All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml`; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
+All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml` (including model and optimizer hyperparameters under `[model]` and `[training]`) and are validated on load; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
@@ -71,9 +72,9 @@ julia scripts/infer.jl \
     --labels data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID>
 ```
 
-`--test-mode` restricts training to 5000 samples and 20 epochs for rapid validation.
+`--test-mode` restricts training to `test_mode_samples` samples and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
 
-Labeled inference fits the decision threshold from the ROC curve and persists it as `threshold.toml` next to the model. Blind inference (`--labels ""` or `--use-real-data`) requires that persisted threshold and produces per-window scores and decisions without labels.
+Labeled inference fits the decision threshold from the ROC curve and persists it as `threshold.toml` next to the model. Blind inference (`--labels ""`) requires that persisted threshold and produces per-window scores and decisions without labels.
 
 ## Testing and Benchmarks
 
