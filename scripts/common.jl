@@ -6,6 +6,7 @@ Pkg.activate(dirname(@__DIR__); io = devnull)
 Pkg.instantiate(; io = devnull)
 
 using TOML
+using InteractiveUtils, LinearAlgebra, Distributed
 
 const PROJECT_ROOT = dirname(@__DIR__)
 
@@ -70,3 +71,30 @@ end
 CLI-over-configuration precedence: return `cli_value` unless it is `nothing`.
 """
 override(cli_value, cfg_value) = cli_value !== nothing ? cli_value : cfg_value
+
+"""
+    hardware_fingerprint() -> Dict{String, Any}
+
+Collect the platform fingerprint recorded in run provenance snapshots:
+hostname, OS kernel, CPU model and logical core count, total memory, Julia
+version with full `versioninfo()` output, and thread/worker counts (Julia
+threads, BLAS threads, `Distributed` workers). Together with the
+configuration snapshot this makes every result attributable to
+configuration, code version, and hardware. GPU fields are to be appended
+once a functional GPU backend is part of the pipeline.
+"""
+function hardware_fingerprint()
+    cpu = Sys.cpu_info()
+    return Dict{String, Any}(
+        "hostname" => gethostname(),
+        "kernel" => string(Sys.KERNEL),
+        "julia_version" => string(VERSION),
+        "versioninfo" => sprint(InteractiveUtils.versioninfo),
+        "cpu_model" => isempty(cpu) ? "unknown" : first(cpu).model,
+        "cpu_threads_logical" => Sys.CPU_THREADS,
+        "total_memory_gib" => round(Sys.total_memory() / 2^30; digits = 2),
+        "julia_threads" => Threads.nthreads(),
+        "blas_threads" => LinearAlgebra.BLAS.get_num_threads(),
+        "distributed_workers" => Distributed.nworkers(),
+    )
+end

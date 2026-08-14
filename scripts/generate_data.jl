@@ -201,10 +201,12 @@ function main()
     println("  - Labels saved to: $label_file")
 
     # Configuration snapshot for provenance (records the seed actually used)
-    snapshot = Dict("generation" => Dict(
-        "days" => days, "fs" => fs, "n_mbhb" => n_mbhb, "n_gbs" => n_gbs,
-        "n_emris" => n_emris, "output" => rootrelative(out_file), "seed" => seed,
-        "run_id" => run_id))
+    snapshot = Dict(
+        "generation" => Dict(
+            "days" => days, "fs" => fs, "n_mbhb" => n_mbhb, "n_gbs" => n_gbs,
+            "n_emris" => n_emris, "output" => rootrelative(out_file), "seed" => seed,
+            "run_id" => run_id),
+        "hardware" => hardware_fingerprint())
     open(replace(out_file, ".h5" => "_generation.toml"), "w") do io
         TOML.print(io, snapshot)
     end

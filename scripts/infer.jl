@@ -108,7 +108,8 @@ function main()
             "target_fpr" => target_fpr,
             "run_id" => run_id,
             "blind" => !has_labels
-        )
+        ),
+        "hardware" => hardware_fingerprint(),
     )
     open(joinpath(res_dir, "config_infer.toml"), "w") do io
         TOML.print(io, final_config)

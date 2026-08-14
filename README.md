@@ -23,7 +23,7 @@ MilliHertzQML/
 │   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
 ├── test/
 │   └── runtests.jl         # Unit tests (model, gradients, features, validation, persistence)
-├── benchmarks/
+├── bench/
 │   └── benchmarks.jl       # BenchmarkTools performance measurements
 ├── docs/                   # Documenter.jl sources (build/ is generated, not tracked)
 ├── data/
@@ -80,13 +80,13 @@ Labeled inference fits the decision threshold from the ROC curve and persists it
 
 ```bash
 julia --project -e 'using Pkg; Pkg.test()'   # unit tests
-julia benchmarks/benchmarks.jl               # performance measurements
+julia bench/benchmarks.jl                    # performance measurements
 ```
 
-Documentation builds with Documenter.jl:
+Documentation builds with Documenter.jl (`docs/make.jl` activates its own environment):
 
 ```bash
-julia --project=docs docs/make.jl
+julia docs/make.jl
 # open docs/build/index.html
 ```
 

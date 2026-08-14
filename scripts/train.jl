@@ -139,6 +139,7 @@ function main()
             "run_id" => run_id,
             "seed" => seed,
         ),
+        "hardware" => hardware_fingerprint(),
     )
     open(joinpath(run_dir, "config.toml"), "w") do io
         TOML.print(io, final_config)
