@@ -1,8 +1,5 @@
 # MilliHertzQML.jl
 
-[![CI](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml)
-[![codecov](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl)
-
 Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
 ## File Structure
@@ -38,7 +35,7 @@ MilliHertzQML/
 │   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
 │   └── outputs/            # Per-run plots and results (not tracked)
 ├── models/                 # Per-run model checkpoints (not tracked)
-├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build
+├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build (manual dispatch until the repository is public)
 ├── .JuliaFormatter.toml    # Committed formatter configuration
 ├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
 ├── CITATION.cff            # Citation metadata
@@ -47,15 +44,14 @@ MilliHertzQML/
 └── Manifest.toml           # Pinned dependency versions (tracked)
 ```
 
-```
-
 ## Installation
 
-Julia 1.12 is the supported release: the committed `Manifest.toml` files are
-resolved on it and it is the `[compat]` floor. Newer releases are exercised
-by an advisory CI job only. With [juliaup](https://github.com/JuliaLang/juliaup),
-`juliaup add 1.12` installs it and `julia +1.12` selects it. From a clone
-of this repository:
+Julia 1.13 is the development release: the committed `Manifest.toml` files
+are resolved on it. The `[compat]` floor is 1.12, where the suite last
+passed on 2026-09-10; the floor is retained until continuous integration
+exercises it again. With [juliaup](https://github.com/JuliaLang/juliaup),
+`juliaup update` keeps the `release` channel current. From a clone of this
+repository:
 
 ```bash
 git clone git@github.com:PaulGoG/MilliHertzQML.jl.git

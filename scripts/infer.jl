@@ -1,7 +1,7 @@
 ENV["GKSwstype"] = "100"
 include(joinpath(@__DIR__, "common.jl"))
 
-using MilliHertzQML, CSV, DataFrames, Plots, ArgParse, TOML, Dates, EvalMetrics
+using MilliHertzQML, CSV, DataFrames, Plots, ArgParse, TOML, Dates
 
 function parse_commandline()
     s = ArgParseSettings(description = "Run Inference with the MilliHertzQML VQC")
@@ -38,6 +38,57 @@ function parse_commandline()
 end
 
 """
+    roc_points(y_true, scores) -> (thresholds, tpr, fpr)
+
+Receiver operating characteristic of `scores` against the binary labels
+`y_true` (0/1): every distinct score taken as the decision threshold of the
+rule `score >= threshold`, in decreasing order, with the true- and
+false-positive rates reached at each. Both classes must be present.
+"""
+function roc_points(y_true, scores)
+    n_pos = count(==(1), y_true)
+    n_neg = length(y_true) - n_pos
+    (n_pos > 0 && n_neg > 0) || throw(
+        ArgumentError(
+            "a ROC curve needs both classes; got $n_pos positive and $n_neg negative labels. " *
+            "Use blind inference (--labels \"\") with a persisted threshold instead.",
+        ),
+    )
+    order = sortperm(scores; rev = true)
+    thresholds_arr = eltype(scores)[]
+    tpr_arr = Float64[]
+    fpr_arr = Float64[]
+    tp = 0
+    fp = 0
+    for (k, i) in enumerate(order)
+        y_true[i] == 1 ? (tp += 1) : (fp += 1)
+        if k == length(order) || scores[order[k+1]] != scores[i]
+            push!(thresholds_arr, scores[i])
+            push!(tpr_arr, tp / n_pos)
+            push!(fpr_arr, fp / n_neg)
+        end
+    end
+    return thresholds_arr, tpr_arr, fpr_arr
+end
+
+"""
+    roc_area(tpr, fpr) -> Float64
+
+Area under the ROC curve by the trapezoidal rule over the points returned by
+`roc_points`, with the origin prepended.
+"""
+function roc_area(tpr_arr, fpr_arr)
+    area = 0.0
+    tpr_prev = 0.0
+    fpr_prev = 0.0
+    for (tpr, fpr) in zip(tpr_arr, fpr_arr)
+        area += (fpr - fpr_prev) * (tpr + tpr_prev) / 2
+        tpr_prev, fpr_prev = tpr, fpr
+    end
+    return area
+end
+
+"""
     select_threshold(y_true, probs, target_fpr)
 
 Select the decision threshold from the ROC curve: the highest-TPR threshold
@@ -45,9 +96,7 @@ satisfying `fpr <= target_fpr`, or the Youden's J maximizer when
 `target_fpr == 0`. Returns `(threshold, index, tpr, fpr, criterion)`.
 """
 function select_threshold(y_true, probs, target_fpr)
-    thresholds_arr = thresholds(probs)
-    tpr_arr = true_positive_rate(y_true, probs, thresholds_arr)
-    fpr_arr = false_positive_rate(y_true, probs, thresholds_arr)
+    thresholds_arr, tpr_arr, fpr_arr = roc_points(y_true, probs)
     if target_fpr > 0.0
         valid_idx = findall(fpr_arr .<= target_fpr)
         opt_idx = isempty(valid_idx) ? 1 : valid_idx[argmax(tpr_arr[valid_idx])]
@@ -174,10 +223,9 @@ function main()
     thresh_file = joinpath(dirname(model_path), "threshold.toml")
     local opt_thresh, opt_idx, tpr_arr, fpr_arr, auc_score
     if has_labels
-        roc = roccurve(y_true, probs)
-        auc_score = auc_trapezoidal(roc...)
         opt_thresh, opt_idx, tpr_arr, fpr_arr, criterion =
             select_threshold(y_true, probs, target_fpr)
+        auc_score = roc_area(tpr_arr, fpr_arr)
 
         open(thresh_file, "w") do io
             TOML.print(

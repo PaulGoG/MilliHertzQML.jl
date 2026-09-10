@@ -70,9 +70,24 @@ Notable changes to MilliHertzQML. The format follows
 - Preprocessing refuses an output path that coincides with an input.
 - Inference: model artifacts without a scaler are rejected; the
   sensitivity-versus-SNR figure bins the observed SNR range.
-- CI: the blocking test job runs on Julia 1.12 (the compat floor the
-  Manifests are resolved on) with coverage; a job on the current stable
-  release is advisory; formatting and documentation-build jobs added.
+- Toolchain: every environment (root, `test/`, `scripts/`, `bench/`,
+  `docs/`) is re-resolved on Julia 1.13.0, taking the newest compatible
+  versions (Yao 0.9.3, Zygote 0.7.13, Flux 0.16.11, JLD2 0.6.6); the
+  `[compat]` floor stays at 1.12.
+- Inference: the ROC curve, its area, and the threshold selection are
+  computed in `scripts/infer.jl` (`roc_points`, `roc_area`); a labeled
+  set containing a single class is rejected with an `ArgumentError`.
+- CI: the workflow runs on manual dispatch only until the repository is
+  public (GitHub Actions minutes are unavailable on the private
+  repository); the matrix tests the current stable release with coverage
+  and the 1.12 compat floor; formatting and documentation-build jobs
+  added. The README badges are removed for the same period.
+- `predict` and `accuracy` documented.
+
+### Removed
+- `EvalMetrics` from the script environment: unmaintained since 2024-07
+  and broken on Julia 1.13, where its unqualified `ispositive` collides
+  with the new `Base.ispositive`.
 
 ## [0.1.0] — 2026-08-07
 
