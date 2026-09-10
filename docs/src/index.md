@@ -4,7 +4,7 @@ MilliHertzQML is a Julia pipeline for the detection of massive black hole binary
 
 The pipeline comprises four stages, each an executable script driven by `config.toml` with CLI overrides:
 
-1. `scripts/generate_data.jl` — simulates continuous milliHertz telemetry at physical strain amplitude (Robson–Cornish–Liu noise, resolvable galactic binaries and EMRIs, MBHB injections at a prescribed matched-filter SNR), written to HDF5 with point-wise labels and an event catalog.
+1. `scripts/generate_data.jl` — simulates continuous milliHertz telemetry at physical strain amplitude (Robson–Cornish–Liu noise, resolvable galactic binaries and EMRIs, IMRPhenomA MBHB injections at a prescribed matched-filter SNR), written to HDF5 with point-wise labels and an event catalog.
 2. `scripts/preprocess_ldc.jl` — extracts a four-dimensional PSD-whitened spectral feature vector per sliding window.
 3. `scripts/train.jl` — trains the VQC with Adam, exponential learning-rate decay, and early stopping.
 4. `scripts/infer.jl` — evaluates the classifier, selects a decision threshold from the ROC curve, and produces diagnostic figures.

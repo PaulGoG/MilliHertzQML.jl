@@ -14,6 +14,7 @@ MilliHertzQML/
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, BCE loss, gradient step
 │   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
+│   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
 │   ├── data.jl             # Whitened window features, train-fitted feature scaler, CSV loading
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── scripts/
@@ -116,7 +117,7 @@ julia docs/make.jl
 | Component | State |
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
-| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, injections scaled to a matched-filter SNR and anchored on the coalescence sample; the phenomenological MBHB waveform (Nyquist aliasing near merger, no mass-consistent ringdown) awaits the closed-form IMR model |
+| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features; scaler fitted on the training partition and persisted with the model |
 | Training script | Runs end-to-end (verified); evaluation protocol still leaks information (random split over overlapping windows, validation set reused as test set) |
 | Inference script | Runs with labeled and blind data; threshold persisted per run; threshold is still fitted on the evaluated dataset |

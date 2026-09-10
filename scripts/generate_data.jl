@@ -53,39 +53,6 @@ function parse_commandline()
     return parse_args(s)
 end
 
-"""
-    phenomenological_chirp(rng, fs, duration_sec) -> (signal, merger_index, parameters)
-
-Unit-scale phenomenological inspiral–merger–ringdown waveform: a Newtonian
-inspiral (phase ∝ τ^{5/8}, amplitude ∝ τ^{-1/4} with τ the time to
-coalescence) of `duration_sec` followed by an exponentially damped ringdown,
-sampled at `fs`. `merger_index` is the sample of coalescence within
-`signal`. The chirp scale, ringdown frequency, and damping time are drawn
-from `rng` and returned in `parameters`. This approximant is a placeholder
-until the closed-form IMR model replaces it.
-"""
-function phenomenological_chirp(rng::AbstractRNG, fs::Real, duration_sec::Real)
-    n_inspiral = max(2, round(Int, duration_sec * fs))
-    t = range(-duration_sec, 0.0; length = n_inspiral)   # time to coalescence ≤ 0
-    chirp_scale = rand(rng, 0.5:0.1:2.0)
-    τ = max.(-t, 0.1)
-    phase = -2.0 .* chirp_scale .* τ .^ (5 / 8)
-    amp_inspiral = τ .^ (-0.25)
-
-    f_ring = rand(rng, 0.005:0.001:0.05)      # ringdown frequency [Hz]
-    τ_ring = rand(rng, 100.0:10.0:500.0)      # damping time [s]
-    n_ring = max(2, round(Int, τ_ring * 5 * fs))
-    t_ring = range(0.0, τ_ring * 5; length = n_ring)
-    amp_ring = amp_inspiral[end] .* exp.(-t_ring ./ τ_ring)
-
-    signal = vcat(
-        amp_inspiral .* cos.(phase),
-        amp_ring .* cos.(2π * f_ring .* t_ring .+ phase[end]),
-    )
-    parameters = (chirp_scale = chirp_scale, f_ring_hz = f_ring, tau_ring_sec = τ_ring)
-    return signal, n_inspiral, parameters
-end
-
 function main()
     parsed_args = parse_commandline()
 
@@ -132,6 +99,22 @@ function main()
     mbhb_duration_days =
         cfgget(gen_cfg, "mbhb_duration_days", 2.0; type = Float64, min = 1e-3)
     noise_f_min = cfgget(gen_cfg, "noise_f_min_hz", 1e-5; type = Float64, min = 0.0)
+    mass_min = cfgget(gen_cfg, "mbhb_total_mass_min", 1e5; type = Float64, min = 1.0)
+    mass_max = cfgget(gen_cfg, "mbhb_total_mass_max", 1e7; type = Float64, min = mass_min)
+    mass_ratio_max = cfgget(gen_cfg, "mbhb_mass_ratio_max", 10.0; type = Float64, min = 1.0)
+    nyquist_taper =
+        cfgget(gen_cfg, "nyquist_taper", 0.9; type = Float64, min = 0.3, max = 1.0)
+    label_span = cfgget(
+        gen_cfg,
+        "label_span",
+        "detectable";
+        type = String,
+        choices = ("detectable", "injection", "fixed"),
+    )
+    label_snr_threshold =
+        cfgget(gen_cfg, "label_snr_threshold", 5.0; type = Float64, min = 1e-3)
+    label_window_size = cfgget(gen_cfg, "label_window_size", 1000; type = Int, min = 2)
+    label_step = cfgget(gen_cfg, "label_step", 10; type = Int, min = 1)
 
     rng = Xoshiro(seed)
     psd = f -> lisa_noise_psd(f; observation_years = observation_years)
@@ -152,6 +135,7 @@ function main()
     println("  Duration : $days days ($n_total samples at $fs Hz)")
     println("  Noise    : Robson–Cornish–Liu 2019, confusion fit $observation_years yr")
     println("  MBHB SNR : [$snr_min, $snr_max] (matched filter)")
+    println("  MBHB mass: [$mass_min, $mass_max] M⊙, q ≤ $mass_ratio_max; IMRPhenomA")
 
     # 1. Instrument plus confusion noise at physical strain amplitude
     println("\n[1/4] Synthesizing calibrated Gaussian noise...")
@@ -190,9 +174,12 @@ function main()
         t_c_sec = Float64[],
         merger_index = Int[],
         snr = Float64[],
-        chirp_scale = Float64[],
+        total_mass_msun = Float64[],
+        mass_ratio = Float64[],
+        eta = Float64[],
+        f_merger_hz = Float64[],
         f_ring_hz = Float64[],
-        tau_ring_sec = Float64[],
+        f_cut_hz = Float64[],
         start_index = Int[],
         end_index = Int[],
         label_start_index = Int[],
@@ -203,7 +190,16 @@ function main()
         k_c = rand(rng, round(Int, 0.1*n_total):round(Int, 0.9*n_total))
         k_c = clamp(k_c, 1, n_total)
         t_c = (k_c - 1) / fs
-        signal, merger_index, pars = phenomenological_chirp(rng, fs, duration_sec)
+        total_mass =
+            10.0^(log10(mass_min) + rand(rng) * (log10(mass_max) - log10(mass_min)))
+        mass_ratio = 1 + rand(rng) * (mass_ratio_max - 1)
+        signal, merger_index, pars = phenoma_waveform(
+            fs,
+            duration_sec;
+            total_mass = total_mass,
+            mass_ratio = mass_ratio,
+            nyquist_taper = nyquist_taper,
+        )
 
         # Truncate to the record before scaling, so the recorded SNR is that
         # of the injected samples.
@@ -214,10 +210,29 @@ function main()
         segment = scale_to_snr(view(placed, covered), fs, ρ_target; psd = psd)
         strain[covered] .+= segment
 
-        lbl_start = clamp(k_c - round(Int, label_before_sec * fs), 1, n_total)
-        lbl_end = clamp(k_c + round(Int, label_after_sec * fs), 1, n_total)
-        labels[lbl_start:lbl_end] .= 1
-        snrs[lbl_start:lbl_end] .= Float32(ρ_target)
+        if label_span == "detectable"
+            placed[covered] .= segment
+            span = detectable_span(
+                placed,
+                covered,
+                fs,
+                label_window_size,
+                label_snr_threshold;
+                step = label_step,
+                psd = psd,
+            )
+            span === nothing && (span = (k_c+1):k_c)   # no window reaches the threshold
+            lbl_start, lbl_end = first(span), last(span)
+        elseif label_span == "injection"
+            lbl_start, lbl_end = first(covered), last(covered)
+        else
+            lbl_start = clamp(k_c - round(Int, label_before_sec * fs), 1, n_total)
+            lbl_end = clamp(k_c + round(Int, label_after_sec * fs), 1, n_total)
+        end
+        if lbl_start <= lbl_end
+            labels[lbl_start:lbl_end] .= 1
+            snrs[lbl_start:lbl_end] .= Float32(ρ_target)
+        end
         push!(
             catalog,
             (
@@ -225,9 +240,12 @@ function main()
                 t_c,
                 k_c,
                 ρ_target,
-                pars.chirp_scale,
-                pars.f_ring_hz,
-                pars.tau_ring_sec,
+                total_mass,
+                mass_ratio,
+                pars.η,
+                pars.f_merg,
+                pars.f_ring,
+                pars.f_cut,
                 first(covered),
                 last(covered),
                 lbl_start,
@@ -276,6 +294,14 @@ function main()
             "label_after_sec" => label_after_sec,
             "mbhb_duration_days" => mbhb_duration_days,
             "noise_f_min_hz" => noise_f_min,
+            "mbhb_total_mass_min" => mass_min,
+            "mbhb_total_mass_max" => mass_max,
+            "mbhb_mass_ratio_max" => mass_ratio_max,
+            "nyquist_taper" => nyquist_taper,
+            "label_span" => label_span,
+            "label_snr_threshold" => label_snr_threshold,
+            "label_window_size" => label_window_size,
+            "label_step" => label_step,
             "n_events_injected" => nrow(catalog),
         ),
         "hardware" => hardware_fingerprint(),

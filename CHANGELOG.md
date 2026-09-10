@@ -29,7 +29,20 @@ Notable changes to MilliHertzQML. The format follows
   `whiten_record`), the normalized tapered periodogram
   (`tapered_periodogram`), and `place_signal!`.
 - Event catalog CSV written by the simulator (merger sample and time,
-  SNR, waveform parameters, covered and labeled ranges).
+  SNR, masses and transition frequencies, covered and labeled ranges).
+- `src/waveforms.jl`: the IMRPhenomA inspiral–merger–ringdown model
+  (Ajith et al. 2008, Table I) generated in the frequency domain on the
+  injection segment's sampling grid (`phenoma_parameters`,
+  `phenoma_waveform`): coalescence placed through the phase's group
+  delay, inspiral roll-on at the segment start, cosine taper below
+  Nyquist. Replaces the phenomenological chirp (Nyquist aliasing,
+  unrelated ringdown). Masses drawn log-uniformly in
+  `[mbhb_total_mass_min, mbhb_total_mass_max]`, mass ratio in
+  `[1, mbhb_mass_ratio_max]`.
+- `label_span = "detectable" | "injection" | "fixed"`: by default the
+  positive span is the union of the windows whose matched-filter SNR
+  reaches `label_snr_threshold` (`detectable_span`), so labels cover the
+  signal an optimal single-window filter can see.
 - `FeatureScaler`, `fit_scaler`, `encode_features`: per-feature quantile
   bounds fitted on the training partition, persisted in the JLD2 model
   artifact, and applied at inference; `load_model` returns the scaler.

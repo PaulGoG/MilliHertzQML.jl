@@ -34,9 +34,12 @@ export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model
 export lisa_noise_psd, instrument_psd, confusion_psd, synthesize_noise
 export matched_filter_snr, scale_to_snr, highpass_record, whiten_record
-export tapered_periodogram, place_signal!
+export tapered_periodogram, place_signal!, detectable_span
+export phenoma_parameters, phenoma_amplitude, phenoma_phase, phenoma_group_delay
+export phenoma_start_frequency, phenoma_waveform
 
 include("simulation.jl")
+include("waveforms.jl")
 include("model.jl")
 include("training.jl")
 include("data.jl")

@@ -21,10 +21,18 @@ gb_snr_min = 1.0            # galactic-binary matched-filter SNR over the record
 gb_snr_max = 10.0           # galactic-binary matched-filter SNR over the record, upper bound; >= gb_snr_min
 emri_snr_min = 2.0          # EMRI matched-filter SNR over the record, lower bound; > 0
 emri_snr_max = 10.0         # EMRI matched-filter SNR over the record, upper bound; >= emri_snr_min
-label_before_sec = 43200.0  # label span before coalescence [s]; >= 0
-label_after_sec = 3600.0    # label span after coalescence [s]; >= 0
+label_span = "detectable"   # positive-label span; one of: "detectable" | "injection" | "fixed"
+label_snr_threshold = 5.0   # per-window matched-filter SNR defining "detectable"; > 0
+label_window_size = 1000    # window length of the detectability criterion [samples]; >= 2
+label_step = 10             # stride of the detectability scan [samples]; >= 1
+label_before_sec = 43200.0  # fixed span before coalescence [s]; >= 0; used when label_span = "fixed"
+label_after_sec = 3600.0    # fixed span after coalescence [s]; >= 0; used when label_span = "fixed"
 mbhb_duration_days = 2.0    # injected inspiral duration [days], capped at 0.4 of the record; > 0
 noise_f_min_hz = 1e-5       # lowest synthesized noise frequency [Hz]; >= 0
+mbhb_total_mass_min = 1e5   # detector-frame total mass, lower bound [M_sun]; >= 1
+mbhb_total_mass_max = 1e7   # detector-frame total mass, upper bound [M_sun]; >= mbhb_total_mass_min
+mbhb_mass_ratio_max = 10.0  # mass ratio q = m1/m2 upper bound; >= 1
+nyquist_taper = 0.9         # waveform spectrum tapered to zero at this fraction of the Nyquist frequency; in [0.3, 1]
 
 [preprocessing]
 window_size = 1000   # sliding-window length [samples]; >= 2

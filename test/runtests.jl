@@ -305,6 +305,97 @@ end
     @test_throws ArgumentError extract_features(long, 0.0)
 end
 
+@testset "IMRPhenomA waveform" begin
+    fs = 0.2
+    p6 = phenoma_parameters(1e6, 1.0)
+    @test p6.η ≈ 0.25
+    @test p6.f_merg < p6.f_ring < p6.f_cut
+    # Transition frequencies scale inversely with the total mass
+    @test phenoma_parameters(2e6, 1.0).f_merg ≈ p6.f_merg / 2
+    @test isapprox(p6.f_merg, 8.10e-3; rtol = 1e-2)   # 0.1254 / (π M) for η = 1/4
+    # Amplitude continuity at the transitions and zero beyond the cutoff
+    @test isapprox(phenoma_amplitude(p6.f_merg, p6), 1.0; atol = 1e-12)
+    ε = 1e-9
+    @test isapprox(
+        phenoma_amplitude(p6.f_ring - ε, p6),
+        phenoma_amplitude(p6.f_ring + ε, p6);
+        rtol = 1e-6,
+    )
+    @test phenoma_amplitude(p6.f_cut, p6) == 0
+    @test phenoma_amplitude(0.0, p6) == 0
+
+    h, k_m, p = phenoma_waveform(fs, 2 * 86400; total_mass = 1e6, mass_ratio = 1.0)
+    n = length(h)
+    @test n == 34560
+    @test maximum(abs, h) == 1
+    # The amplitude peak lands at the target merger time
+    T = n / fs
+    t_pad = clamp(max(0.05 * T, 20 / (π * p.sigma)), 0.0, 0.5 * T)
+    # (the amplitude peak precedes the arrival of the ringdown frequency by
+    # some ten total masses; a merger above the Nyquist taper adds a few samples)
+    @test abs(k_m - (round(Int, (T - t_pad) * fs) + 1)) / fs <= 20 * p.M_sec + 10 / fs
+    # Forward chirp: the zero-crossing frequency rises towards the merger
+    function zc_frequency(seg)
+        return count(j -> sign(seg[j]) != sign(seg[j-1]), 2:length(seg)) / 2 /
+               (length(seg) / fs)
+    end
+    f_early = zc_frequency(view(h, div(k_m, 4):div(k_m, 2)))
+    f_late = zc_frequency(view(h, (k_m-400):k_m))
+    @test f_late > 3 * f_early
+    # Inspiral spectral slope −7/6 on the realized spectrum
+    Hs = abs.(rfft(h))
+    fr = rfftfreq(n, fs)
+    f_lo = 2 * phenoma_start_frequency(p, (k_m - 1) / fs)
+    f_hi = p.f_merg / 2
+    band = (fr .>= f_lo) .& (fr .<= f_hi)
+    X = log.(fr[band])
+    Y = log.(Hs[band])
+    @test isapprox(cov(X, Y) / var(X), -7 / 6; atol = 0.15)
+    # No power above the Nyquist taper
+    @test maximum(Hs[fr .> 0.9*fs/2]) < 1e-3 * maximum(Hs)
+    # The segment starts quietly (roll-on and ramp)
+    @test maximum(abs, view(h, 1:100)) < 0.05
+    # Heavy and light binaries generate and place their peak correctly
+    for (M, q) in ((1e7, 4.0), (1e5, 1.0))
+        hh, kk, pp = phenoma_waveform(fs, 2 * 86400; total_mass = M, mass_ratio = q)
+        Tn = length(hh) / fs
+        tp = clamp(max(0.05 * Tn, 20 / (π * pp.sigma)), 0.0, 0.5 * Tn)
+        @test abs(kk - (round(Int, (Tn - tp) * fs) + 1)) / fs <= 20 * pp.M_sec + 10 / fs
+    end
+    @test_throws ArgumentError phenoma_parameters(0.0, 1.0)
+    @test_throws ArgumentError phenoma_parameters(1e6, 0.5)
+    @test_throws ArgumentError phenoma_waveform(
+        fs,
+        1000.0;
+        total_mass = 1e6,
+        mass_ratio = 1.0,
+        nyquist_taper = 1.5,
+    )
+end
+
+@testset "Detectable span" begin
+    fs = 0.2
+    n = 20000
+    t = (0:(n-1)) ./ fs
+    placed = zeros(n)
+    covered = 8001:9000
+    placed[covered] .= cos.(2π * 3e-3 .* t[covered])
+    # Scale so that a window holding the whole burst has SNR 20
+    ρ_full = matched_filter_snr(view(placed, 8001:9000), fs)
+    placed .*= 20 / ρ_full
+    span = detectable_span(placed, covered, fs, 1000, 5.0; step = 10)
+    @test span !== nothing
+    @test first(span) < first(covered) && last(span) > last(covered)
+    @test first(span) >= first(covered) - 999 && last(span) <= last(covered) + 999
+    # A higher threshold narrows the span, an unreachable one empties it
+    narrow = detectable_span(placed, covered, fs, 1000, 15.0; step = 10)
+    @test narrow !== nothing && length(narrow) < length(span)
+    @test detectable_span(placed, covered, fs, 1000, 1e6; step = 10) === nothing
+    @test detectable_span(placed, 5:4, fs, 1000, 5.0) === nothing
+    @test_throws ArgumentError detectable_span(placed, covered, fs, 1, 5.0)
+    @test_throws ArgumentError detectable_span(placed, covered, fs, 1000, 0.0)
+end
+
 @testset "Record high-pass" begin
     fs = 0.2
     n = 20000
@@ -417,6 +508,9 @@ end
         @test nrow(events) == 2
         @test all(8.0 .<= events.snr .<= 50.0)
         @test all(events.start_index .<= events.merger_index .<= events.end_index)
+        @test all(1e5 .<= events.total_mass_msun .<= 1e7)
+        @test all(events.label_start_index .>= events.start_index .- 999)
+        @test all(events.label_end_index .<= events.end_index .+ 999)
 
         stage("preprocess_ldc.jl", "--h5-file", h5, "--label-file", raw_labels) || return
         @test nrow(CSV.read(feats, DataFrame)) == n_windows

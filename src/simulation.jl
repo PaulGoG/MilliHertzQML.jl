@@ -314,3 +314,48 @@ function place_signal!(
     end
     return (first_sig+offset):(last_sig+offset)
 end
+
+"""
+    detectable_span(placed, covered, fs, window_size, threshold;
+                    step = 10, psd = lisa_noise_psd) -> Union{Nothing,UnitRange{Int}}
+
+Range of samples of the record-length signal `placed` (zero outside
+`covered`, the range it occupies) that belong to at least one window of
+`window_size` samples whose matched-filter SNR against `psd` reaches
+`threshold`. Window starts are scanned with stride `step` from
+`window_size - 1` samples before `covered` to its end. The per-window SNR
+of a chirp rises towards the merger and falls after the ringdown, so the
+qualifying windows form one interval; `nothing` when no window qualifies.
+This is the span over which an optimal filter operating on single windows
+sees the injection, and the default positive-label span of the simulator.
+"""
+function detectable_span(
+    placed::AbstractVector{<:Real},
+    covered::AbstractUnitRange{<:Integer},
+    fs::Real,
+    window_size::Integer,
+    threshold::Real;
+    step::Integer = 10,
+    psd = lisa_noise_psd,
+)
+    window_size >= 2 ||
+        throw(ArgumentError("window_size = $window_size; must be at least 2."))
+    step >= 1 || throw(ArgumentError("step = $step; must be at least 1."))
+    threshold > 0 || throw(ArgumentError("threshold = $threshold; must be positive."))
+    isempty(covered) && return nothing
+    n = length(placed)
+    lo = max(1, first(covered) - window_size + 1)
+    hi = min(n - window_size + 1, last(covered))
+    lo <= hi || return nothing
+    first_positive = typemax(Int)
+    last_positive = 0
+    for s in lo:step:hi
+        ρ = matched_filter_snr(view(placed, s:(s+window_size-1)), fs; psd = psd)
+        if ρ >= threshold
+            first_positive = min(first_positive, s)
+            last_positive = max(last_positive, s + window_size - 1)
+        end
+    end
+    last_positive == 0 && return nothing
+    return first_positive:last_positive
+end
