@@ -1,17 +1,20 @@
 include(joinpath(@__DIR__, "common.jl"))
 
-using HDF5, CSV, DataFrames, Statistics, MilliHertzQML, ArgParse, TOML
+using CSV, DataFrames, Statistics, MilliHertzQML, ArgParse, TOML
 
 function parse_commandline()
     s = ArgParseSettings(
-        description = "Pre-process raw HDF5 telemetry into whitened window features",
+        description = "Pre-process an HDF5 TDI product into per-window features",
     )
     @add_arg_table s begin
         "--config"
         help = "Path to the configuration file"
         default = joinpath(dirname(@__DIR__), "config.toml")
         "--h5-file"
-        help = "Path to the raw HDF5 telemetry file"
+        help = "Path to the HDF5 TDI product (simulator output or LDC file)"
+        default = nothing
+        "--tdi-group"
+        help = "HDF5 group or compound dataset holding t, X, Y, Z (default from [preprocessing] tdi_group)"
         default = nothing
         "--label-file"
         help = "Path to the associated point-wise label CSV (optional, used for training data)"
@@ -28,7 +31,7 @@ function parse_commandline()
         arg_type = Int
         default = nothing
         "--sample-rate"
-        help = "Sampling frequency of the telemetry in Hz"
+        help = "Expected sampling frequency in Hz; must agree with the file"
         arg_type = Float64
         default = nothing
     end
@@ -50,6 +53,61 @@ function analysis_band(section, key, default)
     return (Float64(band[1]), Float64(band[2]))
 end
 
+"""
+    whitening_psd(mode, pre_cfg, A, fs) -> (psd, description, table)
+
+Callable one-sided PSD used to whiten the record for `mode`: `"model"`
+(Robson–Cornish–Liu strain sensitivity, for simulator products), `"ldc"`
+(analytic TDI PSD of the `ldc` package in fractional-frequency units, for
+LDC products), `"welch"` (median-averaged estimate from the record itself),
+or `"none"` (no whitening; `psd` is `nothing`). `table` is the estimated
+PSD for `"welch"` (persisted beside the features) and `nothing` otherwise.
+"""
+function whitening_psd(mode::AbstractString, pre_cfg::AbstractDict, A, fs)
+    if mode == "model"
+        years = cfgget(
+            pre_cfg,
+            "observation_years",
+            1.0;
+            type = Float64,
+            choices = (0.5, 1.0, 2.0, 4.0),
+        )
+        return f -> lisa_noise_psd(f; observation_years = years),
+        "Robson–Cornish–Liu 2019 strain sensitivity, confusion fit $years yr",
+        nothing
+    elseif mode == "ldc"
+        model = cfgget(pre_cfg, "ldc_model", "sangria"; type = String)
+        tdi2 = cfgget(pre_cfg, "ldc_tdi2", false; type = Bool)
+        years = cfgget(pre_cfg, "ldc_observation_years", 0.0; type = Float64, min = 0.0)
+        psd =
+            f -> ldc_tdi_psd(
+                f;
+                channel = :A,
+                model = model,
+                tdi2 = tdi2,
+                observation_years = years,
+            )
+        psd(1e-3)   # validates the model name before the record is processed
+        return psd,
+        "LDC analytic A-channel PSD, model $model, TDI $(tdi2 ? 2 : 1.5), confusion $years yr",
+        nothing
+    elseif mode == "welch"
+        segment = cfgget(pre_cfg, "welch_segment_length", 65536; type = Int, min = 2)
+        segment <= length(A) || throw(
+            ArgumentError(
+                "welch_segment_length = $segment exceeds the record length $(length(A)).",
+            ),
+        )
+        freqs, table = welch_psd(A, fs; segment_length = segment, average = :median)
+        return interpolated_psd(freqs, table),
+        "median Welch estimate of the record, segment $segment samples",
+        DataFrame(frequency_hz = freqs, psd = table)
+    elseif mode == "none"
+        return nothing, "none", nothing
+    end
+    throw(ArgumentError("psd = $(repr(mode)); expected model, ldc, welch, or none."))
+end
+
 function main()
     parsed_args = parse_commandline()
 
@@ -64,6 +122,10 @@ function main()
             cfgget(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"; type = String),
         ),
     )
+    tdi_group = override(
+        parsed_args["tdi-group"],
+        cfgget(pre_cfg, "tdi_group", "obs/tdi"; type = String),
+    )
     window_size = override(
         parsed_args["window-size"],
         cfgget(pre_cfg, "window_size", 1000; type = Int, min = 2),
@@ -72,20 +134,29 @@ function main()
         parsed_args["step-size"],
         cfgget(pre_cfg, "step_size", 100; type = Int, min = 1),
     )
-    fs = override(
+    expected_fs = override(
         parsed_args["sample-rate"],
-        cfgget(pre_cfg, "sample_rate", 0.2; type = Float64, min = 1e-6),
+        cfgget(pre_cfg, "sample_rate", nothing; type = Union{Nothing,Float64}),
     )
     output_prefix = override(
         parsed_args["output-prefix"],
         cfgget(pre_cfg, "output_prefix", "telemetry"; type = String),
     )
-    observation_years = cfgget(
+    psd_mode = cfgget(
         pre_cfg,
-        "observation_years",
-        1.0;
-        type = Float64,
-        choices = (0.5, 1.0, 2.0, 4.0),
+        "psd",
+        "model";
+        type = String,
+        choices = ("model", "ldc", "welch", "none"),
+    )
+    feature_set = Symbol(
+        cfgget(
+            pre_cfg,
+            "feature_set",
+            "whitened";
+            type = String,
+            choices = ("whitened", "paper"),
+        ),
     )
     highpass_cutoff = cfgget(pre_cfg, "highpass_cutoff_hz", 5e-4; type = Float64, min = 0.0)
     highpass_order = cfgget(pre_cfg, "highpass_order", 8; type = Int, min = 1)
@@ -93,48 +164,49 @@ function main()
     high_band = analysis_band(pre_cfg, "high_band_hz", [5e-3, 1e-1])
     step_size <= window_size ||
         throw(ArgumentError("step_size = $step_size exceeds window_size = $window_size."))
-    psd = f -> lisa_noise_psd(f; observation_years = observation_years)
 
     println(
         "================================================================================",
     )
-    println("  TELEMETRY PRE-PROCESSOR (HDF5 -> whitened window features)")
+    println("  TELEMETRY PRE-PROCESSOR (HDF5 -> per-window features)")
     println(
         "================================================================================",
     )
-    println("File: $h5_path")
-    println("Window: $window_size | Step: $step_size | FS: $(fs) Hz")
-    println("Whitening PSD: Robson–Cornish–Liu 2019, confusion fit $observation_years yr")
-    println("Record high-pass: $(highpass_cutoff) Hz, order $highpass_order")
+    println("File: $h5_path ($tdi_group)")
 
-    # 1. Read the TDI channels
+    # 3. Read the TDI channels; the file's sampling step is authoritative
     println("\n[1/4] Reading TDI channels from HDF5...")
-    local x_obs, z_obs
-    h5open(h5_path, "r") do f
-        # Simple arrays (simulator) or a compound dataset (LDC)
-        tdi = f["obs"]["tdi"]
-        if typeof(tdi) <: HDF5.Group
-            x_obs = Float64.(read(tdi["X"]))
-            z_obs = Float64.(read(tdi["Z"]))
-        else
-            d = read(tdi)
-            x_obs = Float64[row.X for row in d]
-            z_obs = Float64[row.Z for row in d]
-        end
+    tdi = read_tdi(h5_path; group = tdi_group)
+    fs = 1 / tdi.dt
+    if expected_fs !== nothing && !isapprox(expected_fs, fs; rtol = 1e-9)
+        throw(
+            ArgumentError(
+                "sample_rate = $expected_fs Hz disagrees with the file's $(fs) Hz (dt = $(tdi.dt) s).",
+            ),
+        )
+    end
+    n_points = length(tdi.t)
+    println("Samples: $n_points | Window: $window_size | Step: $step_size | FS: $(fs) Hz")
+
+    # 4. Orthogonal A channel, record high-pass, whitening
+    println("[2/4] Computing the orthogonal A channel...")
+    A_obs, _, _ = tdi_to_aet(tdi.X, tdi.Y, tdi.Z)
+    if highpass_cutoff > 0
+        # Zero-phase high-pass below the analysis bands: the steep low-frequency
+        # noise would otherwise leak into every window through the taper.
+        A_obs = highpass_record(A_obs, fs; cutoff = highpass_cutoff, order = highpass_order)
+    end
+    psd, psd_description, psd_table = whitening_psd(psd_mode, pre_cfg, A_obs, fs)
+    println("Record high-pass: $(highpass_cutoff) Hz, order $highpass_order")
+    println("Whitening PSD: $psd_description")
+    println("Feature set: $feature_set")
+    if psd !== nothing
+        # Whiten the whole record: noise becomes unit-variance white, so the
+        # tapered periodogram of every window is unbiased.
+        A_obs = whiten_record(A_obs, fs; psd = psd)
     end
 
-    n_points = length(x_obs)
-    # 2. Orthogonal A channel
-    println("[2/4] Computing the orthogonal A channel...")
-    A_obs = (z_obs .- x_obs) ./ sqrt(2.0)
-    # Zero-phase high-pass below the analysis bands: the steep low-frequency
-    # noise would otherwise leak into every window through the taper.
-    A_obs = highpass_record(A_obs, fs; cutoff = highpass_cutoff, order = highpass_order)
-    # Whiten the whole record by the model PSD: noise becomes unit-variance
-    # white, so the tapered periodogram of every window is unbiased.
-    A_obs = whiten_record(A_obs, fs; psd = psd)
-
-    # 3. Point-wise labels (optional)
+    # 5. Point-wise labels (optional)
     has_labels = !isempty(parsed_args["label-file"])
     local raw_labels
     local raw_snrs
@@ -148,11 +220,11 @@ function main()
         raw_snrs = "SNR" in names(label_df) ? label_df[:, :SNR] : zeros(Float32, n_points)
     end
 
-    # 4. Sliding-window feature extraction
+    # 6. Sliding-window feature extraction
     n_points >= window_size ||
         error("Telemetry too short: $n_points samples < window_size = $window_size.")
     n_windows = div(n_points - window_size, step_size) + 1
-    println("[3/4] Extracting whitened features over $n_windows windows...")
+    println("[3/4] Extracting features over $n_windows windows...")
 
     features = zeros(Float32, n_windows, 4)
     window_labels = zeros(Int, n_windows)
@@ -163,9 +235,13 @@ function main()
         end_idx = start_idx + window_size - 1
         window = @view A_obs[start_idx:end_idx]
 
-        p_low, p_high, entropy, log_power_std =
-            extract_features(window, fs; low_band = low_band, high_band = high_band)
-        features[i, :] .= (p_low, p_high, entropy, log_power_std)
+        features[i, :] .= extract_features(
+            window,
+            fs;
+            low_band = low_band,
+            high_band = high_band,
+            feature_set = feature_set,
+        )
 
         # A window is positive when any of its samples is labeled; it carries
         # the largest per-sample SNR inside it.
@@ -179,31 +255,33 @@ function main()
         end
     end
 
-    # 5. Persist
+    # 7. Persist
     println("\n[4/4] Saving processed data to CSV...")
     out_dir = pipeline_paths(config_file).inputs
     mkpath(out_dir)
 
     feat_path = joinpath(out_dir, "$(output_prefix)_features.csv")
     lab_path = joinpath(out_dir, "$(output_prefix)_labels.csv")
+    psd_path = joinpath(out_dir, "$(output_prefix)_psd.csv")
     # Never overwrite an input: an output prefix equal to the stem of the
     # telemetry file would land the window labels on the point-wise labels.
     inputs = filter(
         !isempty,
         [h5_path, has_labels ? resolvepath(parsed_args["label-file"]) : ""],
     )
-    for out in (feat_path, lab_path), inp in inputs
+    for out in (feat_path, lab_path, psd_path), inp in inputs
         abspath(out) == abspath(inp) && throw(
             ArgumentError(
                 "output $out coincides with input $inp; choose another output prefix.",
             ),
         )
     end
-    CSV.write(
-        feat_path,
-        DataFrame(features, [:p_low, :p_high, :spectral_entropy, :log_power_std]),
-    )
+    CSV.write(feat_path, DataFrame(features, feature_names(feature_set)))
     println("  - Features saved to: $feat_path")
+    if psd_table !== nothing
+        CSV.write(psd_path, psd_table)
+        println("  - Whitening PSD saved to: $psd_path")
+    end
     sidecar = replace(feat_path, r"\.csv$" => ".toml")
     open(sidecar, "w") do io
         TOML.print(
@@ -211,10 +289,14 @@ function main()
             Dict(
                 "features" => Dict(
                     "source" => rootrelative(h5_path),
+                    "tdi_group" => tdi_group,
                     "window_size" => window_size,
                     "step_size" => step_size,
                     "sample_rate" => fs,
-                    "observation_years" => observation_years,
+                    "feature_set" => String(feature_set),
+                    "feature_names" => String.(feature_names(feature_set)),
+                    "psd" => psd_mode,
+                    "psd_description" => psd_description,
                     "low_band_hz" => collect(low_band),
                     "high_band_hz" => collect(high_band),
                     "highpass_cutoff_hz" => highpass_cutoff,

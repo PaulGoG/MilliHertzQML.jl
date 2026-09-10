@@ -62,6 +62,26 @@ Notable changes to MilliHertzQML. The format follows
   block), and `metrics.toml` (validation and test blocks); inference
   writes `metrics.toml` for labeled rows and accepts `--block
   validation | test`.
+- `src/ldc.jl`: the analytic TDI noise PSD of the `ldc` package
+  (`ldc_tdi_psd`, `ldc_confusion_psd`; equal arms, X/XY/A/E/T, TDI 1.5
+  and 2, named noise levels), readers of the compound HDF5 TDI datasets
+  and catalogs (`read_tdi`, `read_catalog`), `tdi_to_aet`, a
+  median-averaged Welch estimate (`welch_psd`) with log-log
+  interpolation (`interpolated_psd`), and truth-stream labeling
+  (`windowed_snr`, `snr_peaks` with a merger threshold and a precursor
+  rule for inspiral fluctuations, `detectable_spans`, `fixed_spans`,
+  `span_labels`). HDF5 becomes a package dependency.
+- `scripts/label_ldc.jl`: point-wise labels and an event table of an LDC
+  product from its truth stream and catalog, or from a signal-only CSV
+  for the blind set; `[ldc]` configuration section.
+- Preprocessing selects the whitening PSD (`[preprocessing] psd = "model"
+  | "ldc" | "welch" | "none"`) and the feature set (`feature_set =
+  "whitened" | "paper"`), reads the sampling step from the file, and
+  persists the Welch estimate beside the features.
+- Sangria validation anchors in the test suite, gated on
+  `MILLIHERTZQML_LDC_DIR`: the School-notebook SNR of catalog source 4
+  (1883.5 against 1885.7) and a noise-only null test of the whitening
+  chain.
 
 ### Changed
 - Evaluation protocol: the random shuffle over overlapping windows is

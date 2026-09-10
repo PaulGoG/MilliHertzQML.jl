@@ -43,13 +43,29 @@ The record is first high-passed in the frequency domain with a zero-phase Butter
 3. spectral entropy of the normalized whitened power, divided by ``\ln N_\mathrm{bins}`` (in ``[0, 1]``);
 4. ``\log_{10}`` of the standard deviation of the whitened power.
 
-The band edges and the confusion fit used for whitening are configuration keys of `[preprocessing]`. Because the features are PSD-normalized, they are independent of the window length and of the absolute strain amplitude; the same code path serves the simulator and physical-strain LDC data, provided the whitening PSD describes the channel's noise.
+The band edges and the whitening PSD are configuration keys of `[preprocessing]`: `psd = "model"` is ``S_n`` above (simulator products), `"ldc"` the analytic TDI PSD of the next section (LDC products), `"welch"` a median-averaged Welch estimate of the record itself (`welch_psd`; robust to the transient signals it contains and to the galactic foreground, which it absorbs into the whitening), and `"none"` no whitening. Because the features are PSD-normalized, they are independent of the window length and of the absolute amplitude of the channel.
+
+The alternative feature set of Isfan et al. (2025), `feature_set = "paper"`, takes the normalized spectral entropy and the logarithm of the mean, standard deviation, and maximum of the periodogram of the raw window (the paper applies min–max scaling to the raw moments; the logarithm keeps the scaling well conditioned over the decades a TDI spectrum spans). It is meant for parity runs with `psd = "none"`.
 
 Features are mapped onto the phase-encoding interval ``[0, 2\pi]`` by a `FeatureScaler` whose bounds are per-feature quantiles of the **training partition** (`fit_scaler`, `[training] scaler_quantiles`). The scaler is persisted inside the model artifact and applied unchanged at inference (`encode_features`), so no statistic of the evaluated data enters the encoding.
+
+## LISA Data Challenge Products (`src/ldc.jl`)
+
+LDC time series (Sangria, Spritz) are first-generation TDI Michelson variables ``X, Y, Z`` in dimensionless fractional-frequency units, stored as compound HDF5 datasets ``\{t, X, Y, Z\}`` at 5 s cadence; `read_tdi` reads them (and the simulator's group layout) and `tdi_to_aet` forms ``A = (Z - X)/\sqrt{2}``, ``E = (X - 2Y + Z)/\sqrt{6}``, ``T = (X + Y + Z)/\sqrt{3}``. Their noise is not the strain sensitivity but the TDI noise PSD of the `ldc` package (`ldc_tdi_psd`, equal arms): with ``x = 2\pi f L/c``, the single-link test-mass and optical-metrology terms in fractional frequency, ``S_\mathrm{pm} = S_\mathrm{acc}(f) (2\pi f)^{-4} (2\pi f/c)^2`` and ``S_\mathrm{op} = S_\mathrm{oms}(f) (2\pi f/c)^2``, give
+
+```math
+S_A = S_E = 8 \sin^2 x \left[ 2 S_\mathrm{pm} (3 + 2\cos x + \cos 2x) + S_\mathrm{op} (2 + \cos x) \right],
+```
+
+with the noise levels of the named model (`"sangria"`: 7.9 pm, 2.4 fm s⁻²; `"SciRDv1"`: 15 pm, 3 fm s⁻²), a factor ``4 \sin^2 2x`` for second-generation TDI, and an optional galactic-confusion term with the package's observation-time fit (`ldc_confusion_psd`). The port reproduces the package's doctest of the X-channel PSD to eight digits.
+
+Two anchors validate the port against the Sangria training product (tests that run when `MILLIHERTZQML_LDC_DIR` points at it): the optimal A-channel SNR of catalog source 4 against the SciRDv1 model, 1883.5 here against 1885.7 in the LDC School notebook (which evaluates a lisabeta waveform; the segment excludes the neighbouring merger of source 3), and a noise-only null test in which the observed record minus every truth stream has a Welch PSD within 15 % of the `"sangria"` model from 0.1 mHz to 80 mHz and, whitened by that model, unit band powers.
+
+`scripts/label_ldc.jl` builds point-wise labels from a truth stream: the A channel of the signal-only TDI is scanned with a windowed matched filter against the analytic PSD (`windowed_snr`), mergers come from the catalog's coalescence times or, without a catalog (the blind set's unblinded MBHB stream), from the SNR peaks (`snr_peaks`), and the positive span is either the paper's fixed window ``[t_c - 4\,\mathrm{d}, t_c + 27\,\mathrm{min}]`` (`fixed_spans`) or the detectable span of the simulator's convention (`detectable_spans`). Neighbouring mergers (Sangria sources 2, 3, 4 within four days) produce one merged label run, which event-level metrics count as one event.
 
 ## Known Physical Deficiencies
 
 Retained so that the documentation reflects the code as it stands; remediation is planned.
 
 1. **Waveform model scope.** IMRPhenomA is non-spinning and dominant-mode only; spins, higher harmonics, precession, and the LISA response (orbital modulation, TDI transfer function) are not modelled. The injected strain is the sky-averaged equivalent that the sensitivity model refers to.
-2. **Whitening PSD for LDC data.** The whitening uses the analytic sensitivity model; for LDC TDI channels the channel noise PSD must be estimated from the data or taken from the LDC noise model. This is part of the Sangria benchmark stage.
+2. **LDC noise model scope.** The equal-arm analytic TDI PSD ignores the arm-length variation of the orbits and the anti-aliasing filters of the LDC simulator (the null test shows a 15 % excess below 3 mHz and the filter roll-off above 80 mHz), and it vanishes at the TDI null ``f = c/(2L) \approx 60`` mHz, where the data keep a finite floor: whitening by it (`psd = "ldc"`) is ill-conditioned there and the default high band, which reaches 100 mHz, must then be cut below the null. The Welch estimate (`psd = "welch"`) absorbs all three effects and is the whitening of choice for LDC records. Spritz glitches and gaps are not handled.

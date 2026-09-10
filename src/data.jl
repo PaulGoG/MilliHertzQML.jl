@@ -2,13 +2,31 @@
 # train-fitted feature scaler, and CSV loading of feature and label tables.
 
 """
-    extract_features(x, sample_rate = 0.2; low_band = (1e-3, 5e-3),
-                     high_band = (5e-3, 1e-1), taper = :hann)
+    feature_names(feature_set) -> Vector{Symbol}
 
-Four-dimensional feature vector of a window `x` of the **whitened** record
-([`whiten_record`](@ref)) sampled at `sample_rate` [Hz], computed from its
-tapered periodogram ``P_k`` ([`tapered_periodogram`](@ref); unit mean for
-noise, hence independent of window length and strain amplitude):
+Column names of the feature table produced by [`extract_features`](@ref)
+for `feature_set` (`:whitened` or `:paper`).
+"""
+function feature_names(feature_set::Symbol)
+    feature_set == :whitened && return [:p_low, :p_high, :spectral_entropy, :log_power_std]
+    feature_set == :paper &&
+        return [:spectral_entropy, :log_power_mean, :log_power_std, :log_power_max]
+    throw(ArgumentError("feature_set = $feature_set; expected :whitened or :paper."))
+end
+
+"""
+    extract_features(x, sample_rate = 0.2; low_band = (1e-3, 5e-3),
+                     high_band = (5e-3, 1e-1), taper = :hann, feature_set = :whitened)
+
+Four-dimensional feature vector of a window `x` sampled at `sample_rate`
+[Hz], computed from its tapered periodogram ``P_k``
+([`tapered_periodogram`](@ref)). Returns a tuple of `Float32` whose entries
+are named by [`feature_names`](@ref).
+
+`feature_set = :whitened` (the default) expects a window of the
+**whitened** record ([`whiten_record`](@ref)), whose periodogram has unit
+mean for noise and is therefore independent of window length and strain
+amplitude:
 
 1. mean whitened power in `low_band` [Hz];
 2. mean whitened power in `high_band` [Hz];
@@ -17,8 +35,13 @@ noise, hence independent of window length and strain amplitude):
 4. ``\\log_{10}`` of the standard deviation of the whitened power (0 for
    white noise, whose periodogram is exponentially distributed).
 
-Throws an `ArgumentError` when a band holds no frequency bin. Returns a
-tuple of `Float32`.
+`feature_set = :paper` is the set of Isfan et al. (2025) on the raw window:
+the normalized spectral entropy and ``\\log_{10}`` of the mean, standard
+deviation, and maximum of the periodogram (the paper uses the raw
+moments; the logarithm is a monotone transform that keeps their min–max
+scaling well conditioned over the many decades a TDI spectrum spans).
+
+Throws an `ArgumentError` when an analysis band holds no frequency bin.
 """
 function extract_features(
     x::AbstractVector{<:Real},
@@ -26,22 +49,13 @@ function extract_features(
     low_band::Tuple{Real,Real} = (1e-3, 5e-3),
     high_band::Tuple{Real,Real} = (5e-3, 1e-1),
     taper::Symbol = :hann,
+    feature_set::Symbol = :whitened,
 )
     sample_rate > 0 || throw(ArgumentError("sample_rate = $sample_rate; must be positive."))
+    feature_set in (:whitened, :paper) ||
+        throw(ArgumentError("feature_set = $feature_set; expected :whitened or :paper."))
     power = tapered_periodogram(x; taper = taper)
     n_samples = length(x)
-    freqs = rfftfreq(n_samples, sample_rate)
-
-    mask_low = (freqs .>= low_band[1]) .& (freqs .<= low_band[2])
-    mask_high = (freqs .> high_band[1]) .& (freqs .<= high_band[2])
-    (any(mask_low) && any(mask_high)) || throw(
-        ArgumentError(
-            "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
-            "in the $(low_band) Hz or $(high_band) Hz analysis bands; use a longer window.",
-        ),
-    )
-    p_low = mean(@view power[mask_low])
-    p_high = mean(@view power[mask_high])
 
     total = sum(power)
     n_bins = length(power) - 1   # the DC bin carries no power
@@ -54,9 +68,29 @@ function extract_features(
         end
         entropy /= log(n_bins)
     end
+    positive = @view power[2:end]
+    log_power_std = log10(std(positive) + 1e-300)
 
-    log_power_std = log10(std(@view power[2:end]) + 1e-12)
+    if feature_set == :paper
+        log_power_mean = log10(mean(positive) + 1e-300)
+        log_power_max = log10(maximum(positive) + 1e-300)
+        return Float32(entropy),
+        Float32(log_power_mean),
+        Float32(log_power_std),
+        Float32(log_power_max)
+    end
 
+    freqs = rfftfreq(n_samples, sample_rate)
+    mask_low = (freqs .>= low_band[1]) .& (freqs .<= low_band[2])
+    mask_high = (freqs .> high_band[1]) .& (freqs .<= high_band[2])
+    (any(mask_low) && any(mask_high)) || throw(
+        ArgumentError(
+            "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
+            "in the $(low_band) Hz or $(high_band) Hz analysis bands; use a longer window.",
+        ),
+    )
+    p_low = mean(@view power[mask_low])
+    p_high = mean(@view power[mask_high])
     return Float32(p_low), Float32(p_high), Float32(entropy), Float32(log_power_std)
 end
 

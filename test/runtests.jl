@@ -606,6 +606,239 @@ end
     @test isfinite(train_step!(model, opt_state, Xw, yw; positive_weight = 2.0))
 end
 
+@testset "LDC noise model and readers" begin
+    # Doctest of the ldc package: SciRDv1 X-channel PSD at five frequencies
+    f5 = 10.0 .^ range(-5, 0; length = 5)
+    x_ref = [7.13597299e-40, 2.76990908e-42, 9.52379492e-43, 1.92645601e-40, 1.15359813e-36]
+    @test all(
+        isapprox(ldc_tdi_psd(f; channel = :X, model = "SciRDv1"), r; rtol = 1e-8) for
+        (f, r) in zip(f5, x_ref)
+    )
+    # A = E for equal arms; T is quieter than X in band; TDI 2 rescales by 4 sin²(2x)
+    @test ldc_tdi_psd(2e-3; channel = :A) == ldc_tdi_psd(2e-3; channel = :E)
+    @test ldc_tdi_psd(2e-3; channel = :T) < ldc_tdi_psd(2e-3; channel = :X)
+    x = 2π * 2e-3 * MilliHertzQML.L_ARM / MilliHertzQML.C_LIGHT
+    @test isapprox(
+        ldc_tdi_psd(2e-3; channel = :A, tdi2 = true),
+        4 * sin(2x)^2 * ldc_tdi_psd(2e-3; channel = :A);
+        rtol = 1e-12,
+    )
+    @test ldc_tdi_psd(0.0) == Inf
+    @test ldc_tdi_psd(1e-3; observation_years = 1.0) > ldc_tdi_psd(1e-3)
+    @test ldc_confusion_psd(1e-3; channel = :A) ==
+          1.5 * ldc_confusion_psd(1e-3; channel = :X)
+    @test ldc_confusion_psd(1e-3; observation_years = 4.0) <
+          ldc_confusion_psd(1e-3; observation_years = 0.5)
+    @test_throws ArgumentError ldc_tdi_psd(1e-3; model = "unknown")
+    @test_throws ArgumentError ldc_tdi_psd(1e-3; channel = :B)
+    @test_throws ArgumentError ldc_confusion_psd(1e-3; observation_years = 20.0)
+
+    # A/E/T is an orthonormal combination
+    rng = StableRNG(5)
+    X, Y, Z = randn(rng, 100), randn(rng, 100), randn(rng, 100)
+    A, E, T = tdi_to_aet(X, Y, Z)
+    @test isapprox(
+        sum(A .^ 2 .+ E .^ 2 .+ T .^ 2),
+        sum(X .^ 2 .+ Y .^ 2 .+ Z .^ 2);
+        rtol = 1e-12,
+    )
+    @test A == (Z .- X) ./ sqrt(2)
+    @test_throws DimensionMismatch tdi_to_aet(X, Y, Z[1:99])
+
+    # Compound and group HDF5 layouts read identically; catalogs become tables
+    mktempdir() do dir
+        n = 64
+        t = collect(0.0:5.0:(5.0*(n-1)))
+        rows = [(t = t[i], X = 1.0 * i, Y = 2.0 * i, Z = 3.0 * i) for i in 1:n]
+        cat = [(Mass1 = 1e6, Mass2 = 5e5, CoalescenceTime = 100.0)]
+        compound = joinpath(dir, "ldc.h5")
+        MilliHertzQML.h5open(compound, "w") do f
+            f["obs/tdi"] = rows
+            MilliHertzQML.attributes(f["obs/tdi"])["dt"] = 5.0
+            f["sky/mbhb/cat"] = cat
+        end
+        grouped = joinpath(dir, "sim.h5")
+        MilliHertzQML.h5open(grouped, "w") do f
+            f["obs/tdi/t"] = t
+            f["obs/tdi/X"] = [1.0 * i for i in 1:n]
+            f["obs/tdi/Z"] = [3.0 * i for i in 1:n]
+        end
+        a = read_tdi(compound)
+        b = read_tdi(grouped)
+        @test a.t == b.t == t && a.X == b.X && a.Z == b.Z && a.dt == b.dt == 5.0
+        @test a.Y == 2.0 .* (1:n) && b.Y == zeros(n)
+        table = read_catalog(compound)
+        @test nrow(table) == 1 && table.CoalescenceTime[1] == 100.0
+        @test_throws ArgumentError read_tdi(compound; group = "missing")
+        @test_throws ArgumentError read_tdi(joinpath(dir, "absent.h5"))
+    end
+
+    # Welch estimate: white noise of variance σ² has one-sided PSD 2σ²/fs
+    fs = 0.2
+    σ = 3.0
+    white = σ .* randn(rng, 200_000)
+    fw, sw = welch_psd(white, fs; segment_length = 1024)
+    @test length(fw) == length(sw) == 512 && fw[1] == fs / 1024
+    @test isapprox(median(sw), 2σ^2 / fs; rtol = 0.03)
+    fw2, sw2 = welch_psd(white, fs; segment_length = 1024, average = :mean)
+    @test isapprox(mean(sw2), 2σ^2 / fs; rtol = 0.03)
+    # Colored noise synthesized from the model PSD is recovered in band
+    colored = synthesize_noise(StableRNG(6), 400_000, fs; f_min = 1e-5)
+    fc, sc = welch_psd(colored, fs; segment_length = 8192)
+    inband = (fc .>= 1e-3) .& (fc .<= 5e-2)
+    @test isapprox(median(sc[inband] ./ lisa_noise_psd.(fc[inband])), 1.0; rtol = 0.1)
+    @test_throws ArgumentError welch_psd(white, fs; segment_length = 1)
+    @test_throws ArgumentError welch_psd(white, fs; segment_length = 1024, overlap = 1.0)
+    @test_throws ArgumentError welch_psd(white, fs; segment_length = 1024, average = :max)
+
+    # Log-log interpolation: exact at the knots, geometric in between, flat outside
+    S = interpolated_psd([1e-3, 1e-2, 1e-1], [1.0, 100.0, 1.0])
+    @test S(1e-3) == 1.0 && S(1e-2) == 100.0
+    @test isapprox(S(sqrt(1e-3 * 1e-2)), 10.0; rtol = 1e-12)
+    @test S(1e-4) == 1.0 && S(1.0) == 1.0 && S(0.0) == Inf
+    @test_throws ArgumentError interpolated_psd([1e-2, 1e-3], [1.0, 2.0])
+    @test_throws ArgumentError interpolated_psd([1e-3, 1e-2], [1.0, 0.0])
+    @test_throws DimensionMismatch interpolated_psd([1e-3, 1e-2], [1.0])
+
+    # Windowed SNR of a placed sinusoid burst peaks on the burst, and the
+    # labeling helpers locate it
+    n = 20_000
+    sig = zeros(n)
+    burst = 8001:9000
+    sig[burst] .= 1e-20 .* sin.(2π * 5e-3 .* (0:999) ./ fs)
+    starts, ρ = windowed_snr(sig, fs; window_size = 1000, step = 100, psd = lisa_noise_psd)
+    @test length(starts) == length(ρ) == div(n - 1000, 100) + 1
+    @test starts[argmax(ρ)] == 8001
+    @test ρ[argmax(ρ)] > 5 && all(ρ[starts .> 9000] .== 0)
+    peaks = snr_peaks(starts, ρ; threshold = 5.0, min_separation = 5000)
+    @test peaks == [argmax(ρ)]
+    # A small local maximum shortly before a large one is an inspiral
+    # fluctuation, not a merger; two comparable peaks stay distinct
+    series = zeros(50)
+    series[10] = 6.0
+    series[20] = 600.0
+    series[30] = 500.0
+    grid = 1:100:5000
+    @test snr_peaks(grid, series; threshold = 5.0, min_separation = 500) == [10, 20, 30]
+    @test snr_peaks(
+        grid,
+        series;
+        threshold = 5.0,
+        min_separation = 500,
+        precursor_window = 1500,
+    ) == [20, 30]
+    @test_throws ArgumentError snr_peaks(
+        grid,
+        series;
+        threshold = 5.0,
+        min_separation = 0,
+        precursor_ratio = 2.0,
+    )
+    spans = detectable_spans(starts, ρ, 1000; threshold = 5.0)
+    @test length(spans) == 1 && first(spans[1]) <= 8001 && last(spans[1]) >= 9000
+    @test fixed_spans([8500], fs, n; before = 100.0, after = 50.0) == [8480:8510]
+    @test fixed_spans([5], fs, n; before = 100.0, after = 0.0) == [1:5]
+    labels = span_labels(n, [10:20, 15:30])
+    @test count(==(1), labels) == 21 && labels[9] == 0 && labels[31] == 0
+    @test_throws ArgumentError span_labels(10, [5:12])
+    @test_throws ArgumentError fixed_spans([0], fs, n; before = 1.0, after = 1.0)
+    @test_throws ArgumentError windowed_snr(
+        sig,
+        fs;
+        window_size = 1,
+        step = 1,
+        psd = lisa_noise_psd,
+    )
+    @test isempty(snr_peaks(starts, ρ; threshold = 1e9, min_separation = 0))
+
+    # Paper feature set on a raw window: four finite values, entropy in [0, 1]
+    paper = extract_features(colored[1:1000], fs; feature_set = :paper)
+    @test length(paper) == 4 && all(isfinite, paper) && 0 <= paper[1] <= 1
+    @test feature_names(:paper) ==
+          [:spectral_entropy, :log_power_mean, :log_power_std, :log_power_max]
+    @test feature_names(:whitened) == [:p_low, :p_high, :spectral_entropy, :log_power_std]
+    @test_throws ArgumentError feature_names(:other)
+    @test_throws ArgumentError extract_features(colored[1:1000], fs; feature_set = :other)
+end
+
+# Validation anchors on the LDC Sangria training product. They run only when
+# MILLIHERTZQML_LDC_DIR names a directory holding LDC2_sangria_training_v2.h5
+# (a 3 GB download from Zenodo record 7132178).
+const SANGRIA_FILE =
+    joinpath(get(ENV, "MILLIHERTZQML_LDC_DIR", ""), "LDC2_sangria_training_v2.h5")
+if isfile(SANGRIA_FILE)
+    @testset "Sangria anchors" begin
+        catalog = read_catalog(SANGRIA_FILE)
+        @test nrow(catalog) == 15
+        @test isapprox(catalog.CoalescenceTime[5], 11526944.9; atol = 1.0)
+
+        # The LISA Data Challenge School notebook quotes an optimal A-channel
+        # SNR of 1885.7 for catalog row 4 (0-based) against the SciRDv1 noise
+        # model. Its neighbour (row 3, merging 3.1 d earlier) is excluded by a
+        # segment starting 3 d before the merger; the segment ends are tapered.
+        truth = read_tdi(SANGRIA_FILE; group = "sky/mbhb/tdi")
+        fs = 1 / truth.dt
+        A, _, _ = tdi_to_aet(truth.X, truth.Y, truth.Z)
+        tc = catalog.CoalescenceTime[5]
+        ic = round(Int, (tc - truth.t[1]) * fs) + 1
+        seg = A[(ic-round(Int, 3*86400*fs)):(ic+round(Int, 7200*fs))]
+        m = 100
+        for k in 1:m
+            w = 0.5 * (1 - cos(π * (k - 1) / m))
+            seg[k] *= w
+            seg[end-k+1] *= w
+        end
+        ρ = matched_filter_snr(
+            seg,
+            fs;
+            psd = f -> ldc_tdi_psd(f; channel = :A, model = "SciRDv1"),
+        )
+        @test isapprox(ρ, 1885.7; rtol = 0.03)
+
+        # Noise-only null test: the observed record minus every truth stream
+        # is instrument noise, whose A-channel PSD follows the "sangria" model
+        # to within the simulator's filters; whitened by that model and
+        # high-passed, its windows have unit band powers.
+        obs = read_tdi(SANGRIA_FILE; group = "obs/tdi")
+        residual, _, _ = tdi_to_aet(obs.X, obs.Y, obs.Z)
+        residual .-= A
+        for source in ("dgb", "igb", "vgb")
+            sky = read_tdi(SANGRIA_FILE; group = "sky/$source/tdi")
+            residual .-= tdi_to_aet(sky.X, sky.Y, sky.Z)[1]
+        end
+        psd_sangria = f -> ldc_tdi_psd(f; channel = :A, model = "sangria")
+        fw, sw = welch_psd(residual, fs; segment_length = 65536)
+        band = (fw .>= 3e-4) .& (fw .<= 5e-2)
+        ratio = sw[band] ./ psd_sangria.(fw[band])
+        @test 0.8 < median(ratio) < 1.25
+        white = whiten_record(
+            highpass_record(residual, fs; cutoff = 5e-4, order = 8),
+            fs;
+            psd = psd_sangria,
+        )
+        # The equal-arm analytic PSD vanishes at the TDI null f = c/(2L) ≈ 60 mHz,
+        # where the data keep a finite floor, so the analytic whitening is only
+        # checked below the null; the Welch estimate whitens the full band.
+        starts = round.(Int, range(1, length(white) - 1000; length = 400))
+        feats = [
+            extract_features(view(white, s:(s+999)), fs; high_band = (5e-3, 4e-2)) for
+            s in starts
+        ]
+        @test isapprox(mean(first.(feats)), 1.0; atol = 0.25)
+        @test isapprox(mean(getindex.(feats, 2)), 1.0; atol = 0.25)
+        white_welch = whiten_record(
+            highpass_record(residual, fs; cutoff = 5e-4, order = 8),
+            fs;
+            psd = interpolated_psd(fw, sw),
+        )
+        feats_welch = [extract_features(view(white_welch, s:(s+999)), fs) for s in starts]
+        @test isapprox(mean(first.(feats_welch)), 1.0; atol = 0.15)
+        @test isapprox(mean(getindex.(feats_welch, 2)), 1.0; atol = 0.15)
+    end
+else
+    @info "Sangria anchors skipped: set MILLIHERTZQML_LDC_DIR to the directory holding LDC2_sangria_training_v2.h5"
+end
+
 @testset "Pipeline smoke test" begin
     # The four scripts run as child processes on a three-day configuration
     # whose [paths] section points into a temporary directory; nothing is

@@ -13,13 +13,15 @@ MilliHertzQML/
 │   ├── evaluation.jl       # Chronological block split, ROC, validation-fitted threshold, event-level metrics
 │   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
 │   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
-│   ├── data.jl             # Whitened window features, train-fitted feature scaler, CSV loading
+│   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
+│   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
 │   ├── common.jl           # Shared preamble: activation, paths, validated config access, feature geometry
 │   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels + event catalog)
-│   ├── preprocess_ldc.jl   # Sliding-window whitened feature extraction (HDF5 -> CSV + geometry sidecar)
+│   ├── label_ldc.jl        # Point-wise MBHB labels of an LDC product from its truth stream
+│   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV + geometry sidecar); model, LDC, or Welch whitening
 │   ├── train.jl            # Chronological split, training with early stopping, validation-fitted threshold, test-block metrics
 │   └── infer.jl            # Inference with the persisted threshold, event-level metrics, diagnostic figures
 ├── test/
@@ -96,6 +98,24 @@ julia scripts/infer.jl \
 
 `--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
 
+For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`):
+
+```bash
+# Labels from the truth stream and catalog of the training product
+julia scripts/label_ldc.jl --h5-file <LDC2_sangria_training_v2.h5> --output-prefix sangria
+julia scripts/preprocess_ldc.jl \
+    --h5-file <LDC2_sangria_training_v2.h5> \
+    --label-file data/inputs/sangria_labels.csv --output-prefix sangria_train
+
+# Blind set: labels from the unblinded MBHB-only TDI (columns t, X, Y, Z)
+julia scripts/label_ldc.jl --truth-csv <mbhb_unbl.csv> --output-prefix sangria_blind
+julia scripts/preprocess_ldc.jl \
+    --h5-file <LDC2_sangria_blind_v2.h5> \
+    --label-file data/inputs/sangria_blind_labels.csv --output-prefix sangria_blind
+```
+
+The validation anchors of the LDC reader and noise model run with the test suite when `MILLIHERTZQML_LDC_DIR` names the directory holding `LDC2_sangria_training_v2.h5`.
+
 Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the validation block by `threshold_criterion`: `far`, false-alarm episodes per 30 days; `fpr`; or `youden`), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
 ## Testing and Benchmarks
@@ -118,7 +138,8 @@ julia docs/make.jl
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
-| Feature extraction | PSD-whitened, amplitude- and window-length-independent features; scaler fitted on the training partition and persisted with the model |
+| Feature extraction | PSD-whitened, amplitude- and window-length-independent features (or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
+| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; Sangria benchmark run pending |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, early stopping and threshold selection on the validation block only, test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
 | Documentation | Tracks the current state; remediation of the remaining defects is planned |
