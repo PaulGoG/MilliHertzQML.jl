@@ -47,21 +47,32 @@ key is absent. Validates the value against an expected `type` and optional
 inclusive bounds, throwing an `ArgumentError` naming the offending key on any
 violation. Numeric values are converted to `type` when the conversion is exact.
 """
-function cfgget(section::AbstractDict, key::AbstractString, default;
-                type::Type = Any, min = nothing, max = nothing)
+function cfgget(
+    section::AbstractDict,
+    key::AbstractString,
+    default;
+    type::Type = Any,
+    min = nothing,
+    max = nothing,
+)
     value = get(section, key, default)
     if type !== Any && !(value isa type)
         if value isa Real && type <: Real
             value = convert(type, value)
         else
-            throw(ArgumentError(
-                "configuration key `$key` has value $(repr(value)); expected type $type."))
+            throw(
+                ArgumentError(
+                    "configuration key `$key` has value $(repr(value)); expected type $type.",
+                ),
+            )
         end
     end
-    min !== nothing && value < min && throw(ArgumentError(
-        "configuration key `$key` = $value; must be >= $min."))
-    max !== nothing && value > max && throw(ArgumentError(
-        "configuration key `$key` = $value; must be <= $max."))
+    min !== nothing &&
+        value < min &&
+        throw(ArgumentError("configuration key `$key` = $value; must be >= $min."))
+    max !== nothing &&
+        value > max &&
+        throw(ArgumentError("configuration key `$key` = $value; must be <= $max."))
     return value
 end
 
@@ -85,7 +96,7 @@ once a functional GPU backend is part of the pipeline.
 """
 function hardware_fingerprint()
     cpu = Sys.cpu_info()
-    return Dict{String, Any}(
+    return Dict{String,Any}(
         "hostname" => gethostname(),
         "kernel" => string(Sys.KERNEL),
         "julia_version" => string(VERSION),

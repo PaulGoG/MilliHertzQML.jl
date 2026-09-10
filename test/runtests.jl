@@ -26,7 +26,7 @@ Random.seed!(1234)
         model = VariationalQuantumClassifier(4, 2)
         x = rand(Float32, 4)
         p = predict_probability(model, x)
-        
+
         @test 0.0 <= p <= 1.0
     end
 
@@ -57,7 +57,7 @@ Random.seed!(1234)
     @testset "Feature Extraction" begin
         # Pure 2mHz Sine Wave (MilliHertz Regime)
         fs = 0.2
-        t = range(0, 5000, length=1000) # 5000 seconds
+        t = range(0, 5000, length = 1000) # 5000 seconds
         signal = sin.(2π * 0.002 * t) # 2 mHz sine wave
 
         p_low, p_high, ent, std_psd = extract_features(signal, fs)
@@ -73,8 +73,13 @@ Random.seed!(1234)
             feat_path = joinpath(dir, "test_feats.csv")
             lab_path = joinpath(dir, "test_labs.csv")
 
-            df_f = DataFrame(PLow=[0.0, 50.0], PHigh=[0.0, 50.0], Ent=[0.0, 10.0], Std=[0.0, 7.0])
-            df_l = DataFrame(Label=[0, 1])
+            df_f = DataFrame(
+                PLow = [0.0, 50.0],
+                PHigh = [0.0, 50.0],
+                Ent = [0.0, 10.0],
+                Std = [0.0, 7.0],
+            )
+            df_l = DataFrame(Label = [0, 1])
 
             CSV.write(feat_path, df_f)
             CSV.write(lab_path, df_l)
@@ -84,7 +89,7 @@ Random.seed!(1234)
             # Check scaling to [0, 2π]
             @test all(X .>= 0.0)
             @test all(X .<= 2π + 1e-5)
-            @test isapprox(X[2, 1], 2π, atol=1e-5) # 50.0 should map to 2π
+            @test isapprox(X[2, 1], 2π, atol = 1e-5) # 50.0 should map to 2π
 
             # Label-free path must produce the identical feature matrix
             @test load_features(feat_path) == X
@@ -98,7 +103,11 @@ Random.seed!(1234)
 
         model = VariationalQuantumClassifier(4, 2)
         @test_throws DimensionMismatch predict_probability(model, rand(Float32, 3))
-        @test_throws DimensionMismatch loss_function(model, rand(Float32, 4, 3), [0, 1, 0, 1])
+        @test_throws DimensionMismatch loss_function(
+            model,
+            rand(Float32, 4, 3),
+            [0, 1, 0, 1],
+        )
         @test_throws DimensionMismatch loss_function(model, rand(Float32, 4, 4), [0, 1])
 
         # 16 samples at 0.2 Hz resolve no bins inside the 1-5 mHz band
@@ -115,12 +124,19 @@ Random.seed!(1234)
         mktempdir() do dir
             feat_path = joinpath(dir, "f.csv")
             lab_path = joinpath(dir, "l.csv")
-            CSV.write(feat_path, DataFrame(PLow=[-5.0, 500.0], PHigh=[-1.0, 100.0],
-                                           Ent=[-2.0, 50.0], Std=[-3.0, 20.0]))
-            CSV.write(lab_path, DataFrame(Label=[0, 1]))
+            CSV.write(
+                feat_path,
+                DataFrame(
+                    PLow = [-5.0, 500.0],
+                    PHigh = [-1.0, 100.0],
+                    Ent = [-2.0, 50.0],
+                    Std = [-3.0, 20.0],
+                ),
+            )
+            CSV.write(lab_path, DataFrame(Label = [0, 1]))
             X, _ = load_data(feat_path, lab_path)
             @test all(X[1, :] .== 0.0f0)
-            @test all(isapprox.(X[2, :], Float32(2π); atol=1e-5))
+            @test all(isapprox.(X[2, :], Float32(2π); atol = 1e-5))
         end
     end
 

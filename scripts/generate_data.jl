@@ -4,40 +4,50 @@ include(joinpath(@__DIR__, "common.jl"))
 using Random, Statistics, FFTW, Plots, ArgParse, HDF5, CSV, DataFrames, TOML, UUIDs
 
 # Publication-ready plotting setup
-default(dpi=600, frame=:box, fontfamily="Computer Modern", grid=true, gridalpha=0.2, minorgrid=false, margin=5Plots.mm)
+default(
+    dpi = 600,
+    frame = :box,
+    fontfamily = "Computer Modern",
+    grid = true,
+    gridalpha = 0.2,
+    minorgrid = false,
+    margin = 5Plots.mm,
+)
 
 function parse_commandline()
-    s = ArgParseSettings(description = "Continuous LISA Telemetry Simulator (MilliHertz Regime)")
+    s = ArgParseSettings(
+        description = "Continuous LISA Telemetry Simulator (MilliHertz Regime)",
+    )
     @add_arg_table s begin
         "--config"
-            help = "Path to the configuration file"
-            default = joinpath(dirname(@__DIR__), "config.toml")
+        help = "Path to the configuration file"
+        default = joinpath(dirname(@__DIR__), "config.toml")
         "--days"
-            help = "Number of days of continuous telemetry to simulate"
-            arg_type = Float64
-            default = nothing
+        help = "Number of days of continuous telemetry to simulate"
+        arg_type = Float64
+        default = nothing
         "--fs"
-            help = "Sampling frequency in Hz (LISA nominal is ~0.2 Hz)"
-            arg_type = Float64
-            default = nothing
+        help = "Sampling frequency in Hz (LISA nominal is ~0.2 Hz)"
+        arg_type = Float64
+        default = nothing
         "--n-mbhb"
-            help = "Number of Massive Black Hole Binary events to inject"
-            arg_type = Int
-            default = nothing
+        help = "Number of Massive Black Hole Binary events to inject"
+        arg_type = Int
+        default = nothing
         "--n-gbs"
-            help = "Number of continuous Galactic Binaries (Background source confusion)"
-            arg_type = Int
-            default = nothing
+        help = "Number of continuous Galactic Binaries (Background source confusion)"
+        arg_type = Int
+        default = nothing
         "--n-emris"
-            help = "Number of Extreme Mass Ratio Inspirals"
-            arg_type = Int
-            default = nothing
+        help = "Number of Extreme Mass Ratio Inspirals"
+        arg_type = Int
+        default = nothing
         "--output"
-            help = "Path to output HDF5 file"
-            default = nothing
+        help = "Path to output HDF5 file"
+        default = nothing
         "--run-id"
-            help = "Optional custom Run ID for the simulation output plots"
-            default = ""
+        help = "Optional custom Run ID for the simulation output plots"
+        default = ""
     end
     return parse_args(s)
 end
@@ -49,10 +59,12 @@ const F_STAR = C_LIGHT / (2π * L_ARM) # Transfer frequency (~19 mHz)
 
 # --- LISA Noise PSD (Robson, Cornish, Liu 2019) ---
 function lisa_noise_psd(f)
-    if f <= 0.0; return 1e-30; end
+    if f <= 0.0
+        return 1e-30
+    end
     p_oms = (1.5e-11)^2 * (1 + (2e-3/f)^4)
     p_acc = (3e-15)^2 * (1 + (0.4e-3/f)^2) * (1 + (f/8e-3)^4)
-    s_inst = (p_oms / L_ARM^2) + (2 * p_acc / ( (2π*f)^4 * L_ARM^2 )) * (1 + cos(f/F_STAR)^2)
+    s_inst = (p_oms / L_ARM^2) + (2 * p_acc / ((2π*f)^4 * L_ARM^2)) * (1 + cos(f/F_STAR)^2)
 
     A, fk, B, C, D = 1.8e-44, 1.0e-4, 292.0, 10.0^(-3.5), 10.0^(-4.5)
     s_gal = A * f^(-7/3) * exp(-(f/fk)^B) * (1 + tanh((C-f)/D))
@@ -72,13 +84,13 @@ end
 function generate_mbhb(fs, t_c, duration_secs)
     # Generate the signal for `duration_secs` ending at t_c
     n_samples = Int(round(duration_secs * fs))
-    t = range(t_c - duration_secs, t_c, length=n_samples)
+    t = range(t_c - duration_secs, t_c, length = n_samples)
 
     # milliHertz physics scaling
     chirp_scale = rand(0.5:0.1:2.0)
     tau = max.(t_c .- t, 0.1)
-    phase = -2.0 .* chirp_scale .* tau.^(5/8)
-    amp_insp = tau.^(-0.25)
+    phase = -2.0 .* chirp_scale .* tau .^ (5/8)
+    amp_insp = tau .^ (-0.25)
 
     f_ring = rand(0.005:0.001:0.05) # 5 mHz to 50 mHz
     tau_ring = rand(100.0:10.0:500.0) # Seconds
@@ -88,10 +100,13 @@ function generate_mbhb(fs, t_c, duration_secs)
 
     # Create ringdown part
     n_ring = Int(round(tau_ring * 5 * fs)) # 5 time constants
-    t_ring = range(t_c, t_c + tau_ring*5, length=n_ring)
+    t_ring = range(t_c, t_c + tau_ring*5, length = n_ring)
     amp_ring = amp_at_merger .* exp.(-(t_ring .- t_c) ./ tau_ring)
 
-    sig = vcat((amp_insp .* cos.(phase)), (amp_ring .* cos.(2π * f_ring .* (t_ring .- t_c) .+ phase[end])))
+    sig = vcat(
+        (amp_insp .* cos.(phase)),
+        (amp_ring .* cos.(2π * f_ring .* (t_ring .- t_c) .+ phase[end])),
+    )
     time_vec = vcat(t, t_ring)
 
     return time_vec, Float32.(sig)
@@ -102,26 +117,40 @@ function main()
 
     # 1. Load and validate TOML configuration
     config_file = load_config(parsed_args["config"])
-    gen_cfg = get(config_file, "generation", Dict{String, Any}())
+    gen_cfg = get(config_file, "generation", Dict{String,Any}())
 
     # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
-    days = override(parsed_args["days"], cfgget(gen_cfg, "days", 30.0; type = Float64, min = 0.0))
+    days = override(
+        parsed_args["days"],
+        cfgget(gen_cfg, "days", 30.0; type = Float64, min = 0.0),
+    )
     fs = override(parsed_args["fs"], cfgget(gen_cfg, "fs", 0.2; type = Float64, min = 1e-6))
-    n_mbhb = override(parsed_args["n-mbhb"], cfgget(gen_cfg, "n_mbhb", 5; type = Int, min = 0))
-    n_gbs = override(parsed_args["n-gbs"], cfgget(gen_cfg, "n_gbs", 50; type = Int, min = 0))
-    n_emris = override(parsed_args["n-emris"], cfgget(gen_cfg, "n_emris", 5; type = Int, min = 0))
-    out_file = resolvepath(override(parsed_args["output"],
-        cfgget(gen_cfg, "output", "data/inputs/simulated_telemetry.h5"; type = String)))
+    n_mbhb =
+        override(parsed_args["n-mbhb"], cfgget(gen_cfg, "n_mbhb", 5; type = Int, min = 0))
+    n_gbs =
+        override(parsed_args["n-gbs"], cfgget(gen_cfg, "n_gbs", 50; type = Int, min = 0))
+    n_emris =
+        override(parsed_args["n-emris"], cfgget(gen_cfg, "n_emris", 5; type = Int, min = 0))
+    out_file = resolvepath(
+        override(
+            parsed_args["output"],
+            cfgget(gen_cfg, "output", "data/inputs/simulated_telemetry.h5"; type = String),
+        ),
+    )
     run_id = isempty(parsed_args["run-id"]) ? string(uuid4())[1:8] : parsed_args["run-id"]
     seed = cfgget(gen_cfg, "seed", 42; type = Int)
     Random.seed!(seed)
 
     n_total = Int(round(days * 24 * 3600 * fs))
-    t_arr = range(0, days * 24 * 3600, length=n_total)
+    t_arr = range(0, days * 24 * 3600, length = n_total)
 
-    println("================================================================================")
+    println(
+        "================================================================================",
+    )
     println("  GENERATING CONTINUOUS LISA TELEMETRY [ID: $run_id]")
-    println("================================================================================")
+    println(
+        "================================================================================",
+    )
     println("  Duration : $days Days")
     println("  Samples  : $n_total")
     println("  Sampling : $fs Hz")
@@ -159,7 +188,7 @@ function main()
     snrs = zeros(Float32, n_total)
 
     for i in 1:n_mbhb
-        t_c = rand(t_arr[Int(round(n_total*0.1))] : t_arr[Int(round(n_total*0.9))])
+        t_c = rand(t_arr[Int(round(n_total*0.1))]:t_arr[Int(round(n_total*0.9))])
         t_vec, sig = generate_mbhb(fs, t_c, 2 * 24 * 3600)
 
         snr = rand(3.0:0.5:8.0) # Realistic low SNR
@@ -197,16 +226,23 @@ function main()
     end
 
     label_file = replace(out_file, ".h5" => "_labels.csv")
-    CSV.write(label_file, DataFrame(Label=labels, SNR=snrs))
+    CSV.write(label_file, DataFrame(Label = labels, SNR = snrs))
     println("  - Labels saved to: $label_file")
 
     # Configuration snapshot for provenance (records the seed actually used)
     snapshot = Dict(
         "generation" => Dict(
-            "days" => days, "fs" => fs, "n_mbhb" => n_mbhb, "n_gbs" => n_gbs,
-            "n_emris" => n_emris, "output" => rootrelative(out_file), "seed" => seed,
-            "run_id" => run_id),
-        "hardware" => hardware_fingerprint())
+            "days" => days,
+            "fs" => fs,
+            "n_mbhb" => n_mbhb,
+            "n_gbs" => n_gbs,
+            "n_emris" => n_emris,
+            "output" => rootrelative(out_file),
+            "seed" => seed,
+            "run_id" => run_id,
+        ),
+        "hardware" => hardware_fingerprint(),
+    )
     open(replace(out_file, ".h5" => "_generation.toml"), "w") do io
         TOML.print(io, snapshot)
     end
@@ -218,9 +254,26 @@ function main()
     plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
     mkpath(plot_dir)
 
-    p = plot(t_days[1:ds:end], strain[1:ds:end], title="Simulated Continuous Telemetry",
-             xlabel="Mission Time [Days]", ylabel="Strain", lw=0.5, color=:gray, label="Data")
-    plot!(p, t_days[1:ds:end], labels[1:ds:end] .* maximum(strain)/2, st=:step, color=:red, alpha=0.5, fill=(0, 0.5, :red), label="MBHB Events")
+    p = plot(
+        t_days[1:ds:end],
+        strain[1:ds:end],
+        title = "Simulated Continuous Telemetry",
+        xlabel = "Mission Time [Days]",
+        ylabel = "Strain",
+        lw = 0.5,
+        color = :gray,
+        label = "Data",
+    )
+    plot!(
+        p,
+        t_days[1:ds:end],
+        labels[1:ds:end] .* maximum(strain)/2,
+        st = :step,
+        color = :red,
+        alpha = 0.5,
+        fill = (0, 0.5, :red),
+        label = "MBHB Events",
+    )
     savefig(joinpath(plot_dir, "simulated_continuous_trace.png"))
 
     println("\n[SUCCESS] Continuous pipeline dataset generated. Run ID: $run_id")

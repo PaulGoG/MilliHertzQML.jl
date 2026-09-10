@@ -11,13 +11,18 @@ snapshot, decision threshold).
 The circuit itself is not serialized; `load_model` rebuilds it from the
 hyperparameters, keeping artifacts robust across package versions.
 """
-function save_model(path::AbstractString, model::VariationalQuantumClassifier;
-                    metadata::AbstractDict = Dict{String, Any}())
-    jldsave(path;
+function save_model(
+    path::AbstractString,
+    model::VariationalQuantumClassifier;
+    metadata::AbstractDict = Dict{String,Any}(),
+)
+    jldsave(
+        path;
         n_qubits = model.n_qubits,
         n_layers = model.n_layers,
         params = model.params,
-        metadata = Dict{String, Any}(metadata))
+        metadata = Dict{String,Any}(metadata),
+    )
     return path
 end
 

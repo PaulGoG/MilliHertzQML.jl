@@ -24,7 +24,7 @@ function build_layer(n_qubits)
         n_qubits,
         [put(i => Ry(0.0f0)) for i in 1:n_qubits]...,
         [put(i => Rz(0.0f0)) for i in 1:n_qubits]...,
-        [control(i, (i % n_qubits) + 1 => X) for i in 1:n_qubits]...
+        [control(i, (i % n_qubits) + 1 => X) for i in 1:n_qubits]...,
     )
 end
 
@@ -34,10 +34,14 @@ end
 Constructor for the VQC. Initializes parameters from a zero-mean normal
 distribution with standard deviation 0.5.
 """
-function VariationalQuantumClassifier(n_qubits::Int=4, n_layers::Int=2)
-    n_qubits >= 2 || throw(ArgumentError(
-        "n_qubits = $n_qubits; at least 2 qubits are required for the entangling CNOT ring."))
-    n_layers >= 1 || throw(ArgumentError("n_layers = $n_layers; at least 1 layer is required."))
+function VariationalQuantumClassifier(n_qubits::Int = 4, n_layers::Int = 2)
+    n_qubits >= 2 || throw(
+        ArgumentError(
+            "n_qubits = $n_qubits; at least 2 qubits are required for the entangling CNOT ring.",
+        ),
+    )
+    n_layers >= 1 ||
+        throw(ArgumentError("n_layers = $n_layers; at least 1 layer is required."))
     layers = [build_layer(n_qubits) for _ in 1:n_layers]
 
     n_params_per_layer = nparameters(layers[1])
@@ -49,7 +53,7 @@ function VariationalQuantumClassifier(n_qubits::Int=4, n_layers::Int=2)
     idx = 1
     for l in layers
         np = nparameters(l)
-        dispatch!(l, p[idx:idx+np-1])
+        dispatch!(l, p[idx:(idx+np-1)])
         idx += np
     end
 
@@ -68,7 +72,7 @@ function build_step(model::VariationalQuantumClassifier, x, layer_idx::Int)
     fm = chain(
         model.n_qubits,
         [put(i => H) for i in 1:model.n_qubits]...,
-        [put(i => Rz(Float64(x[i]))) for i in 1:model.n_qubits]... # Yao gates often internally prefer Float64 for angles
+        [put(i => Rz(Float64(x[i]))) for i in 1:model.n_qubits]..., # Yao gates often internally prefer Float64 for angles
     )
     return chain(model.n_qubits, fm, model.ansatz_layers[layer_idx])
 end

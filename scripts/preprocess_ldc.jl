@@ -6,29 +6,29 @@ function parse_commandline()
     s = ArgParseSettings(description = "Pre-process raw HDF5 telemetry into QNN features")
     @add_arg_table s begin
         "--config"
-            help = "Path to the configuration file"
-            default = joinpath(dirname(@__DIR__), "config.toml")
+        help = "Path to the configuration file"
+        default = joinpath(dirname(@__DIR__), "config.toml")
         "--h5-file"
-            help = "Path to the raw HDF5 telemetry file"
-            default = nothing
+        help = "Path to the raw HDF5 telemetry file"
+        default = nothing
         "--label-file"
-            help = "Path to the associated labels CSV (optional, used for training data)"
-            default = ""
+        help = "Path to the associated labels CSV (optional, used for training data)"
+        default = ""
         "--output-prefix"
-            help = "Prefix for the output CSV files (e.g., 'telemetry_train')"
-            default = nothing
+        help = "Prefix for the output CSV files (e.g., 'telemetry_train')"
+        default = nothing
         "--window-size"
-            help = "Size of the sliding window in samples"
-            arg_type = Int
-            default = nothing
+        help = "Size of the sliding window in samples"
+        arg_type = Int
+        default = nothing
         "--step-size"
-            help = "Step size for the sliding window in samples"
-            arg_type = Int
-            default = nothing
+        help = "Step size for the sliding window in samples"
+        arg_type = Int
+        default = nothing
         "--sample-rate"
-            help = "Sampling rate of the data (usually 0.2 Hz)"
-            arg_type = Float64
-            default = nothing
+        help = "Sampling rate of the data (usually 0.2 Hz)"
+        arg_type = Float64
+        default = nothing
     end
     return parse_args(s)
 end
@@ -38,25 +38,41 @@ function main()
 
     # 1. Load and validate TOML configuration
     config_file = load_config(parsed_args["config"])
-    pre_cfg = get(config_file, "preprocessing", Dict{String, Any}())
+    pre_cfg = get(config_file, "preprocessing", Dict{String,Any}())
 
     # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
-    h5_path = resolvepath(override(parsed_args["h5-file"],
-        cfgget(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"; type = String)))
-    window_size = override(parsed_args["window-size"],
-        cfgget(pre_cfg, "window_size", 1000; type = Int, min = 2))
-    step_size = override(parsed_args["step-size"],
-        cfgget(pre_cfg, "step_size", 100; type = Int, min = 1))
-    fs = override(parsed_args["sample-rate"],
-        cfgget(pre_cfg, "sample_rate", 0.2; type = Float64, min = 1e-6))
-    output_prefix = override(parsed_args["output-prefix"],
-        cfgget(pre_cfg, "output_prefix", "telemetry"; type = String))
-    step_size <= window_size || throw(ArgumentError(
-        "step_size = $step_size exceeds window_size = $window_size."))
+    h5_path = resolvepath(
+        override(
+            parsed_args["h5-file"],
+            cfgget(pre_cfg, "h5_file", "data/inputs/simulated_telemetry.h5"; type = String),
+        ),
+    )
+    window_size = override(
+        parsed_args["window-size"],
+        cfgget(pre_cfg, "window_size", 1000; type = Int, min = 2),
+    )
+    step_size = override(
+        parsed_args["step-size"],
+        cfgget(pre_cfg, "step_size", 100; type = Int, min = 1),
+    )
+    fs = override(
+        parsed_args["sample-rate"],
+        cfgget(pre_cfg, "sample_rate", 0.2; type = Float64, min = 1e-6),
+    )
+    output_prefix = override(
+        parsed_args["output-prefix"],
+        cfgget(pre_cfg, "output_prefix", "telemetry"; type = String),
+    )
+    step_size <= window_size ||
+        throw(ArgumentError("step_size = $step_size exceeds window_size = $window_size."))
 
-    println("================================================================================")
+    println(
+        "================================================================================",
+    )
     println("  TELEMETRY PRE-PROCESSOR (HDF5 -> QNN Features)")
-    println("================================================================================")
+    println(
+        "================================================================================",
+    )
     println("File: $h5_path")
     println("Window: $window_size | Step: $step_size | FS: $(fs) Hz")
 
@@ -93,8 +109,8 @@ function main()
     end
 
     # 4. Sliding Window Feature Extraction
-    n_points >= window_size || error(
-        "Telemetry too short: $n_points samples < window_size = $window_size.")
+    n_points >= window_size ||
+        error("Telemetry too short: $n_points samples < window_size = $window_size.")
     n_windows = div(n_points - window_size, step_size) + 1
     println("[3/4] Extracting quantum features via sliding window (N = $n_windows)...")
 
@@ -131,12 +147,15 @@ function main()
     mkpath(out_dir)
 
     feat_path = joinpath(out_dir, "$(output_prefix)_features.csv")
-    CSV.write(feat_path, DataFrame(features, [:p_low, :p_high, :spectral_entropy, :log_psd_std]))
+    CSV.write(
+        feat_path,
+        DataFrame(features, [:p_low, :p_high, :spectral_entropy, :log_psd_std]),
+    )
     println("  - Features saved to: $feat_path")
 
     if has_labels
         lab_path = joinpath(out_dir, "$(output_prefix)_labels.csv")
-        CSV.write(lab_path, DataFrame(Label=window_labels, SNR=window_snrs))
+        CSV.write(lab_path, DataFrame(Label = window_labels, SNR = window_snrs))
         println("  - Labels saved to: $lab_path")
     end
 

@@ -1,0 +1,8 @@
+# JuliaFormatter configuration (run over touched files before
+# committing). Default style; spaced keyword arguments match the canonical
+# environment-activation form (`io = devnull`).
+style = "default"
+margin = 92
+always_for_in = true
+whitespace_in_kwargs = true
+remove_extra_newlines = true

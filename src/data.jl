@@ -29,12 +29,7 @@ Fixed `(min, max)` clamping scales per feature column, in feature order
 standard deviation). Calibrated to the unit-variance output of the
 integrated simulator.
 """
-const FEATURE_SCALES = (
-    (0.0f0, 50.0f0),
-    (0.0f0, 50.0f0),
-    (0.0f0, 10.0f0),
-    (0.0f0, 7.0f0),
-)
+const FEATURE_SCALES = ((0.0f0, 50.0f0), (0.0f0, 50.0f0), (0.0f0, 10.0f0), (0.0f0, 7.0f0))
 
 """
     load_features(feature_path)
@@ -61,7 +56,7 @@ Calculates the 4-dimensional physical feature vector from a raw time-series stra
 This function acts as the bridge between raw LDC telemetry and the quantum classifier.
 Uses LISA milliHertz physics bands: Low (1mHz - 5mHz), High (5mHz - 100mHz).
 """
-function extract_features(x, sample_rate=0.2)
+function extract_features(x, sample_rate = 0.2)
     spec = abs.(rfft(x))
     n_samples = length(x)
     freqs = rfftfreq(n_samples, sample_rate)
@@ -69,13 +64,16 @@ function extract_features(x, sample_rate=0.2)
     # Base Band: Low (1mHz - 5mHz), High (5mHz - 100mHz)
     mask_low = (freqs .>= 1e-3) .& (freqs .<= 5e-3)
     mask_high = (freqs .> 5e-3) .& (freqs .<= 1e-1)
-    (any(mask_low) && any(mask_high)) || throw(ArgumentError(
-        "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
-        "in the 1-5 mHz or 5-100 mHz analysis bands; use a longer window."))
+    (any(mask_low) && any(mask_high)) || throw(
+        ArgumentError(
+            "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
+            "in the 1-5 mHz or 5-100 mHz analysis bands; use a longer window.",
+        ),
+    )
     p_low = mean(spec[mask_low])
     p_high = mean(spec[mask_high])
 
-    psd = spec.^2 .+ 1e-12
+    psd = spec .^ 2 .+ 1e-12
     p_norm = psd ./ sum(psd)
     entropy = -sum(p_norm .* log.(p_norm))
 
