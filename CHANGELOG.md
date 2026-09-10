@@ -82,6 +82,9 @@ Notable changes to MilliHertzQML. The format follows
   `MILLIHERTZQML_LDC_DIR`: the School-notebook SNR of catalog source 4
   (1883.5 against 1885.7) and a noise-only null test of the whitening
   chain.
+- `config_sangria.toml` and `config_sangria_paper.toml`: the Sangria
+  benchmark configurations (Welch-whitened features; the paper's
+  raw-window feature set).
 
 ### Changed
 - Evaluation protocol: the random shuffle over overlapping windows is

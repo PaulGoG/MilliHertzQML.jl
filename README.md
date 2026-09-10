@@ -42,7 +42,9 @@ MilliHertzQML/
 ├── .JuliaFormatter.toml    # Committed formatter configuration
 ├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
 ├── CITATION.cff            # Citation metadata
-├── config.toml             # Pipeline defaults; overridden by CLI flags
+├── config.toml             # Pipeline defaults (simulator); overridden by CLI flags
+├── config_sangria.toml     # Sangria benchmark: Welch-whitened features, truth-stream labels
+├── config_sangria_paper.toml # Sangria paper-parity run: raw-window feature set of Isfan et al. (2025)
 ├── Project.toml            # Package metadata: only the dependencies of src/
 └── Manifest.toml           # Pinned dependency versions (tracked)
 ```
@@ -98,20 +100,26 @@ julia scripts/infer.jl \
 
 `--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
 
-For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`):
+For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`). `config_sangria.toml` holds the benchmark settings (`config_sangria_paper.toml` the paper-parity variant); the HDF5 products are passed on the command line:
 
 ```bash
-# Labels from the truth stream and catalog of the training product
-julia scripts/label_ldc.jl --h5-file <LDC2_sangria_training_v2.h5> --output-prefix sangria
-julia scripts/preprocess_ldc.jl \
+# Labels from the truth stream and catalog of the training product, then features
+julia scripts/label_ldc.jl --config config_sangria.toml \
+    --h5-file <LDC2_sangria_training_v2.h5> --output-prefix sangria
+julia scripts/preprocess_ldc.jl --config config_sangria.toml \
     --h5-file <LDC2_sangria_training_v2.h5> \
     --label-file data/inputs/sangria_labels.csv --output-prefix sangria_train
 
-# Blind set: labels from the unblinded MBHB-only TDI (columns t, X, Y, Z)
-julia scripts/label_ldc.jl --truth-csv <mbhb_unbl.csv> --output-prefix sangria_blind
-julia scripts/preprocess_ldc.jl \
+# Blind set: point-wise labels from the unblinded MBHB-only TDI (columns t, X, Y, Z)
+julia scripts/label_ldc.jl --config config_sangria.toml \
+    --truth-csv <mbhb_unbl.csv> --output-prefix sangria_blind_points
+julia scripts/preprocess_ldc.jl --config config_sangria.toml \
     --h5-file <LDC2_sangria_blind_v2.h5> \
-    --label-file data/inputs/sangria_blind_labels.csv --output-prefix sangria_blind
+    --label-file data/inputs/sangria_blind_points_labels.csv --output-prefix sangria_blind
+
+# Training on the year-long training set, then the blind evaluation
+julia scripts/train.jl --config config_sangria.toml --run-id sangria01
+julia scripts/infer.jl --config config_sangria.toml --run-id sangria01
 ```
 
 The validation anchors of the LDC reader and noise model run with the test suite when `MILLIHERTZQML_LDC_DIR` names the directory holding `LDC2_sangria_training_v2.h5`.

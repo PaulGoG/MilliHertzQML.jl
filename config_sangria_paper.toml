@@ -1,0 +1,68 @@
+# Sangria paper-parity run (Isfan et al. 2025 feature set, no filtering or whitening). Sections absent here
+# fall back to the defaults of the scripts; the HDF5 products are passed on
+# the command line. Paths are resolved relative to the project root.
+
+[paths]
+inputs = "data/inputs"              # feature, label, and PSD CSVs
+models = "models"                   # per-run model checkpoints, logs, thresholds
+plots = "data/outputs/plots"        # per-run figures
+results = "data/outputs/results"    # per-run inference tables and snapshots
+
+[preprocessing]
+tdi_group = "obs/tdi"   # compound dataset holding t, X, Y, Z
+window_size = 1000      # sliding-window length [samples]; >= 2
+step_size = 100         # sliding-window step [samples]; in [1, window_size]
+sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file
+psd = "none"            # whitening PSD; one of: "model" | "ldc" | "welch" | "none" (paper parity: none)
+welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+feature_set = "paper"          # per-window features; one of: "whitened" | "paper"
+low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
+high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
+highpass_cutoff_hz = 0.0       # zero-phase record high-pass cutoff [Hz]; 0 disables (paper parity: no filtering)
+highpass_order = 8             # Butterworth order of the record high-pass; >= 1
+output_prefix = "sangria_paper_train"   # prefix of the output feature/label CSVs
+
+[model]
+n_qubits = 4    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_layers = 4    # data re-uploading layers; >= 1
+
+[training]
+train_features = "data/inputs/sangria_paper_train_features.csv"   # training feature CSV
+train_labels = "data/inputs/sangria_paper_train_labels.csv"       # training label CSV
+epochs = 50                # maximum training epochs; >= 1
+batch_size = 64            # mini-batch size; >= 1
+learning_rate = 0.01       # initial Adam learning rate; > 0
+lr_decay = 0.95            # multiplicative learning-rate decay per epoch; in (0, 1]
+patience = 12              # early-stopping patience [epochs]; >= 1
+train_fraction = 0.7       # chronological training block; in (0, 1)
+validation_fraction = 0.15 # chronological validation block; in (0, 1); the rest is the test block
+class_weight = "balanced"  # positive-class loss weight; one of: "balanced" | "none"
+threshold_criterion = "far"  # threshold fitted on the validation block; one of: "far" | "fpr" | "youden"
+target_far_per_30d = 1.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
+target_fpr = 0.05          # window false-positive rate admitted by "fpr"; in [0, 1]
+scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
+test_mode_samples = 5000   # sample cap under --test-mode; >= 1
+test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
+seed = 9999                # RNG seed for initialization
+
+[inference]
+features = "data/inputs/sangria_paper_blind_features.csv"   # blind-set feature CSV
+labels = "data/inputs/sangria_paper_blind_labels.csv"       # blind-set window labels (from the unblinded MBHB stream)
+block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
+
+[ldc]
+truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
+catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalog
+psd_model = "sangria"           # analytic TDI PSD of the labeling SNR
+tdi2 = false                    # second-generation TDI factor of the labeling PSD
+observation_years = 0.0         # confusion term of the labeling PSD [yr]; 0 disables
+label_span = "fixed"            # positive span per merger; one of: "fixed" | "detectable"
+label_before_sec = 345600.0     # fixed span before the merger [s]; >= 0
+label_after_sec = 1620.0        # fixed span after the merger [s]; >= 0
+label_snr_threshold = 5.0       # per-window SNR defining "detectable"; > 0
+label_window_size = 1000        # window of the labeling SNR scan [samples]; >= 2
+label_step = 10                 # stride of the labeling SNR scan [samples]; >= 1
+peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
+merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
+precursor_ratio = 0.1           # a peak within label_before_sec before a larger one and below this fraction of it is an inspiral fluctuation; in [0, 1]
+output_prefix = "sangria"       # prefix of the label, event, and span CSVs
