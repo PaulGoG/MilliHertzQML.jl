@@ -15,6 +15,9 @@ using CairoMakie.Makie: LaTeXStrings
 using MilliHertzQML
 using MilliHertzQML: FIGURE_WIDTH_MM, FIGURE_COLORS, backup_existing!, write_toml
 using MilliHertzQML: contiguous_runs
+using CairoMakie.Makie: scatter!
+using DataFrames: DataFrame, nrow
+using Dates: Dates, DateTime
 import MilliHertzQML:
     figure_theme,
     save_figure,
@@ -23,7 +26,8 @@ import MilliHertzQML:
     figure_roc,
     figure_sensitivity,
     figure_score_distribution,
-    figure_telemetry_trace
+    figure_telemetry_trace,
+    figure_telemetry_alerts
 
 """
     PT_PER_MM
@@ -443,6 +447,105 @@ function figure_telemetry_trace(
             ax_strain.xlabel = "Mission time [days]"
         end
         top_legend!(figure, ax_strain)
+        figure
+    end
+end
+
+"""
+    days_since(epoch, t) -> Float64
+
+Mission time `t` in days after `epoch`.
+"""
+days_since(epoch::DateTime, t::DateTime) = Dates.value(t - epoch) / 8.64e7
+
+function figure_telemetry_alerts(
+    windows::DataFrame,
+    threshold::Real;
+    epoch::DateTime,
+    label_spans::Union{Nothing,AbstractVector{<:Tuple{DateTime,DateTime}}} = nothing,
+    latencies::Union{Nothing,DataFrame} = nothing,
+)
+    nrow(windows) >= 1 || throw(ArgumentError("the windows table is empty."))
+    t_days = [days_since(epoch, t) for t in windows.content_end]
+    scores = Float64.(windows.score)
+    latency_h = [
+        Dates.value(a - c) / 3.6e6 for
+        (a, c) in zip(windows.complete_at, windows.content_end)
+    ]
+    # Windows complete out of order: draw them in content-time order
+    order = sortperm(t_days)
+    t_days = t_days[order]
+    scores = scores[order]
+    latency_h = latency_h[order]
+    alarmed = findall(==(1), Int.(windows.decision)[order])
+    return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
+        figure = Figure()
+        ax_score = Axis(figure[1, 1]; ylabel = "MBHB probability")
+        if label_spans !== nothing
+            for (k, (a, b)) in enumerate(label_spans)
+                vspan!(
+                    ax_score,
+                    days_since(epoch, a),
+                    days_since(epoch, b);
+                    color = (FIGURE_COLORS.label, 0.25),
+                    label = k == 1 ? "Labeled span" : nothing,
+                )
+            end
+        end
+        lines!(
+            ax_score,
+            t_days,
+            scores;
+            color = FIGURE_COLORS.data,
+            linewidth = 0.7,
+            label = "Classifier output",
+        )
+        isempty(alarmed) || scatter!(
+            ax_score,
+            t_days[alarmed],
+            scores[alarmed];
+            color = FIGURE_COLORS.signal,
+            markersize = 4,
+            label = "Alarm",
+        )
+        hlines!(
+            ax_score,
+            [threshold];
+            color = FIGURE_COLORS.threshold,
+            linestyle = :dash,
+            label = "Threshold $(round(threshold; digits = 2))",
+        )
+        ylims!(ax_score, 0, 1)
+        ax_lat = Axis(
+            figure[2, 1];
+            xlabel = "Mission time [days]",
+            ylabel = "Ground latency [h]",
+        )
+        lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 0.7)
+        if latencies !== nothing
+            for row in eachrow(latencies)
+                row.detected || continue
+                x = days_since(epoch, row.t_alarm)
+                y = Dates.value(row.t_alarm - row.t_merger) / 3.6e6
+                scatter!(ax_lat, [x], [y]; color = FIGURE_COLORS.signal, markersize = 5)
+                text!(
+                    ax_lat,
+                    x,
+                    y;
+                    text = "$(round(row.latency_total_h; digits = 1)) h",
+                    align = (:left, :bottom),
+                    offset = (3, 2),
+                    fontsize = 7,
+                    color = FIGURE_COLORS.signal,
+                )
+            end
+        end
+        linkxaxes!(ax_score, ax_lat)
+        hidexdecorations!(ax_score; grid = false, ticks = false)
+        lo, hi = extrema(t_days)
+        xlims!(ax_lat, lo, hi == lo ? lo + 1 : hi)
+        Legend(figure[0, 1], ax_score; LEGEND_STYLE..., nbanks = 2)
+        rowgap!(figure.layout, 4)
         figure
     end
 end

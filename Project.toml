@@ -27,11 +27,14 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [weakdeps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
 
 [extensions]
 MilliHertzQMLCairoMakieExt = "CairoMakie"
+MilliHertzQMLDeepSpaceTelemetryExt = "DeepSpaceTelemetry"
 
 [compat]
+DeepSpaceTelemetry = "1.0"
 CairoMakie = "0.15"
 CSV = "0.10"
 DataFrames = "1"

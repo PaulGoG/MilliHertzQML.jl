@@ -14,6 +14,7 @@ makedocs(
         "Home" => "index.md",
         "Physics & Data" => "physics.md",
         "Quantum Architecture" => "architecture.md",
+        "Telemetry Coupling" => "telemetry.md",
         "API Reference" => "api.md",
     ],
 )

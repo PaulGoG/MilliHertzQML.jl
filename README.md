@@ -13,6 +13,7 @@ MilliHertzQML/
 │   ├── stages/             # One typed stage function per pipeline step
 │   │   ├── generation.jl   #   generate_telemetry: simulated continuous telemetry, labels, event catalog
 │   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
+│   │   ├── export_payload.jl #  export_telemetry_payload: A-channel payload and scenario fragment for the telemetry producer
 │   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
 │   │   ├── training.jl     #   train_classifier: chronological blocks, training, validation-fitted threshold
 │   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
@@ -24,9 +25,11 @@ MilliHertzQML/
 │   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
 │   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
 │   ├── visualization.jl    # Figure interface (theme, export with provenance, one function per figure)
+│   ├── telemetry.jl        # Telemetry coupling: run interface, coverage, window scheduler, streaming detector, replay, alert latency
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── ext/
-│   └── MilliHertzQMLCairoMakieExt.jl  # CairoMakie implementation of the figures (loads with CairoMakie)
+│   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures (loads with CairoMakie)
+│   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API (loads with DeepSpaceTelemetry)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
 │   ├── common.jl           # Activation of the script environment
@@ -34,10 +37,15 @@ MilliHertzQML/
 │   ├── label_ldc.jl        # Dispatcher of label_truth_stream
 │   ├── preprocess_ldc.jl   # Dispatcher of preprocess_record
 │   ├── train.jl            # Dispatcher of train_classifier plus the terminal dashboard, file logger, and training figure
-│   └── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
+│   ├── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
+│   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
+│   └── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
 ├── test/
-│   ├── Project.toml        # Test environment (package consumed by path); Manifest committed
-│   └── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
+│   ├── Project.toml        # Test environment (package and producer consumed by path/git); Manifest committed
+│   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
+│   ├── telemetry_tests.jl  # Coupling core on an in-memory run
+│   ├── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed through the extension
+│   └── export_payload_tests.jl         # Payload export stage
 ├── bench/
 │   ├── Project.toml        # Benchmark environment (package consumed by path); Manifest committed
 │   └── benchmarks.jl       # BenchmarkTools performance measurements
@@ -79,7 +87,11 @@ The scripts, tests, benchmarks, and documentation each carry their own
 environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
 package by path and activates itself, so the step above is optional for
 them; the first invocation of each environment resolves and precompiles
-it.
+it. The script and test environments also pin the telemetry producer
+DeepSpaceTelemetry.jl as a git source of its private repository; on a
+machine whose git configuration rewrites GitHub URLs to SSH, instantiate
+them with `JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses
+the command-line git client and its agent.
 
 ## Usage
 
@@ -135,6 +147,20 @@ julia scripts/infer.jl config_sangria.toml --run-id sangria01
 
 The validation anchors of the LDC reader and noise model run with the test suite when `MILLIHERTZQML_LDC_DIR` names the directory holding `LDC2_sangria_training_v2.h5`.
 
+The coupling to the telemetry simulator DeepSpaceTelemetry.jl is file-based in both directions. Upstream, a product of this pipeline is exported as the producer's external payload (one `Amplitude` column at 0.2 Hz) with a scenario fragment carrying the geometry (50 s segments, ten per batch, so one batch equals one window step), the mission epoch, and the event catalog as markers. Downstream, a producer run directory is replayed (or followed live) through the producer's own API: the consumer tracks the coverage of delivered rows, scores every window as soon as it is complete with the same conditioning as the batch pipeline, and reports the ground-availability latency of the first alarm of every event:
+
+```bash
+julia scripts/export_telemetry_payload.jl config.toml \
+    --h5-file data/inputs/simulated_telemetry_complex.h5 \
+    --catalog data/inputs/simulated_telemetry_complex_events.csv --output-prefix mission01
+# ... run DeepSpaceTelemetry on a scenario merged from data/inputs/mission01_scenario.toml ...
+julia scripts/infer_telemetry.jl config.toml --run-dir <DeepSpaceTelemetry run directory> \
+    --model models/run_<RUN_ID>/gw_model.jld2 \
+    --events data/inputs/simulated_telemetry_complex_events.csv --run-id coupling01
+```
+
+`infer_telemetry.jl` writes `telemetry_windows.csv` (one row per scored window with its completion time and inference wall time), `alert_latency.csv` (per event: first alarmed window, data latency, total latency with the ground processing budget, false-alarm episodes per 30 days), a snapshot, and the alert figure. The `[telemetry]` section of the configuration holds the geometry, the coverage and erosion policy, the accepted producer version, and the processing budget.
+
 Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the validation block by `threshold_criterion`: `far`, false-alarm episodes per 30 days; `fpr`; or `youden`), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
 ## Testing and Benchmarks
@@ -162,6 +188,7 @@ julia docs/make.jl
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; Sangria benchmark run pending |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, early stopping and threshold selection on the validation block only, test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
+| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector, replay and live modes, alert-latency table and figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
 | Documentation | Tracks the current state; remediation of the remaining defects is planned |
 
 Version 0.1.x is a pre-release: the remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.

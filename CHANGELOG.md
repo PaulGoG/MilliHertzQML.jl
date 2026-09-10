@@ -25,6 +25,22 @@ Notable changes to MilliHertzQML. The format follows
   standard libraries become package dependencies.
 - Preprocessing records a hash of every parameter that determines a
   feature product and reuses an identical product unless `--force`.
+- Telemetry coupling to DeepSpaceTelemetry.jl (`src/telemetry.jl`,
+  `ext/MilliHertzQMLDeepSpaceTelemetryExt.jl`): the run interface
+  (`open_telemetry_run`, `run_geometry`, `list_batches`, `read_batch`,
+  `arrival_events`, `run_state`) implemented over the producer's API, the
+  batch-to-row geometry, the coverage set of delivered rows, the window
+  scheduler, the streaming detector reproducing the batch conditioning on
+  the delivered stretch around a window (`StreamingDetector`,
+  `detector_from_run`), replay and live modes (`replay_run`,
+  `follow_run`), and the alert-latency table (`alert_latency_table`);
+  the payload export stage (`export_telemetry_payload`,
+  `scripts/export_telemetry_payload.jl`) and the consumer script
+  `scripts/infer_telemetry.jl`; the `[telemetry]` configuration section;
+  the `figure_telemetry_alerts` figure; unit tests on an in-memory run and
+  an integration test that runs a producer mission in a temporary root.
+  DeepSpaceTelemetry is a weak dependency of the package and a pinned git
+  source of the script and test environments.
 - Publication figures as a CairoMakie package extension
   (`src/visualization.jl`, `ext/MilliHertzQMLCairoMakieExt.jl`): one
   theme at the 86 mm single-column width (Computer Modern, boxed axes,

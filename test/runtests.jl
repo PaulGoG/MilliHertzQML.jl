@@ -7,7 +7,7 @@ Pkg.activate(@__DIR__; io = devnull)
 Pkg.instantiate(; io = devnull)
 
 using Test
-using Statistics, Random, TOML
+using Statistics, Random, TOML, Dates
 using FFTW: rfft, rfftfreq
 using CSV, DataFrames
 using StableRNGs
@@ -15,6 +15,7 @@ using Aqua, JET, ExplicitImports
 using MilliHertzQML
 using Yao, Flux, Zygote
 using CairoMakie: CairoMakie
+using DeepSpaceTelemetry: DeepSpaceTelemetry
 
 const PROJECT_ROOT = dirname(@__DIR__)
 
@@ -924,6 +925,10 @@ end
         )
     end
 end
+
+include("export_payload_tests.jl")
+include("telemetry_tests.jl")
+include("telemetry_integration_tests.jl")
 
 # Validation anchors on the LDC Sangria training product. They run only when
 # MILLIHERTZQML_LDC_DIR names a directory holding LDC2_sangria_training_v2.h5

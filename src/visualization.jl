@@ -96,6 +96,20 @@ when `labels` is given, with the decision threshold. Requires CairoMakie.
 function figure_score_distribution end
 
 """
+    figure_telemetry_alerts(windows, threshold; epoch, label_spans = nothing,
+                            latencies = nothing) -> Figure
+
+Two stacked panels on a shared mission-time axis [days since `epoch`] for
+the windows table of a replay: the classifier score of every window at its
+content end with the decision threshold, alarmed windows marked, and the
+labeled spans (`label_spans`, pairs of `DateTime`) shaded; below, the
+ground-availability latency of every window (`complete_at − content_end`
+[h]) with the alert latencies of the detected events (`latencies`, the
+table of `alert_latency_table`) annotated. Requires CairoMakie.
+"""
+function figure_telemetry_alerts end
+
+"""
     figure_telemetry_trace(t_days, strain, labels; max_points = 5000, whitened = nothing) -> Figure
 
 Simulated strain record against mission time with the labeled spans as

@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "71b3e5ba19e2d31a9273b29bbabf34ede018aa3f"
+project_hash = "c3953a94ce669aeacaab266aff8ce3b06525b72a"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -515,6 +515,14 @@ version = "1.0.0"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
+
+[[deps.DeepSpaceTelemetry]]
+deps = ["AbstractFFTs", "CSV", "CairoMakie", "DataFrames", "Dates", "FFTW", "FileWatching", "HDF5", "JSON3", "LinearAlgebra", "Logging", "MathTeXEngine", "PrecompileTools", "ProgressMeter", "Random", "SHA", "TOML"]
+git-tree-sha1 = "b24654edf4de948bf8e15ebf42e34624db26305e"
+repo-rev = "b88c4fc87011d7fe6e4c541d8738167c72387faf"
+repo-url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"
+uuid = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
+version = "1.0.0"
 
 [[deps.DelaunayTriangulation]]
 deps = ["AdaptivePredicates", "EnumX", "ExactPredicates", "Random"]
@@ -1215,6 +1223,19 @@ version = "1.8.0"
     [deps.JSON.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
+[[deps.JSON3]]
+deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
+git-tree-sha1 = "411eccfe8aba0814ffa0fdf4860913ed09c34975"
+registries = "General"
+uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+version = "1.14.3"
+
+    [deps.JSON3.extensions]
+    JSON3ArrowExt = ["ArrowTypes"]
+
+    [deps.JSON3.weakdeps]
+    ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
+
 [[deps.JpegTurbo]]
 deps = ["CEnum", "FileIO", "ImageCore", "JpegTurbo_jll", "TOML"]
 git-tree-sha1 = "9496de8fb52c224a2e3f9ff403947674517317d9"
@@ -1646,10 +1667,11 @@ deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux",
 path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
-weakdeps = ["CairoMakie"]
+weakdeps = ["CairoMakie", "DeepSpaceTelemetry"]
 
     [deps.MilliHertzQML.extensions]
     MilliHertzQMLCairoMakieExt = "CairoMakie"
+    MilliHertzQMLDeepSpaceTelemetryExt = "DeepSpaceTelemetry"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -2395,6 +2417,13 @@ weakdeps = ["Adapt", "GPUArraysCore", "KernelAbstractions", "LinearAlgebra", "Sp
     StructArraysLinearAlgebraExt = "LinearAlgebra"
     StructArraysSparseArraysExt = "SparseArrays"
     StructArraysStaticArraysExt = "StaticArrays"
+
+[[deps.StructTypes]]
+deps = ["Dates", "UUIDs"]
+git-tree-sha1 = "159331b30e94d7b11379037feeb9b690950cace8"
+registries = "General"
+uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+version = "1.11.0"
 
 [[deps.StructUtils]]
 deps = ["Dates", "UUIDs"]

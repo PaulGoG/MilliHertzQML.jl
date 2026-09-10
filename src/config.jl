@@ -496,6 +496,69 @@ function ldc_settings(config::AbstractDict)
 end
 
 """
+    telemetry_settings(config) -> NamedTuple
+
+Validated `[telemetry]` parameters of the coupling to a DeepSpaceTelemetry
+run: the exported scenario geometry (`segment_duration_sec`, `batch_size`,
+`start_sim_time`, `output_prefix`) and the consumer's replay settings
+(`run_dir`, `mode`, `min_coverage`, `tdi_gap_dilation_sec`,
+`context_windows`, `poll_interval_sec`, `producer_compat`,
+`processing_latency_hours`, `events_csv`).
+"""
+function telemetry_settings(config::AbstractDict)
+    t = section(config, "telemetry")
+    start = cfgget(t, "start_sim_time", "2035-01-01T00:00:00"; type = String)
+    start_sim_time = tryparse(Dates.DateTime, start)
+    start_sim_time === nothing && throw(
+        ArgumentError(
+            "configuration key `start_sim_time` = $(repr(start)); expected an ISO-8601 datetime.",
+        ),
+    )
+    run_dir = cfgget(t, "run_dir", ""; type = String)
+    events_csv = cfgget(t, "events_csv", ""; type = String)
+    return (
+        segment_duration_sec = cfgget(
+            t,
+            "segment_duration_sec",
+            50.0;
+            type = Float64,
+            min = 1e-6,
+        ),
+        batch_size = cfgget(t, "batch_size", 10; type = Int, min = 1),
+        start_sim_time = start_sim_time,
+        output_prefix = cfgget(t, "output_prefix", "telemetry"; type = String),
+        run_dir = isempty(run_dir) ? "" : resolvepath(run_dir),
+        mode = cfgget(t, "mode", "replay"; type = String, choices = ("replay", "live")),
+        min_coverage = cfgget(
+            t,
+            "min_coverage",
+            1.0;
+            type = Float64,
+            min = 1e-6,
+            max = 1.0,
+        ),
+        tdi_gap_dilation_sec = cfgget(
+            t,
+            "tdi_gap_dilation_sec",
+            100.0;
+            type = Float64,
+            min = 0.0,
+        ),
+        context_windows = cfgget(t, "context_windows", 4; type = Int, min = 0),
+        poll_interval_sec = cfgget(t, "poll_interval_sec", 1.0; type = Float64, min = 1e-3),
+        producer_compat = cfgget(t, "producer_compat", "1.0"; type = String),
+        processing_latency_hours = cfgget(
+            t,
+            "processing_latency_hours",
+            1.0;
+            type = Float64,
+            min = 0.0,
+        ),
+        events_csv = isempty(events_csv) ? "" : resolvepath(events_csv),
+    )
+end
+
+"""
     feature_geometry(features_path, config) -> NamedTuple
 
 Window geometry (`window_size`, `step_size`, `sample_rate`) of a feature
