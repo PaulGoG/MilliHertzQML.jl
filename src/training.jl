@@ -45,11 +45,25 @@ function predict_probability(model::VariationalQuantumClassifier, x)
     return (1.0f0 - avg_z) / 2.0f0
 end
 
+"""
+    predict(model, x) -> Int
+
+Class decision for a single feature vector `x` at the fixed probability
+threshold 0.5: `1` when `predict_probability(model, x) > 0.5`, else `0`.
+Run-specific thresholds selected from the ROC curve live in the inference
+script, not here.
+"""
 function predict(model::VariationalQuantumClassifier, x)
     prob = predict_probability(model, x)
     return prob > 0.5f0 ? 1 : 0
 end
 
+"""
+    accuracy(model, X, y) -> Float64
+
+Fraction of the rows of the feature matrix `X` (samples along the first
+dimension) whose `predict` decision equals the corresponding label in `y`.
+"""
 function accuracy(model::VariationalQuantumClassifier, X, y)
     correct = 0
     for i in 1:size(X, 1)

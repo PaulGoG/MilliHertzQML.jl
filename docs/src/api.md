@@ -1,6 +1,8 @@
 # API Reference
 
-This section provides the internal API documentation for the `MilliHertzQML` package. All core logic functions, quantum architectural blocks, and physics-informed data processing routines are thoroughly documented.
+Docstrings of the `MilliHertzQML` module: the classifier and its training
+interface, the noise model, waveform, and feature-extraction routines, and
+model persistence.
 
 ```@autodocs
 Modules = [MilliHertzQML]
