@@ -102,14 +102,23 @@ S_c(f) = A f^{-7/3} \\exp\\left(-f^{\\alpha} + \\beta f \\sin(\\kappa f)\\right)
 
 with the parameters of [`confusion_fit`](@ref) for `observation_years`.
 Returns `Inf` for `f ≤ 0`.
+
+The product is evaluated in log space with
+``\\log(1 + \\tanh x) = \\log 2 - \\mathrm{softplus}(-2x)``: far above the
+knee ``f_k`` the cutoff factor underflows to zero while the exponential can
+overflow, and the direct product would give `NaN` where the foreground
+vanishes.
 """
 function confusion_psd(f::Real; observation_years::Real = 1.0)
     p = confusion_fit(observation_years)
     f > 0 || return Inf
-    return CONFUSION_AMPLITUDE *
-           f^(-7 / 3) *
-           exp(-f^p.α + p.β * f * sin(p.κ * f)) *
-           (1 + tanh(p.γ * (p.f_k - f)))
+    y = -2 * p.γ * (p.f_k - f)
+    softplus = max(y, zero(y)) + log1p(exp(-abs(y)))
+    log_s =
+        log(CONFUSION_AMPLITUDE) - (7 / 3) * log(f) - f^p.α +
+        p.β * f * sin(p.κ * f) +
+        log(2) - softplus
+    return exp(log_s)
 end
 
 """

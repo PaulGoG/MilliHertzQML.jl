@@ -196,6 +196,19 @@ end
     @test isapprox(instrument_psd(1e-2), 1.443169e-40; rtol = 1e-5)
     @test isapprox(confusion_psd(3e-3; observation_years = 1.0), 5.591648e-40; rtol = 1e-5)
     @test_throws ArgumentError confusion_psd(1e-3; observation_years = 3.0)
+    # Far above the knee the direct product would be 0 × Inf; the log-space
+    # evaluation vanishes and the sensitivity stays finite up to 10 Hz
+    @test confusion_psd(10.0; observation_years = 1.0) == 0.0
+    @test all(isfinite, lisa_noise_psd.((0.05, 0.5, 2.0, 10.0)))
+    # Agreement with the direct product where both are finite
+    p = MilliHertzQML.confusion_fit(1.0)
+    f = 2e-3
+    direct =
+        MilliHertzQML.CONFUSION_AMPLITUDE *
+        f^(-7 / 3) *
+        exp(-f^p.α + p.β * f * sin(p.κ * f)) *
+        (1 + tanh(p.γ * (p.f_k - f)))
+    @test isapprox(confusion_psd(f), direct; rtol = 1e-10)
 end
 
 @testset "Noise synthesis calibration" begin

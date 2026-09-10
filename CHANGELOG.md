@@ -73,6 +73,9 @@ Notable changes to MilliHertzQML. The format follows
   `[training]`; `[inference]` loses `target_fpr` and gains `block`.
 - Inference no longer fits a threshold: it requires the `threshold.toml`
   written at training time.
+- `confusion_psd` evaluates the Robson–Cornish–Liu foreground in log
+  space, so the sensitivity stays finite far above the knee frequency
+  (the direct product gave `0 × Inf` above a few hertz).
 - Simulator: noise synthesized at physical strain amplitude against the
   corrected PSD (the previous confusion term vanished above 0.2 mHz and
   the instrument term lacked the 10/3 and transfer factors); every
