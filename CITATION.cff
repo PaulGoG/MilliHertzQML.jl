@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "MilliHertzQML.jl"
+abstract: "Variational quantum classifier with data re-uploading for the detection of massive black hole binary coalescences in milliHertz gravitational-wave telemetry, implemented in Julia."
+authors:
+  - family-names: "Gogîță"
+    given-names: "Paul-Adrian"
+    email: "gogitapaul@yahoo.ro"
+version: 0.1.0
+date-released: 2026-08-07
+license: MIT
+repository-code: "https://github.com/PaulGoG/MilliHertzQML.jl"
+keywords:
+  - gravitational waves
+  - LISA
+  - quantum machine learning
+  - variational quantum classifier
+  - Julia
+references:
+  - type: article
+    title: "Quantum computing tools for fast detection of gravitational waves in the context of LISA space mission"
+    authors:
+      - family-names: "Isfan"
+        given-names: "Maria-Catalina"
+      - family-names: "Caramete"
+        given-names: "Laurentiu-Ioan"
+      - family-names: "Caramete"
+        given-names: "Ana"
+      - family-names: "Tonoiu"
+        given-names: "Daniel"
+      - family-names: "Nicolin-Żaczek"
+        given-names: "Alexandru"
+    journal: "Classical and Quantum Gravity"
+    volume: 42
+    issue: 22
+    start: 225001
+    year: 2025
+    doi: "10.1088/1361-6382/ae1787"

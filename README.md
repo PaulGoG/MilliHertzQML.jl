@@ -24,7 +24,7 @@ MilliHertzQML/
 │   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
 ├── test/
 │   ├── Project.toml        # Test environment (package consumed by path); Manifest committed
-│   └── runtests.jl         # Unit tests (model, gradients, features, validation, persistence)
+│   └── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
 ├── bench/
 │   ├── Project.toml        # Benchmark environment (package consumed by path); Manifest committed
 │   └── benchmarks.jl       # BenchmarkTools performance measurements
@@ -38,6 +38,8 @@ MilliHertzQML/
 ├── models/                 # Per-run model checkpoints (not tracked)
 ├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build
 ├── .JuliaFormatter.toml    # Committed formatter configuration
+├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
+├── CITATION.cff            # Citation metadata
 ├── config.toml             # Pipeline defaults; overridden by CLI flags
 ├── Project.toml            # Package metadata: only the dependencies of src/
 └── Manifest.toml           # Pinned dependency versions (tracked)
@@ -67,7 +69,7 @@ it.
 
 ## Usage
 
-All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml` (including model and optimizer hyperparameters under `[model]` and `[training]`) and are validated on load; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
+All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml` (including model and optimizer hyperparameters under `[model]` and `[training]`, and the output roots under `[paths]`) and are validated on load; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
@@ -97,7 +99,7 @@ Labeled inference fits the decision threshold from the ROC curve and persists it
 ## Testing and Benchmarks
 
 ```bash
-julia --project -e 'using Pkg; Pkg.test()'   # unit tests (equivalently: julia test/runtests.jl)
+julia --project -e 'using Pkg; Pkg.test()'   # static QA, unit tests, pipeline smoke test (equivalently: julia test/runtests.jl)
 julia bench/benchmarks.jl                    # performance measurements
 ```
 
