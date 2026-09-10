@@ -1,3 +1,11 @@
+# The suite runs in its own environment (test/Project.toml, with the package
+# consumed by path through [sources]) and loads MilliHertzQML as a real
+# package, so static QA resolves the package identity and `Pkg.test` agrees
+# with a direct `julia --project=test test/runtests.jl` invocation.
+using Pkg
+Pkg.activate(@__DIR__; io = devnull)
+Pkg.instantiate(; io = devnull)
+
 using Test
 using MilliHertzQML
 using Yao

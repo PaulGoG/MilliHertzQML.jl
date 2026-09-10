@@ -1,5 +1,5 @@
 using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.activate(@__DIR__; io = devnull)
 Pkg.instantiate(; io = devnull)
 using BenchmarkTools
 using MilliHertzQML

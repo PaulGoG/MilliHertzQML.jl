@@ -1,8 +1,9 @@
-# scripts/common.jl — shared script preamble: environment activation, path
-# resolution against the project root, and validated configuration access.
+# scripts/common.jl — shared script preamble: activation of the script environment
+# (scripts/Project.toml, package consumed by path), path resolution against the
+# project root, and validated configuration access.
 
 using Pkg
-Pkg.activate(dirname(@__DIR__); io = devnull)
+Pkg.activate(@__DIR__; io = devnull)
 Pkg.instantiate(; io = devnull)
 
 using TOML

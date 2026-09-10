@@ -16,28 +16,42 @@ MilliHertzQML/
 │   ├── data.jl             # Feature extraction and normalization
 │   └── persistence.jl      # JLD2 model save/load (parameters + hyperparameters)
 ├── scripts/
+│   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
 │   ├── common.jl           # Shared preamble: activation, paths, validated config access
 │   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels)
 │   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV)
 │   ├── train.jl            # Training loop with early stopping and terminal dashboard
 │   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
 ├── test/
+│   ├── Project.toml        # Test environment (package consumed by path); Manifest committed
 │   └── runtests.jl         # Unit tests (model, gradients, features, validation, persistence)
 ├── bench/
+│   ├── Project.toml        # Benchmark environment (package consumed by path); Manifest committed
 │   └── benchmarks.jl       # BenchmarkTools performance measurements
-├── docs/                   # Documenter.jl sources (build/ is generated, not tracked)
+├── docs/
+│   ├── Project.toml        # Documentation environment (package consumed by path)
+│   ├── make.jl             # Documenter.jl build script
+│   └── src/                # Manual pages (build/ is generated, not tracked)
 ├── data/
 │   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
 │   └── outputs/            # Per-run plots and results (not tracked)
 ├── models/                 # Per-run model checkpoints (not tracked)
+├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build
+├── .JuliaFormatter.toml    # Committed formatter configuration
 ├── config.toml             # Pipeline defaults; overridden by CLI flags
-├── Project.toml            # Package manifest
+├── Project.toml            # Package metadata: only the dependencies of src/
 └── Manifest.toml           # Pinned dependency versions (tracked)
+```
+
 ```
 
 ## Installation
 
-Julia ≥ 1.12 is required. From a clone of this repository:
+Julia 1.12 is the supported release: the committed `Manifest.toml` files are
+resolved on it and it is the `[compat]` floor. Newer releases are exercised
+by an advisory CI job only. With [juliaup](https://github.com/JuliaLang/juliaup),
+`juliaup add 1.12` installs it and `julia +1.12` selects it. From a clone
+of this repository:
 
 ```bash
 git clone git@github.com:PaulGoG/MilliHertzQML.jl.git
@@ -45,7 +59,11 @@ cd MilliHertzQML.jl
 julia --project -e 'using Pkg; Pkg.instantiate()'
 ```
 
-The tracked `Manifest.toml` pins the exact dependency versions.
+The scripts, tests, benchmarks, and documentation each carry their own
+environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
+package by path and activates itself, so the step above is optional for
+them; the first invocation of each environment resolves and precompiles
+it.
 
 ## Usage
 
@@ -79,7 +97,7 @@ Labeled inference fits the decision threshold from the ROC curve and persists it
 ## Testing and Benchmarks
 
 ```bash
-julia --project -e 'using Pkg; Pkg.test()'   # unit tests
+julia --project -e 'using Pkg; Pkg.test()'   # unit tests (equivalently: julia test/runtests.jl)
 julia bench/benchmarks.jl                    # performance measurements
 ```
 
