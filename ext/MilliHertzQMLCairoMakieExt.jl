@@ -136,13 +136,13 @@ Index range keeping about `max_points` of `n` samples.
 decimation(n::Integer, max_points::Integer) = 1:max(1, cld(n, max_points)):n
 
 """
-    top_legend!(figure, axis)
+    top_legend!(figure, axis; nbanks = 1)
 
 Horizontal legend of the labeled series of `axis` above the axes, in the
-first row of the figure layout.
+first row of the figure layout, in `nbanks` rows.
 """
-function top_legend!(figure::Figure, axis::Axis)
-    Legend(figure[0, 1], axis; LEGEND_STYLE...)
+function top_legend!(figure::Figure, axis::Axis; nbanks::Integer = 1)
+    Legend(figure[0, 1], axis; LEGEND_STYLE..., nbanks = nbanks)
     rowgap!(figure.layout, 3)
     return nothing
 end
@@ -238,11 +238,11 @@ function figure_mission_trace(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
-            label = "Threshold $(round(threshold; digits = 2))",
+            label = "Threshold $(round(threshold; digits = 3))",
         )
         xlims!(axis, days[1], days[end] == days[1] ? days[1] + 1 : days[end])
         ylims!(axis, 0, 1)
-        top_legend!(figure, axis)
+        top_legend!(figure, axis; nbanks = 2)
         figure
     end
 end
@@ -307,14 +307,7 @@ function figure_sensitivity(
         figure = Figure()
         axis =
             Axis(figure[1, 1]; xlabel = "Matched-filter SNR", ylabel = "Detected fraction")
-        scatterlines!(
-            axis,
-            centers,
-            rates;
-            color = FIGURE_COLORS.data,
-            markersize = 6,
-            label = "Labeled windows per SNR bin",
-        )
+        scatterlines!(axis, centers, rates; color = FIGURE_COLORS.data, markersize = 6)
         text!(
             axis,
             centers,
@@ -324,10 +317,19 @@ function figure_sensitivity(
             fontsize = 7,
             color = FIGURE_COLORS.data,
         )
+        text!(
+            axis,
+            0.02,
+            0.97;
+            text = "Numbers: labeled windows per SNR bin",
+            space = :relative,
+            align = (:left, :top),
+            fontsize = 7,
+            color = FIGURE_COLORS.data,
+        )
         ylims!(axis, 0, 1.18)
         span = hi - lo
         xlims!(axis, lo - 0.05 * max(span, 1), hi + 0.05 * max(span, 1))
-        top_legend!(figure, axis)
         figure
     end
 end
@@ -382,10 +384,10 @@ function figure_score_distribution(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
-            label = "Threshold $(round(threshold; digits = 2))",
+            label = "Threshold $(round(threshold; digits = 3))",
         )
         xlims!(axis, 0, 1)
-        top_legend!(figure, axis)
+        top_legend!(figure, axis; nbanks = 2)
         figure
     end
 end
@@ -513,7 +515,7 @@ function figure_telemetry_alerts(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
-            label = "Threshold $(round(threshold; digits = 2))",
+            label = "Threshold $(round(threshold; digits = 3))",
         )
         ylims!(ax_score, 0, 1)
         ax_lat = Axis(
