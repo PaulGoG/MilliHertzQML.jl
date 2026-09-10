@@ -8,6 +8,14 @@ Quantum machine learning for gravitational-wave detection in the milliHertz band
 MilliHertzQML/
 ├── src/
 │   ├── MilliHertzQML.jl    # Module definition and exports
+│   ├── config.jl           # TOML loading, validated key access, typed settings of every section, path resolution
+│   ├── provenance.jl       # Run identifiers, hardware and git provenance, overwrite-safe writing, memory guard, stage timer
+│   ├── stages/             # One typed stage function per pipeline step
+│   │   ├── generation.jl   #   generate_telemetry: simulated continuous telemetry, labels, event catalog
+│   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
+│   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
+│   │   ├── training.jl     #   train_classifier: chronological blocks, training, validation-fitted threshold
+│   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, class-weighted BCE loss, gradient step
 │   ├── evaluation.jl       # Chronological block split, ROC, validation-fitted threshold, event-level metrics
@@ -18,12 +26,12 @@ MilliHertzQML/
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
-│   ├── common.jl           # Shared preamble: activation, paths, validated config access, feature geometry
-│   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels + event catalog)
-│   ├── label_ldc.jl        # Point-wise MBHB labels of an LDC product from its truth stream
-│   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV + geometry sidecar); model, LDC, or Welch whitening
-│   ├── train.jl            # Chronological split, training with early stopping, validation-fitted threshold, test-block metrics
-│   └── infer.jl            # Inference with the persisted threshold, event-level metrics, diagnostic figures
+│   ├── common.jl           # Activation of the script environment
+│   ├── generate_data.jl    # Dispatcher of generate_telemetry plus the trace figure
+│   ├── label_ldc.jl        # Dispatcher of label_truth_stream
+│   ├── preprocess_ldc.jl   # Dispatcher of preprocess_record
+│   ├── train.jl            # Dispatcher of train_classifier plus the terminal dashboard, file logger, and training figure
+│   └── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
 ├── test/
 │   ├── Project.toml        # Test environment (package consumed by path); Manifest committed
 │   └── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
@@ -72,54 +80,52 @@ it.
 
 ## Usage
 
-All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml` (including model and optimizer hyperparameters under `[model]` and `[training]`, and the output roots under `[paths]`) and are validated on load; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
+Every script takes the configuration file as its first argument (default `config.toml` at the repository root) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise labels + event catalog)
-julia scripts/generate_data.jl --days 30.0
+julia scripts/generate_data.jl config.toml --run-id sim01
 
 # 2. Sliding-window feature extraction
-julia scripts/preprocess_ldc.jl \
+julia scripts/preprocess_ldc.jl config.toml \
     --h5-file data/inputs/simulated_telemetry_complex.h5 \
     --label-file data/inputs/simulated_telemetry_complex_labels.csv \
     --output-prefix telemetry_sim
 
 # 3. Training: chronological train/validation/test blocks, class-weighted BCE,
 #    early stopping and threshold selection on the validation block, test block scored once
-julia scripts/train.jl \
-    --train-features data/inputs/telemetry_sim_features.csv \
-    --train-labels data/inputs/telemetry_sim_labels.csv --epochs 50
+julia scripts/train.jl config.toml --run-id <RUN_ID>
 
 # 4. Inference and diagnostics with the persisted threshold (mission trace, ROC,
 #    sensitivity versus SNR, score distributions); --block test restricts the
 #    evaluation to the test block of the training table
-julia scripts/infer.jl \
-    --features data/inputs/telemetry_sim_features.csv \
-    --labels data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID> --block test
+julia scripts/infer.jl config.toml --run-id <RUN_ID> --block test
 ```
 
-`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
+`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
+
+Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
 
 For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`). `config_sangria.toml` holds the benchmark settings (`config_sangria_paper.toml` the paper-parity variant); the HDF5 products are passed on the command line:
 
 ```bash
 # Labels from the truth stream and catalog of the training product, then features
-julia scripts/label_ldc.jl --config config_sangria.toml \
+julia scripts/label_ldc.jl config_sangria.toml \
     --h5-file <LDC2_sangria_training_v2.h5> --output-prefix sangria
-julia scripts/preprocess_ldc.jl --config config_sangria.toml \
+julia scripts/preprocess_ldc.jl config_sangria.toml \
     --h5-file <LDC2_sangria_training_v2.h5> \
     --label-file data/inputs/sangria_labels.csv --output-prefix sangria_train
 
 # Blind set: point-wise labels from the unblinded MBHB-only TDI (columns t, X, Y, Z)
-julia scripts/label_ldc.jl --config config_sangria.toml \
+julia scripts/label_ldc.jl config_sangria.toml \
     --truth-csv <mbhb_unbl.csv> --output-prefix sangria_blind_points
-julia scripts/preprocess_ldc.jl --config config_sangria.toml \
+julia scripts/preprocess_ldc.jl config_sangria.toml \
     --h5-file <LDC2_sangria_blind_v2.h5> \
     --label-file data/inputs/sangria_blind_points_labels.csv --output-prefix sangria_blind
 
 # Training on the year-long training set, then the blind evaluation
-julia scripts/train.jl --config config_sangria.toml --run-id sangria01
-julia scripts/infer.jl --config config_sangria.toml --run-id sangria01
+julia scripts/train.jl config_sangria.toml --run-id sangria01
+julia scripts/infer.jl config_sangria.toml --run-id sangria01
 ```
 
 The validation anchors of the LDC reader and noise model run with the test suite when `MILLIHERTZQML_LDC_DIR` names the directory holding `LDC2_sangria_training_v2.h5`.
@@ -145,6 +151,7 @@ julia docs/make.jl
 | Component | State |
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
+| Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; Sangria benchmark run pending |

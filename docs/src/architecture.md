@@ -12,7 +12,7 @@ Parameters are initialized from a zero-mean normal distribution with standard de
 
 ## Evaluation protocol
 
-Sliding windows overlap by 90 %, so neighbouring windows are nearly identical and any random split would place copies of the same signal on both sides. `scripts/train.jl` therefore partitions the chronologically ordered windows into three contiguous blocks — training, validation, and test, holding `train_fraction`, `validation_fraction`, and the remainder of the windows (defaults 0.7, 0.15, 0.15) — separated by a buffer of one window length (`window_size / step_size` windows) so that no window straddles two blocks (`chronological_split`). The block ranges are written to `split.toml` in the run directory; the feature scaler is fitted on the training block alone.
+Sliding windows overlap by 90 %, so neighbouring windows are nearly identical and any random split would place copies of the same signal on both sides. The training stage therefore partitions the chronologically ordered windows into three contiguous blocks — training, validation, and test, holding `train_fraction`, `validation_fraction`, and the remainder of the windows (defaults 0.7, 0.15, 0.15) — separated by a buffer of one window length (`window_size / step_size` windows) so that no window straddles two blocks (`chronological_split`). The block ranges are written to `split.toml` in the run directory; the feature scaler is fitted on the training block alone.
 
 - The validation block drives early stopping and the decision threshold; the test block is scored once, after training, with the fitted threshold.
 - Window labels are positive whenever a labeled sample falls inside the window (a few per cent to a few tens of per cent of the windows, depending on the label span). The binary cross-entropy weights the positive term by the negative-to-positive count ratio of the training block (`class_weight = "balanced"`) unless disabled.
@@ -36,11 +36,28 @@ Candidates are the quantiles of the validation scores. The threshold, the criter
 
 ## Inference
 
-`scripts/infer.jl` loads the model, the scaler, and the persisted threshold, scores a feature table, and writes per-window probabilities and decisions. The window geometry comes from the sidecar `<features>.toml` written by `scripts/preprocess_ldc.jl` (CLI overrides exist for tables without one). With labels it reports the window- and event-level metrics of the evaluated rows to `metrics.toml`; `--block validation` or `--block test` restricts the evaluation to one block of the training table through the run's `split.toml`. Blind inference (`--labels ""`) needs no labels. Figures: the mission trace with the threshold, the ROC curve, detection sensitivity versus matched-filter SNR, and the score distributions.
+The inference stage loads the model, the scaler, and the persisted threshold, scores a feature table, and writes per-window probabilities and decisions. The window geometry comes from the sidecar `<features>.toml` written by the pre-processor. With labels it reports the window- and event-level metrics of the evaluated rows to `metrics.toml`; `--block validation` or `--block test` restricts the evaluation to one block of the training table through the run's `split.toml`. Blind inference (`--labels ""`) needs no labels. Figures: the mission trace with the threshold, the ROC curve, detection sensitivity versus matched-filter SNR, and the score distributions.
+
+## Pipeline architecture
+
+The pipeline is a library with thin command-line entry points. Every stage is a typed, documented function of the package taking the parsed TOML configuration and returning a named tuple of its artifacts and results, so that it can be called from a script, a test, or another package alike:
+
+| Stage | Function | Script |
+|---|---|---|
+| Telemetry simulation | `generate_telemetry(config; run_id, output)` | `scripts/generate_data.jl` |
+| Truth-stream labels (LDC) | `label_truth_stream(config; h5_file, truth_csv, output_prefix)` | `scripts/label_ldc.jl` |
+| Window features | `preprocess_record(config; h5_file, tdi_group, label_file, output_prefix, force)` | `scripts/preprocess_ldc.jl` |
+| Training | `train_classifier(config; run_id, test_mode, on_epoch)` | `scripts/train.jl` |
+| Inference | `evaluate_classifier(config; run_id, model, features, labels, block)` | `scripts/infer.jl` |
+
+- **Configuration.** The TOML file is the single source of truth (`src/config.jl`): each section is read through a settings function (`generation_settings`, `preprocessing_settings`, `model_settings`, `training_settings`, `inference_settings`, `ldc_settings`, `resource_settings`) that validates types, bounds, and enumerated choices on load and fails with the offending key. The scripts add only a run identifier, a test-mode switch, and the location of external inputs (`julia scripts/<stage>.jl [config.toml] [--run-id ID] ...`); relative paths resolve against the package root whichever environment is active.
+- **Provenance.** Every snapshot written by a stage (`write_toml`) carries the hardware fingerprint, the git description of the package tree with its dirty flag and the package version, and the wall-clock time; model artifacts carry the same in their metadata. Existing files are never overwritten: `write_toml` and `write_csv` move a previous file to `<stem>_#k<ext>` first, the `safesave` convention of DrWatson. Feature products record a hash of every parameter that determines them, and preprocessing reuses an identical product unless forced.
+- **Resource guard.** `[resources]` holds `max_memory_gib` and `warn_memory_gib`. Before allocating, a stage estimates its memory — for training, the ``2^{n}`` complex single-precision statevector copied per gate application under the automatic-differentiation tape for every sample of the batch and every layer, forward and adjoint (`training_memory_estimate_gib`); for record processing, a few record-length arrays (`record_memory_estimate_gib`) — and refuses to start above the maximum or warns above the warning level (`check_memory`).
+- **Timing.** Stages accumulate wall time and allocations in a package-wide `TimerOutput`; the scripts print its table at the end (`report_timing`).
 
 ## Known Methodological Deficiencies
 
 Retained here so the documentation reflects the code as it stands; remediation is planned.
 
-1. **Configuration coverage.** Model, optimizer, feature-band, scaler, split, and threshold parameters are exposed in `config.toml` and validated on load; memory-safety thresholds and a pre-run register-size estimate are not yet enforced.
-2. **Single evaluation record.** The blocks are cut from one simulated record, so the test block carries the events of one realization; event-level statistics on the Sangria data set are pending.
+1. **Single evaluation record.** The blocks are cut from one record, so the test block carries the events of one realization; the Sangria blind set is the independent evaluation.
+2. **Serial training loop.** Gradients are evaluated sample by sample on one thread; mission-scale training runs for hours on a workstation. Threaded batch gradients are deferred until the benchmark demands them.

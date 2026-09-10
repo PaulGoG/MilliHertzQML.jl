@@ -761,6 +761,106 @@ end
     @test_throws ArgumentError extract_features(colored[1:1000], fs; feature_set = :other)
 end
 
+@testset "Configuration and provenance" begin
+    @test isfile(joinpath(project_root(), "Project.toml"))
+    @test resolvepath("data") == joinpath(project_root(), "data")
+    @test resolvepath("/abs/x") == "/abs/x"
+    @test rootrelative(joinpath(project_root(), "data", "x.csv")) ==
+          joinpath("data", "x.csv")
+    @test rootrelative("/elsewhere/x.csv") == "/elsewhere/x.csv"
+    @test_throws ArgumentError load_config(joinpath(project_root(), "absent.toml"))
+    sec = Dict{String,Any}("a" => 3, "b" => 2.5, "c" => "x", "d" => [1, 2])
+    @test cfgget(sec, "a", 0; type = Float64) === 3.0
+    @test cfgget(sec, "missing", 7; type = Int) == 7
+    @test_throws ArgumentError cfgget(sec, "c", "y"; type = Int)
+    @test_throws ArgumentError cfgget(sec, "a", 0; type = Int, min = 4)
+    @test_throws ArgumentError cfgget(sec, "b", 0.0; type = Float64, max = 2.0)
+    @test_throws ArgumentError cfgget(sec, "c", "x"; choices = ("y", "z"))
+    @test override(nothing, 1) == 1 && override(2, 1) == 2
+    @test analysis_band(Dict{String,Any}("band" => [1e-3, 5e-3]), "band", nothing) ==
+          (1e-3, 5e-3)
+    @test_throws ArgumentError analysis_band(
+        Dict{String,Any}("band" => [5e-3, 1e-3]),
+        "band",
+        nothing,
+    )
+    # An empty configuration yields the documented, validated defaults
+    empty = Dict{String,Any}()
+    @test pipeline_paths(empty).inputs == joinpath(project_root(), "data", "inputs")
+    @test generation_settings(empty).snr_max == 50.0
+    @test preprocessing_settings(empty).psd == "model"
+    @test preprocessing_settings(empty).feature_set == :whitened
+    @test model_settings(empty).n_qubits == 4
+    @test training_settings(empty).threshold_criterion == "far"
+    @test inference_settings(empty).block == "all"
+    @test ldc_settings(empty).label_before_sec == 4 * 86400.0
+    @test_throws ArgumentError training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("train_fraction" => 0.9)),
+    )
+    @test_throws ArgumentError preprocessing_settings(
+        Dict{String,Any}("preprocessing" => Dict{String,Any}("step_size" => 2000)),
+    )
+    @test_throws ArgumentError generation_settings(
+        Dict{String,Any}("generation" => Dict{String,Any}("observation_years" => 3.0)),
+    )
+    # Resources: machine-derived defaults, ordered thresholds, monotone estimates
+    r = resource_settings(empty)
+    @test r.warn_memory_gib <= r.max_memory_gib <= r.total_memory_gib
+    r16 = resource_settings(
+        Dict{String,Any}(
+            "resources" =>
+                Dict{String,Any}("max_memory_gib" => 16.0, "warn_memory_gib" => 8.0),
+        ),
+    )
+    @test r16.max_memory_gib == 16.0
+    @test_throws ArgumentError resource_settings(
+        Dict{String,Any}(
+            "resources" =>
+                Dict{String,Any}("max_memory_gib" => 1.0, "warn_memory_gib" => 2.0),
+        ),
+    )
+    # One more qubit doubles the statevector and adds a fifth of the gates
+    @test training_memory_estimate_gib(5, 4, 64) ==
+          2.5 * training_memory_estimate_gib(4, 4, 64)
+    @test training_memory_estimate_gib(4, 4, 128) ==
+          2 * training_memory_estimate_gib(4, 4, 64)
+    @test record_memory_estimate_gib(2^30 ÷ 8) == 6.0
+    @test check_memory(0.1, r16; stage = "test") == 0.1
+    @test_logs (:warn, r"warning threshold") match_mode = :any check_memory(
+        9.0,
+        r16;
+        stage = "test",
+    )
+    @test_throws ArgumentError check_memory(17.0, r16; stage = "test")
+    # Provenance: run identifiers, fingerprint, git, overwrite-safe writing
+    @test length(new_run_id()) == 8 && new_run_id() != new_run_id()
+    hw = hardware_fingerprint()
+    @test hw["julia_version"] == string(VERSION)
+    @test hw["cpu_threads_logical"] == Sys.CPU_THREADS
+    g = git_provenance()
+    @test haskey(g, "git_commit") &&
+          g["package_version"] == string(pkgversion(MilliHertzQML))
+    mktempdir() do dir
+        path = joinpath(dir, "snap.toml")
+        write_toml(path, Dict("stage" => Dict("a" => 1)))
+        snap = TOML.parsefile(path)
+        @test snap["stage"]["a"] == 1
+        @test haskey(snap, "hardware") && haskey(snap, "git") && haskey(snap, "written_at")
+        write_toml(path, Dict("stage" => Dict("a" => 2)))
+        @test TOML.parsefile(path)["stage"]["a"] == 2
+        @test TOML.parsefile(joinpath(dir, "snap_#1.toml"))["stage"]["a"] == 1
+        @test backup_existing!(joinpath(dir, "absent.toml")) === nothing
+        csv = joinpath(dir, "t.csv")
+        write_csv(csv, DataFrame(x = [1, 2]))
+        write_csv(csv, DataFrame(x = [3]))
+        @test nrow(CSV.read(csv, DataFrame)) == 1 && isfile(joinpath(dir, "t_#1.csv"))
+        plain = joinpath(dir, "plain.toml")
+        write_toml(plain, Dict("k" => "v"); tag = false)
+        @test !haskey(TOML.parsefile(plain), "git")
+    end
+    @test occursin("Time", sprint(report_timing))
+end
+
 # Validation anchors on the LDC Sangria training product. They run only when
 # MILLIHERTZQML_LDC_DIR names a directory holding LDC2_sangria_training_v2.h5
 # (a 3 GB download from Zenodo record 7132178).
@@ -888,7 +988,7 @@ end
         log = joinpath(dir, "pipeline.log")
 
         function stage(script, args...)
-            cmd = `$julia --startup-file=no $(joinpath(scripts, script)) --config $cfg_path $(collect(args))`
+            cmd = `$julia --startup-file=no $(joinpath(scripts, script)) $cfg_path $(collect(args))`
             ok = success(pipeline(cmd; stdout = log, stderr = log, append = true))
             ok || println(read(log, String))
             @test ok

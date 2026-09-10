@@ -7,6 +7,24 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- Pipeline architecture: every stage is a typed library function
+  (`generate_telemetry`, `label_truth_stream`, `preprocess_record`,
+  `train_classifier`, `evaluate_classifier` under `src/stages/`) returning
+  its artifacts; the scripts are thin dispatchers.
+- `src/config.jl`: validated settings of every configuration section
+  (`generation_settings`, `preprocessing_settings`, `model_settings`,
+  `training_settings`, `inference_settings`, `ldc_settings`,
+  `resource_settings`), path resolution against the package root.
+- `src/provenance.jl`: git description and package version beside the
+  hardware fingerprint in every snapshot (`write_toml`), overwrite-safe
+  writing with DrWatson-style `_#k` backups (`backup_existing!`,
+  `write_csv`), run identifiers, the `[resources]` memory guard with
+  pre-flight estimates (`training_memory_estimate_gib`,
+  `record_memory_estimate_gib`, `check_memory`), and the stage timer
+  (`TIMER`, `report_timing`). DrWatson, TimerOutputs, and the provenance
+  standard libraries become package dependencies.
+- Preprocessing records a hash of every parameter that determines a
+  feature product and reuses an identical product unless `--force`.
 - Committed `.JuliaFormatter.toml` (default style, 92-column margin, spaced
   keyword arguments); the tree is formatted with it.
 - Auxiliary environments: `scripts/Project.toml`, `bench/Project.toml`, and
@@ -87,6 +105,12 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- Command-line interface: the configuration file is the first (positional)
+  argument of every script and the single source of every parameter; the
+  scripts keep only `--run-id`, `--test-mode`, and the location of
+  external inputs (`--h5-file`, `--label-file`, `--truth-csv`,
+  `--features`, `--labels`, `--model`, `--block`, `--output-prefix`,
+  `--output`, `--force`). Numeric overrides are removed.
 - Evaluation protocol: the random shuffle over overlapping windows is
   replaced by the chronological block split; early stopping and the
   decision threshold use the validation block only and the test block is

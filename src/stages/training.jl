@@ -1,0 +1,439 @@
+# src/stages/training.jl — training stage: chronological block split,
+# class-weighted training with early stopping on the validation block,
+# validation-fitted decision threshold, and a single scoring of the test
+# block. The script scripts/train.jl adds only the terminal dashboard, the
+# file logger, and the training-history figure.
+
+"""
+    predict_all(model, X; progress = false) -> Vector{Float32}
+
+Classifier probability of every row of the encoded feature matrix `X`
+(samples × features); with `progress`, a line is printed at every tenth
+of the rows.
+"""
+function predict_all(
+    model::VariationalQuantumClassifier,
+    X::AbstractMatrix{<:Real};
+    progress::Bool = false,
+)
+    n = size(X, 1)
+    probabilities = Vector{Float32}(undef, n)
+    every = max(1, div(n, 10))
+    for i in 1:n
+        probabilities[i] = predict_probability(model, @view(X[i, :]))
+        progress && i % every == 0 && println("  Progress: $(round(Int, i / n * 100)) %")
+    end
+    return probabilities
+end
+
+"""
+    metrics_dict(m) -> Dict{String, Any}
+
+The fields of an [`event_metrics`](@ref) named tuple keyed by name, as
+persisted in the `metrics.toml` snapshots.
+"""
+metrics_dict(m::NamedTuple) = Dict{String,Any}(String(k) => v for (k, v) in pairs(m))
+
+"""
+    fixed(x, digits, width) -> String
+
+`x` in fixed-point notation with `digits` decimals, right-aligned in
+`width` characters; non-finite values print as such.
+"""
+function fixed(x::Real, digits::Integer, width::Integer)
+    s = string(isfinite(x) ? round(Float64(x); digits = digits) : Float64(x))
+    if isfinite(x) && !occursin('e', s)
+        head, tail = split(s, '.')
+        s = head * "." * rpad(tail, digits, '0')
+    end
+    return lpad(s, width)
+end
+
+"""
+    print_block_summary(io, rows)
+
+Console table of the window- and event-level detection statistics of the
+evaluated blocks; `rows` holds `(name, metrics, auc)` triples with
+`metrics` from [`event_metrics`](@ref).
+"""
+function print_block_summary(io::IO, rows)
+    println(io)
+    println(
+        io,
+        "  Block        AUC      Prec.   Recall  F1      Bal.acc  Events  Detected  FA/30 d",
+    )
+    for (name, m, auc) in rows
+        println(
+            io,
+            "  ",
+            rpad(name, 11),
+            "  ",
+            fixed(auc, 3, 6),
+            "  ",
+            fixed(m.precision, 3, 6),
+            "  ",
+            fixed(m.recall, 3, 6),
+            "  ",
+            fixed(m.f1, 3, 6),
+            "  ",
+            fixed(m.balanced_accuracy, 3, 6),
+            "  ",
+            lpad(m.n_events, 6),
+            "  ",
+            lpad(m.n_detected, 8),
+            "  ",
+            fixed(m.false_alarms_per_30d, 2, 7),
+        )
+    end
+    return nothing
+end
+
+"""
+    block_metrics(probabilities, labels, threshold, geometry) -> (metrics, auc, dict)
+
+Event-level metrics of a scored block at the decision `threshold`, its ROC
+area, and the merged dictionary persisted in `metrics.toml`
+(`n_windows`, `threshold`, `auc` added to the [`event_metrics`](@ref)
+fields).
+"""
+function block_metrics(
+    probabilities::AbstractVector{<:Real},
+    labels::AbstractVector{<:Integer},
+    threshold::Real,
+    geometry::NamedTuple,
+)
+    m = event_metrics(
+        Int.(probabilities .>= threshold),
+        labels;
+        step_size = geometry.step_size,
+        sample_rate = geometry.sample_rate,
+    )
+    fpr, tpr, _ = roc_curve(labels, probabilities)
+    auc = roc_auc(fpr, tpr)
+    d = merge(
+        metrics_dict(m),
+        Dict{String,Any}(
+            "auc" => auc,
+            "n_windows" => length(labels),
+            "threshold" => Float64(threshold),
+        ),
+    )
+    return m, auc, d
+end
+
+"""
+    epoch_validation(model, loader, n; positive_weight) -> (loss, accuracy)
+
+Mean weighted binary cross-entropy and accuracy of `model` over the
+batches of `loader`, which together hold `n` windows.
+"""
+function epoch_validation(
+    model::VariationalQuantumClassifier,
+    loader,
+    n::Integer;
+    positive_weight::Real,
+)
+    loss = 0.0f0
+    correct = 0.0f0
+    for (Xt, y) in loader
+        loss += loss_function(model, Xt', y; positive_weight = positive_weight) * length(y)
+        correct += accuracy(model, Xt', y) * length(y)
+    end
+    return loss / n, correct / n
+end
+
+"""
+    train_classifier(config; run_id = new_run_id(), test_mode = false, on_epoch = nothing)
+        -> NamedTuple
+
+Training stage driven by the `[model]`, `[training]`, `[paths]`, and
+`[resources]` sections of `config`:
+
+1. memory pre-flight of one training step against the `[resources]`
+   thresholds;
+2. run directory `<models>/run_<run_id>` with the configuration snapshot
+   `config.toml` (sections `model`, `training`, `features`, plus
+   provenance);
+3. feature and label tables of `[training]`, capped to
+   `test_mode_samples` windows and `test_mode_epochs` epochs under
+   `test_mode`;
+4. chronological split into training, validation, and test blocks with a
+   one-window buffer ([`chronological_split`](@ref)), persisted in
+   `split.toml`; feature scaler fitted on the training block only;
+5. Adam with exponential learning-rate decay, the positive class weighted
+   by the negative-to-positive count ratio under
+   `class_weight = "balanced"`, early stopping on the validation loss
+   with the `patience` of the configuration; the best epoch is kept in
+   `gw_model_best.jld2` and copied to `gw_model.jld2`;
+6. decision threshold fitted on the validation block alone
+   ([`select_threshold`](@ref)), persisted in `threshold.toml`;
+7. the isolated test block scored once; window- and event-level metrics
+   of both blocks in `metrics.toml` and printed as a table.
+
+`on_epoch`, when given, is called after every epoch as
+`on_epoch(epoch, max_epochs, learning_rate, history, elapsed_seconds)`.
+
+Returns `(run_id, run_dir, model_path, threshold, threshold_info, metrics,
+history, blocks, elapsed)`: `threshold_info` and `metrics` are the
+dictionaries of `threshold.toml` and `metrics.toml` (sections
+`"validation"` and `"test"`), `history` the per-epoch vectors `epochs`,
+`train_loss`, `val_loss`, `val_acc`, `blocks` the split ranges, and
+`elapsed` the wall time of the stage in seconds.
+"""
+function train_classifier(
+    config::AbstractDict;
+    run_id::AbstractString = new_run_id(),
+    test_mode::Bool = false,
+    on_epoch = nothing,
+)
+    isempty(run_id) && throw(ArgumentError("run_id must not be empty."))
+    return @timeit TIMER "training" begin
+        start_time = time()
+        paths = pipeline_paths(config)
+        mdl = model_settings(config)
+        trn = training_settings(config)
+        resources = resource_settings(config)
+        max_epochs = test_mode ? trn.test_mode_epochs : trn.epochs
+        check_memory(
+            training_memory_estimate_gib(mdl.n_qubits, mdl.n_layers, trn.batch_size),
+            resources;
+            stage = "training",
+        )
+        Random.seed!(trn.seed)
+
+        run_dir = joinpath(paths.models, "run_$run_id")
+        mkpath(run_dir)
+        geometry = feature_geometry(trn.train_features, config)
+        snapshot = Dict{String,Any}(
+            "model" => Dict{String,Any}(
+                "n_qubits" => mdl.n_qubits,
+                "n_layers" => mdl.n_layers,
+            ),
+            "training" => Dict{String,Any}(
+                "epochs" => max_epochs,
+                "batch_size" => trn.batch_size,
+                "learning_rate" => trn.learning_rate,
+                "lr_decay" => trn.lr_decay,
+                "patience" => trn.patience,
+                "train_fraction" => trn.train_fraction,
+                "validation_fraction" => trn.validation_fraction,
+                "class_weight" => trn.class_weight,
+                "threshold_criterion" => trn.threshold_criterion,
+                "target_far_per_30d" => trn.target_far_per_30d,
+                "target_fpr" => trn.target_fpr,
+                "scaler_quantiles" => collect(trn.scaler_quantiles),
+                "train_features" => rootrelative(trn.train_features),
+                "train_labels" => rootrelative(trn.train_labels),
+                "test_mode" => test_mode,
+                "run_id" => run_id,
+                "seed" => trn.seed,
+            ),
+            "features" => Dict{String,Any}(
+                "window_size" => geometry.window_size,
+                "step_size" => geometry.step_size,
+                "sample_rate" => geometry.sample_rate,
+            ),
+        )
+        write_toml(joinpath(run_dir, "config.toml"), snapshot)
+        @info "training run" run_id = run_id run_dir = run_dir test_mode = test_mode
+
+        X_raw, y_raw, _ = load_data(trn.train_features, trn.train_labels)
+        size(X_raw, 2) == mdl.n_qubits || throw(
+            DimensionMismatch(
+                "feature dimension $(size(X_raw, 2)) does not match n_qubits = $(mdl.n_qubits).",
+            ),
+        )
+        if test_mode
+            n_keep = min(trn.test_mode_samples, size(X_raw, 1))
+            @info "test mode: keeping the first $n_keep windows"
+            X_raw = X_raw[1:n_keep, :]
+            y_raw = y_raw[1:n_keep]
+        end
+
+        # Chronological block split with a one-window buffer.
+        buffer = cld(geometry.window_size, geometry.step_size)
+        blocks = chronological_split(
+            size(X_raw, 1);
+            train_fraction = trn.train_fraction,
+            validation_fraction = trn.validation_fraction,
+            buffer = buffer,
+        )
+        write_toml(
+            joinpath(run_dir, "split.toml"),
+            Dict{String,Any}(
+                "split" => Dict{String,Any}(
+                    "n_windows" => size(X_raw, 1),
+                    "buffer_windows" => buffer,
+                    "train" => [first(blocks.train), last(blocks.train)],
+                    "validation" => [first(blocks.validation), last(blocks.validation)],
+                    "test" => [first(blocks.test), last(blocks.test)],
+                    "features" => rootrelative(trn.train_features),
+                ),
+            ),
+        )
+        @info "chronological split" train = blocks.train validation = blocks.validation test =
+            blocks.test buffer = buffer
+
+        # Feature scaler fitted on the training block only.
+        scaler = fit_scaler(X_raw[blocks.train, :]; quantiles = trn.scaler_quantiles)
+        X_train = encode_features(scaler, X_raw[blocks.train, :])
+        X_val = encode_features(scaler, X_raw[blocks.validation, :])
+        X_test = encode_features(scaler, X_raw[blocks.test, :])
+        y_train = y_raw[blocks.train]
+        y_val = y_raw[blocks.validation]
+        y_test = y_raw[blocks.test]
+
+        n_pos = count(==(1), y_train)
+        n_neg = length(y_train) - n_pos
+        positive_weight = 1.0
+        if trn.class_weight == "balanced"
+            if n_pos == 0
+                @warn "no positive window in the training block; class weighting disabled."
+            else
+                positive_weight = n_neg / n_pos
+            end
+        end
+        @info "training block" windows = length(y_train) positive = n_pos positive_weight =
+            positive_weight
+
+        # The loaders batch along the last dimension (features × samples).
+        train_loader = Flux.DataLoader(
+            (permutedims(X_train), y_train);
+            batchsize = trn.batch_size,
+            shuffle = true,
+        )
+        val_loader = Flux.DataLoader(
+            (permutedims(X_val), y_val);
+            batchsize = trn.batch_size,
+            shuffle = false,
+        )
+
+        model = VariationalQuantumClassifier(mdl.n_qubits, mdl.n_layers)
+        opt_state = Flux.setup(Flux.Adam(trn.learning_rate), model.params)
+        history = (
+            epochs = Int[],
+            train_loss = Float32[],
+            val_loss = Float32[],
+            val_acc = Float32[],
+        )
+        best_path = joinpath(run_dir, "gw_model_best.jld2")
+        model_path = joinpath(run_dir, "gw_model.jld2")
+        backup_existing!(best_path)
+        backup_existing!(model_path)
+        best_val_loss = Inf32
+        epochs_no_improve = 0
+        loop_start = time()
+        @info "training started" batch_size = trn.batch_size max_epochs = max_epochs n_qubits =
+            mdl.n_qubits n_layers = mdl.n_layers
+
+        for epoch in 1:max_epochs
+            current_lr = trn.learning_rate * trn.lr_decay^(epoch - 1)
+            Flux.adjust!(opt_state, current_lr)
+
+            epoch_train_loss = 0.0f0
+            for (Xt, y) in train_loader
+                epoch_train_loss +=
+                    train_step!(model, opt_state, Xt', y; positive_weight = positive_weight)
+            end
+            avg_train_loss = epoch_train_loss / length(train_loader)
+            avg_val_loss, avg_val_acc = epoch_validation(
+                model,
+                val_loader,
+                length(y_val);
+                positive_weight = positive_weight,
+            )
+
+            push!(history.epochs, epoch)
+            push!(history.train_loss, avg_train_loss)
+            push!(history.val_loss, avg_val_loss)
+            push!(history.val_acc, avg_val_acc)
+            elapsed = time() - loop_start
+            on_epoch === nothing ||
+                on_epoch(epoch, max_epochs, current_lr, history, elapsed)
+            @info "epoch complete" epoch = epoch lr = current_lr train_loss = avg_train_loss val_loss =
+                avg_val_loss val_acc = avg_val_acc elapsed = elapsed
+
+            if avg_val_loss < best_val_loss
+                best_val_loss = avg_val_loss
+                epochs_no_improve = 0
+                save_model(
+                    best_path,
+                    model;
+                    metadata = Dict{String,Any}(
+                        "run_id" => run_id,
+                        "seed" => trn.seed,
+                        "epoch" => epoch,
+                        "val_loss" => avg_val_loss,
+                        "config" => snapshot,
+                        "provenance" => provenance(),
+                    ),
+                    scaler = scaler,
+                )
+            else
+                epochs_no_improve += 1
+            end
+            if epochs_no_improve >= trn.patience
+                @info "early stopping" epoch = epoch best_val_loss = best_val_loss
+                break
+            end
+        end
+
+        isfile(best_path) || error(
+            "no epoch improved the validation loss (best_val_loss = $best_val_loss); " *
+            "no model checkpoint was written to $run_dir.",
+        )
+        model, best_meta, best_scaler = load_model(best_path)
+        save_model(model_path, model; metadata = best_meta, scaler = best_scaler)
+
+        # Decision threshold fitted on the validation block only.
+        @info "training complete; fitting the decision threshold on the validation block"
+        probs_val = predict_all(model, X_val)
+        threshold, info = select_threshold(
+            y_val,
+            probs_val;
+            criterion = trn.threshold_criterion,
+            target_far_per_30d = trn.target_far_per_30d,
+            target_fpr = trn.target_fpr,
+            step_size = geometry.step_size,
+            sample_rate = geometry.sample_rate,
+        )
+        m_val, auc_val, metrics_val = block_metrics(probs_val, y_val, threshold, geometry)
+        info["auc"] = auc_val
+        info["value"] = threshold
+        info["fitted_on"] = rootrelative(trn.train_features) * " (validation block)"
+        info["fitted_at"] = string(Dates.now())
+        write_toml(
+            joinpath(run_dir, "threshold.toml"),
+            Dict{String,Any}("threshold" => info),
+        )
+        @info "threshold" value = threshold criterion = info["criterion"] validation_auc =
+            auc_val
+
+        # The isolated test block, evaluated once.
+        probs_test = predict_all(model, X_test)
+        m_test, auc_test, metrics_test =
+            block_metrics(probs_test, y_test, threshold, geometry)
+        metrics = Dict{String,Any}("validation" => metrics_val, "test" => metrics_test)
+        write_toml(joinpath(run_dir, "metrics.toml"), metrics)
+        print_block_summary(
+            stdout,
+            (("validation", m_val, auc_val), ("test", m_test, auc_test)),
+        )
+        @info "test block" auc = auc_test precision = m_test.precision recall =
+            m_test.recall event_recall = m_test.event_recall false_alarms_per_30d =
+            m_test.false_alarms_per_30d
+        @info "training artifacts written" run_dir = run_dir
+
+        (
+            run_id = String(run_id),
+            run_dir = run_dir,
+            model_path = model_path,
+            threshold = threshold,
+            threshold_info = info,
+            metrics = metrics,
+            history = history,
+            blocks = blocks,
+            elapsed = time() - start_time,
+        )
+    end
+end

@@ -200,6 +200,21 @@ function tdi_to_aet(
 end
 
 """
+    hdf5_dataset(parent, name) -> HDF5.Dataset
+
+The dataset `name` of the HDF5 file or group `parent`; `ArgumentError` when
+the object is absent or is not a dataset.
+"""
+function hdf5_dataset(parent::Union{HDF5.File,HDF5.Group}, name::AbstractString)
+    haskey(parent, name) ||
+        throw(ArgumentError("$(HDF5.filename(parent)) holds no object at $(repr(name))."))
+    obj = parent[name]
+    obj isa HDF5.Dataset ||
+        throw(ArgumentError("$(repr(name)) in $(HDF5.filename(parent)) is not a dataset."))
+    return obj
+end
+
+"""
     read_tdi(path; group = "obs/tdi") -> NamedTuple
 
 Time vector and Michelson variables `(t, X, Y, Z, dt)` of an HDF5 TDI
@@ -215,6 +230,11 @@ function read_tdi(path::AbstractString; group::AbstractString = "obs/tdi")
         haskey(file, group) ||
             throw(ArgumentError("$path holds no object at $(repr(group))."))
         obj = file[group]
+        obj isa HDF5.Group ||
+            obj isa HDF5.Dataset ||
+            throw(
+                ArgumentError("$(repr(group)) of $path is neither a group nor a dataset."),
+            )
         local t, X, Y, Z
         if obj isa HDF5.Group
             for name in ("t", "X", "Z")
@@ -222,10 +242,12 @@ function read_tdi(path::AbstractString; group::AbstractString = "obs/tdi")
                     ArgumentError("group $(repr(group)) of $path lacks the dataset $name."),
                 )
             end
-            t = Float64.(vec(read(obj["t"])))
-            X = Float64.(vec(read(obj["X"])))
-            Z = Float64.(vec(read(obj["Z"])))
-            Y = haskey(obj, "Y") ? Float64.(vec(read(obj["Y"]))) : zeros(length(t))
+            t = Float64.(vec(read(hdf5_dataset(obj, "t"))))
+            X = Float64.(vec(read(hdf5_dataset(obj, "X"))))
+            Z = Float64.(vec(read(hdf5_dataset(obj, "Z"))))
+            Y =
+                haskey(obj, "Y") ? Float64.(vec(read(hdf5_dataset(obj, "Y")))) :
+                zeros(length(t))
         else
             rows = vec(read(obj))
             isempty(rows) &&
@@ -267,7 +289,7 @@ function read_catalog(path::AbstractString; group::AbstractString = "sky/mbhb/ca
     return h5open(path, "r") do file
         haskey(file, group) ||
             throw(ArgumentError("$path holds no object at $(repr(group))."))
-        rows = vec(read(file[group]))
+        rows = vec(read(hdf5_dataset(file, group)))
         DataFrame(rows)
     end
 end

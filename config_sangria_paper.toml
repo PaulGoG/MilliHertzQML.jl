@@ -66,3 +66,7 @@ peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as d
 merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
 precursor_ratio = 0.1           # a peak within label_before_sec before a larger one and below this fraction of it is an inspiral fluctuation; in [0, 1]
 output_prefix = "sangria"       # prefix of the label, event, and span CSVs
+
+[resources]
+max_memory_gib = 16.0    # a stage whose pre-flight memory estimate exceeds this refuses to start [GiB]; > 0
+warn_memory_gib = 8.0    # a stage whose estimate exceeds this warns [GiB]; <= max_memory_gib
