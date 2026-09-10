@@ -1,83 +1,157 @@
-# src/data.jl
+# src/data.jl — whitened spectral features of a strain window, the
+# train-fitted feature scaler, and CSV loading of feature and label tables.
 
 """
-    load_data(feature_path, label_path)
+    extract_features(x, sample_rate = 0.2; low_band = (1e-3, 5e-3),
+                     high_band = (5e-3, 1e-1), taper = :hann)
 
-Load a feature matrix and label vector from CSV files produced by
-`scripts/preprocess_ldc.jl`.
+Four-dimensional feature vector of a window `x` of the **whitened** record
+([`whiten_record`](@ref)) sampled at `sample_rate` [Hz], computed from its
+tapered periodogram ``P_k`` ([`tapered_periodogram`](@ref); unit mean for
+noise, hence independent of window length and strain amplitude):
 
-Each feature column is clamped to a fixed scale and mapped linearly to
-``[0, 2\\pi]`` for phase encoding. The clamping scales are calibrated to the
-unit-variance output of `scripts/generate_data.jl`; physical-amplitude LDC
-strain data saturates the clamps and is not currently supported.
+1. mean whitened power in `low_band` [Hz];
+2. mean whitened power in `high_band` [Hz];
+3. spectral entropy of the normalized whitened power, divided by
+   ``\\ln N_\\mathrm{bins}`` so that it lies in ``[0, 1]``;
+4. ``\\log_{10}`` of the standard deviation of the whitened power (0 for
+   white noise, whose periodogram is exponentially distributed).
 
-Returns `(X, y, df_labels)`, where `df_labels` retains auxiliary columns such
-as `SNR` when present.
+Throws an `ArgumentError` when a band holds no frequency bin. Returns a
+tuple of `Float32`.
 """
-function load_data(feature_path, label_path)
-    X = load_features(feature_path)
-    df_labels = CSV.read(label_path, DataFrame)
-    y = Int.(df_labels[:, :Label])
-    return X, y, df_labels
-end
-
-"""
-    FEATURE_SCALES
-
-Fixed `(min, max)` clamping scales per feature column, in feature order
-(low-band magnitude, high-band magnitude, spectral entropy, log10 PSD
-standard deviation). Calibrated to the unit-variance output of the
-integrated simulator.
-"""
-const FEATURE_SCALES = ((0.0f0, 50.0f0), (0.0f0, 50.0f0), (0.0f0, 10.0f0), (0.0f0, 7.0f0))
-
-"""
-    load_features(feature_path)
-
-Load a feature matrix from CSV without labels (blind inference path).
-Each column is clamped to `FEATURE_SCALES` and mapped linearly to
-``[0, 2\\pi]`` for phase encoding.
-"""
-function load_features(feature_path)
-    df_features = CSV.read(feature_path, DataFrame)
-    X = Matrix{Float32}(df_features)
-    for col in 1:min(size(X, 2), length(FEATURE_SCALES))
-        s_min, s_max = FEATURE_SCALES[col]
-        X[:, col] .= clamp.(X[:, col], s_min, s_max)
-        X[:, col] .= (X[:, col] .- s_min) ./ (s_max - s_min) .* Float32(2π)
-    end
-    return X
-end
-
-"""
-    extract_features(x, sample_rate=0.2)
-
-Calculates the 4-dimensional physical feature vector from a raw time-series strain segment `x`.
-This function acts as the bridge between raw LDC telemetry and the quantum classifier.
-Uses LISA milliHertz physics bands: Low (1mHz - 5mHz), High (5mHz - 100mHz).
-"""
-function extract_features(x, sample_rate = 0.2)
-    spec = abs.(rfft(x))
+function extract_features(
+    x::AbstractVector{<:Real},
+    sample_rate::Real = 0.2;
+    low_band::Tuple{Real,Real} = (1e-3, 5e-3),
+    high_band::Tuple{Real,Real} = (5e-3, 1e-1),
+    taper::Symbol = :hann,
+)
+    sample_rate > 0 || throw(ArgumentError("sample_rate = $sample_rate; must be positive."))
+    power = tapered_periodogram(x; taper = taper)
     n_samples = length(x)
     freqs = rfftfreq(n_samples, sample_rate)
 
-    # Base Band: Low (1mHz - 5mHz), High (5mHz - 100mHz)
-    mask_low = (freqs .>= 1e-3) .& (freqs .<= 5e-3)
-    mask_high = (freqs .> 5e-3) .& (freqs .<= 1e-1)
+    mask_low = (freqs .>= low_band[1]) .& (freqs .<= low_band[2])
+    mask_high = (freqs .> high_band[1]) .& (freqs .<= high_band[2])
     (any(mask_low) && any(mask_high)) || throw(
         ArgumentError(
             "window of $n_samples samples at $sample_rate Hz has no frequency bins " *
-            "in the 1-5 mHz or 5-100 mHz analysis bands; use a longer window.",
+            "in the $(low_band) Hz or $(high_band) Hz analysis bands; use a longer window.",
         ),
     )
-    p_low = mean(spec[mask_low])
-    p_high = mean(spec[mask_high])
+    p_low = mean(@view power[mask_low])
+    p_high = mean(@view power[mask_high])
 
-    psd = spec .^ 2 .+ 1e-12
-    p_norm = psd ./ sum(psd)
-    entropy = -sum(p_norm .* log.(p_norm))
+    total = sum(power)
+    n_bins = length(power) - 1   # the DC bin carries no power
+    entropy = 0.0
+    if total > 0 && n_bins > 1
+        for p in power
+            p > 0 || continue
+            q = p / total
+            entropy -= q * log(q)
+        end
+        entropy /= log(n_bins)
+    end
 
-    psd_std = log10(std(psd) + 1e-12)
+    log_power_std = log10(std(@view power[2:end]) + 1e-12)
 
-    return Float32(p_low), Float32(p_high), Float32(entropy), Float32(psd_std)
+    return Float32(p_low), Float32(p_high), Float32(entropy), Float32(log_power_std)
+end
+
+"""
+    FeatureScaler(lower, upper)
+
+Per-feature affine map from the range `[lower[j], upper[j]]` onto the
+phase-encoding interval ``[0, 2\\pi]``; values outside the range are
+clamped. Fitted on the training partition by [`fit_scaler`](@ref),
+persisted with the model, and applied by [`encode_features`](@ref).
+"""
+struct FeatureScaler
+    lower::Vector{Float32}
+    upper::Vector{Float32}
+    function FeatureScaler(lower::AbstractVector{<:Real}, upper::AbstractVector{<:Real})
+        length(lower) == length(upper) || throw(
+            DimensionMismatch(
+                "scaler bounds have lengths $(length(lower)) and $(length(upper)).",
+            ),
+        )
+        all(upper .> lower) ||
+            throw(ArgumentError("every scaler upper bound must exceed its lower bound."))
+        return new(Vector{Float32}(lower), Vector{Float32}(upper))
+    end
+end
+
+"""
+    fit_scaler(X; quantiles = (0.005, 0.995)) -> FeatureScaler
+
+Scaler whose bounds are the per-column empirical quantiles `quantiles` of the
+feature matrix `X` (samples × features). Throws an `ArgumentError` for a
+constant feature column.
+"""
+function fit_scaler(X::AbstractMatrix{<:Real}; quantiles::Tuple{Real,Real} = (0.005, 0.995))
+    0 <= quantiles[1] < quantiles[2] <= 1 ||
+        throw(ArgumentError("quantiles = $quantiles; need 0 <= lower < upper <= 1."))
+    lower = [quantile(view(X, :, j), quantiles[1]) for j in 1:size(X, 2)]
+    upper = [quantile(view(X, :, j), quantiles[2]) for j in 1:size(X, 2)]
+    for j in 1:size(X, 2)
+        upper[j] > lower[j] || throw(
+            ArgumentError(
+                "feature column $j is constant between the $(quantiles) quantiles; " *
+                "it carries no information and cannot be scaled.",
+            ),
+        )
+    end
+    return FeatureScaler(lower, upper)
+end
+
+"""
+    encode_features(scaler, X) -> Matrix{Float32}
+
+`X` (samples × features) clamped to the scaler bounds and mapped linearly
+onto ``[0, 2\\pi]``.
+"""
+function encode_features(scaler::FeatureScaler, X::AbstractMatrix{<:Real})
+    size(X, 2) == length(scaler.lower) || throw(
+        DimensionMismatch(
+            "feature matrix has $(size(X, 2)) columns; the scaler expects $(length(scaler.lower)).",
+        ),
+    )
+    E = Matrix{Float32}(undef, size(X))
+    for j in 1:size(X, 2)
+        lo, hi = scaler.lower[j], scaler.upper[j]
+        for i in 1:size(X, 1)
+            E[i, j] = (clamp(Float32(X[i, j]), lo, hi) - lo) / (hi - lo) * Float32(2π)
+        end
+    end
+    return E
+end
+
+"""
+    load_features(feature_path) -> Matrix{Float32}
+
+Raw feature matrix (samples × features) from a CSV written by
+`scripts/preprocess_ldc.jl`. Encoding is a separate step
+([`encode_features`](@ref)) so that the scaler fitted on the training
+partition is applied identically at inference.
+"""
+function load_features(feature_path::AbstractString)
+    return Matrix{Float32}(CSV.read(feature_path, DataFrame))
+end
+
+"""
+    load_data(feature_path, label_path) -> (X, y, df_labels)
+
+Raw feature matrix, integer label vector, and the full label table (which
+retains auxiliary columns such as `SNR`) from the CSVs written by
+`scripts/preprocess_ldc.jl`.
+"""
+function load_data(feature_path::AbstractString, label_path::AbstractString)
+    X = load_features(feature_path)
+    df_labels = CSV.read(label_path, DataFrame)
+    y = Int.(df_labels[:, :Label])
+    size(X, 1) == length(y) ||
+        throw(DimensionMismatch("$(size(X, 1)) feature rows but $(length(y)) labels."))
+    return X, y, df_labels
 end

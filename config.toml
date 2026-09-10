@@ -7,18 +7,34 @@ plots = "data/outputs/plots"        # per-run figures
 results = "data/outputs/results"    # per-run inference tables and snapshots
 
 [generation]
-days = 60.0     # simulated mission duration [days]; > 2.0 required for MBHB injection
+days = 60.0     # simulated mission duration [days]; > 0
 fs = 0.2        # sampling frequency [Hz]
 n_mbhb = 15     # number of injected MBHB events; >= 0
 n_gbs = 150     # number of background galactic binaries; >= 0
 n_emris = 15    # number of background EMRIs; >= 0
 seed = 9999     # RNG seed for the simulation
 output = "data/inputs/simulated_telemetry_complex.h5"   # output HDF5 path
+observation_years = 1.0     # confusion-foreground fit of Robson et al. (2019); one of: 0.5 | 1.0 | 2.0 | 4.0
+snr_min = 8.0               # MBHB matched-filter SNR, lower bound; > 0
+snr_max = 50.0              # MBHB matched-filter SNR, upper bound; >= snr_min
+gb_snr_min = 1.0            # galactic-binary matched-filter SNR over the record, lower bound; > 0
+gb_snr_max = 10.0           # galactic-binary matched-filter SNR over the record, upper bound; >= gb_snr_min
+emri_snr_min = 2.0          # EMRI matched-filter SNR over the record, lower bound; > 0
+emri_snr_max = 10.0         # EMRI matched-filter SNR over the record, upper bound; >= emri_snr_min
+label_before_sec = 43200.0  # label span before coalescence [s]; >= 0
+label_after_sec = 3600.0    # label span after coalescence [s]; >= 0
+mbhb_duration_days = 2.0    # injected inspiral duration [days], capped at 0.4 of the record; > 0
+noise_f_min_hz = 1e-5       # lowest synthesized noise frequency [Hz]; >= 0
 
 [preprocessing]
 window_size = 1000   # sliding-window length [samples]; >= 2
 step_size = 100      # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2    # sampling frequency of the input telemetry [Hz]
+observation_years = 1.0        # confusion fit of the whitening PSD; one of: 0.5 | 1.0 | 2.0 | 4.0
+low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
+high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
+highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
+highpass_order = 8             # Butterworth order of the record high-pass; >= 1
 output_prefix = "telemetry_complex"   # prefix of the output feature/label CSVs
 
 [model]
@@ -34,6 +50,7 @@ learning_rate = 0.01       # initial Adam learning rate; > 0
 lr_decay = 0.95            # multiplicative learning-rate decay per epoch; in (0, 1]
 patience = 12              # early-stopping patience [epochs]; >= 1
 validation_fraction = 0.1  # held-out validation fraction; in [0.01, 0.5]
+scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 20      # epoch cap under --test-mode; >= 1
 seed = 9999                # RNG seed for the data split and initialization

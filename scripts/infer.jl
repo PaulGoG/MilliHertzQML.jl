@@ -142,16 +142,21 @@ function main()
     )
 
     # 3. Load model and data
-    model, model_meta = load_model(model_path)
+    model, model_meta, scaler = load_model(model_path)
+    scaler === nothing && error(
+        "the model artifact $model_path carries no feature scaler; " *
+        "retrain it with the current pipeline.",
+    )
     println("\n[INFER] Model loaded from $model_path")
 
     local y_true, snrs
     if has_labels
-        X, y_true, df_meta = load_data(features_path, labels_path)
+        X_raw, y_true, df_meta = load_data(features_path, labels_path)
+        X = encode_features(scaler, X_raw)
         snrs = "SNR" in names(df_meta) ? df_meta[:, :SNR] : zeros(Float32, size(X, 1))
     else
         println("[INFER] Blind mode: no labels; using the persisted decision threshold.")
-        X = load_features(features_path)
+        X = encode_features(scaler, load_features(features_path))
     end
 
     # 4. Forward pass over all windows
@@ -288,7 +293,10 @@ function main()
         println("  - ROC curve saved.")
 
         # Detection sensitivity vs SNR
-        snr_bins = 2.0:0.5:8.0
+        snr_pos = snrs[y_true .== 1]
+        snr_bins =
+            isempty(snr_pos) ? (0.0:1.0:1.0) :
+            range(minimum(snr_pos), maximum(snr_pos) + 1e-6; length = 9)
         bin_centers = Float64[]
         bin_accs = Float64[]
         for i in 1:(length(snr_bins)-1)

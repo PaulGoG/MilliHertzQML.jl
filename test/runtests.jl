@@ -8,6 +8,7 @@ Pkg.instantiate(; io = devnull)
 
 using Test
 using Statistics, Random, TOML
+using FFTW: rfft, rfftfreq
 using CSV, DataFrames
 using StableRNGs
 using Aqua, JET, ExplicitImports
@@ -93,31 +94,28 @@ end
         @test std_psd isa Float32
     end
 
-    @testset "Data Normalization" begin
+    @testset "Data Loading" begin
         mktempdir() do dir
             feat_path = joinpath(dir, "test_feats.csv")
             lab_path = joinpath(dir, "test_labs.csv")
-
             df_f = DataFrame(
-                PLow = [0.0, 50.0],
-                PHigh = [0.0, 50.0],
-                Ent = [0.0, 10.0],
-                Std = [0.0, 7.0],
+                p_low = [0.5, 3.0, 1.0],
+                p_high = [1.0, 0.9, 1.1],
+                spectral_entropy = [0.95, 0.6, 0.9],
+                log_power_std = [0.0, 0.8, 0.1],
             )
-            df_l = DataFrame(Label = [0, 1])
-
             CSV.write(feat_path, df_f)
-            CSV.write(lab_path, df_l)
+            CSV.write(lab_path, DataFrame(Label = [0, 1, 0], SNR = [0.0, 12.0, 0.0]))
 
-            X, y = load_data(feat_path, lab_path)
-
-            # Scaling to [0, 2π]
-            @test all(X .>= 0.0)
-            @test all(X .<= 2π + 1e-5)
-            @test isapprox(X[2, 1], 2π, atol = 1e-5) # 50.0 maps to 2π
-
-            # The label-free path yields the identical feature matrix
+            X, y, df_l = load_data(feat_path, lab_path)
+            @test X == Matrix{Float32}(df_f)
+            @test y == [0, 1, 0]
+            @test df_l.SNR == [0.0, 12.0, 0.0]
+            # The label-free path yields the identical raw matrix
             @test load_features(feat_path) == X
+
+            CSV.write(lab_path, DataFrame(Label = [0, 1]))
+            @test_throws DimensionMismatch load_data(feat_path, lab_path)
         end
     end
 
@@ -146,25 +144,6 @@ end
         # A constant (zero) signal yields finite features
         feats = extract_features(zeros(Float64, 1000), 0.2)
         @test all(isfinite, feats)
-
-        # Out-of-range feature values clamp to the encoding bounds [0, 2π]
-        mktempdir() do dir
-            feat_path = joinpath(dir, "f.csv")
-            lab_path = joinpath(dir, "l.csv")
-            CSV.write(
-                feat_path,
-                DataFrame(
-                    PLow = [-5.0, 500.0],
-                    PHigh = [-1.0, 100.0],
-                    Ent = [-2.0, 50.0],
-                    Std = [-3.0, 20.0],
-                ),
-            )
-            CSV.write(lab_path, DataFrame(Label = [0, 1]))
-            X, _ = load_data(feat_path, lab_path)
-            @test all(X[1, :] .== 0.0f0)
-            @test all(isapprox.(X[2, :], Float32(2π); atol = 1e-5))
-        end
     end
 
     @testset "Model Persistence" begin
@@ -172,20 +151,199 @@ end
             model = VariationalQuantumClassifier(4, 3; rng = rng)
             x = rand(rng, Float32, 4)
             p_ref = predict_probability(model, x)
+            scaler = FeatureScaler([0.0, 0.0, 0.0, -1.0], [3.0, 3.0, 1.0, 1.0])
 
             path = joinpath(dir, "model.jld2")
             meta_in = Dict("run_id" => "test", "seed" => 1234)
-            save_model(path, model; metadata = meta_in)
+            save_model(path, model; metadata = meta_in, scaler = scaler)
 
-            loaded, meta_out = load_model(path)
+            loaded, meta_out, scaler_out = load_model(path)
             @test loaded.n_qubits == model.n_qubits
             @test loaded.n_layers == model.n_layers
             @test loaded.params == model.params
             @test meta_out["run_id"] == "test"
             @test meta_out["seed"] == 1234
+            @test scaler_out.lower == scaler.lower && scaler_out.upper == scaler.upper
             @test isapprox(predict_probability(loaded, x), p_ref; atol = 1e-6)
+
+            # Artifacts without a scaler load with `nothing`
+            bare = joinpath(dir, "bare.jld2")
+            save_model(bare, model)
+            @test load_model(bare)[3] === nothing
         end
     end
+end
+
+@testset "Noise model (Robson, Cornish & Liu 2019)" begin
+    # Structural properties of the sensitivity curve
+    @test instrument_psd(0.0) == Inf
+    @test confusion_psd(-1.0) == Inf
+    @test lisa_noise_psd(1e-3) > 0
+    # The confusion foreground dominates the instrument term near 1 mHz for the
+    # one-year fit and is negligible above 10 mHz
+    @test confusion_psd(1e-3; observation_years = 1.0) > instrument_psd(1e-3)
+    @test confusion_psd(1e-2; observation_years = 1.0) < 1e-3 * instrument_psd(1e-2)
+    # More resolved and subtracted binaries with longer observation
+    @test confusion_psd(1e-3; observation_years = 4.0) <
+          confusion_psd(1e-3; observation_years = 0.5)
+    # The sensitivity has its minimum in the milliHertz band
+    @test lisa_noise_psd(1e-2) < lisa_noise_psd(3e-4)
+    @test lisa_noise_psd(1e-2) < lisa_noise_psd(1e-1)
+    # Hand-evaluated reference values of the published formulas
+    # Reference values evaluated independently from the published formulas
+    @test isapprox(instrument_psd(1e-3), 1.634101e-38; rtol = 1e-5)
+    @test isapprox(confusion_psd(1e-3; observation_years = 1.0), 1.663516e-37; rtol = 1e-5)
+    @test isapprox(instrument_psd(1e-2), 1.443169e-40; rtol = 1e-5)
+    @test isapprox(confusion_psd(3e-3; observation_years = 1.0), 5.591648e-40; rtol = 1e-5)
+    @test_throws ArgumentError confusion_psd(1e-3; observation_years = 3.0)
+end
+
+@testset "Noise synthesis calibration" begin
+    rng = StableRNG(2026)
+    fs = 0.2
+    n = 2^15
+    x = synthesize_noise(rng, n, fs)
+    @test length(x) == n
+    @test eltype(x) == Float64
+    @test isapprox(mean(x), 0.0; atol = 3 * std(x) / sqrt(n))
+    # Whitening the record turns the noise into unit-variance white noise;
+    # 655 bins in 1-5 mHz give a 4 % standard error on the mean power
+    w = whiten_record(x, fs)
+    @test isapprox(var(w), 1.0; atol = 0.05)
+    power = tapered_periodogram(w; taper = :none)
+    freqs = rfftfreq(n, fs)
+    inband = (freqs .>= 1e-3) .& (freqs .<= 5e-3)
+    @test isapprox(mean(power[inband]), 1.0; atol = 0.15)
+    @test power[1] == 0
+    # Seeded synthesis is reproducible
+    @test synthesize_noise(StableRNG(5), 64, fs) == synthesize_noise(StableRNG(5), 64, fs)
+    # Bins below the synthesis floor carry no power
+    floored = synthesize_noise(StableRNG(5), 4096, fs; f_min = 1e-3)
+    spectrum = abs.(rfft(floored))
+    low_bins = rfftfreq(4096, fs) .< 1e-3
+    @test maximum(spectrum[low_bins]) < 1e-10 * maximum(spectrum)
+    @test_throws ArgumentError synthesize_noise(rng, 64, fs; f_min = -1.0)
+    @test_throws ArgumentError synthesize_noise(rng, 1, fs)
+    @test_throws ArgumentError synthesize_noise(rng, 64, 0.0)
+end
+
+@testset "Tapered periodogram" begin
+    rng = StableRNG(99)
+    white = randn(rng, 8192)
+    for taper in (:hann, :none)
+        p = tapered_periodogram(white; taper = taper)
+        @test length(p) == 4097
+        @test p[1] == 0
+        @test isapprox(mean(p[2:end]), 1.0; atol = 0.05)
+    end
+    @test_throws ArgumentError tapered_periodogram(white; taper = :tukey)
+    @test_throws ArgumentError tapered_periodogram([1.0])
+end
+
+@testset "Matched-filter SNR" begin
+    fs = 0.2
+    n = 4096
+    T = n / fs
+    t = (0:(n-1)) ./ fs
+    # An on-bin sinusoid of amplitude A has ρ = A sqrt(T / S_n(f0)) exactly
+    k = 60
+    f0 = k * fs / n
+    A = 1e-20
+    h = A .* cos.(2π * f0 .* t)
+    ρ_expected = A * sqrt(T / lisa_noise_psd(f0))
+    @test isapprox(matched_filter_snr(h, fs), ρ_expected; rtol = 1e-6)
+    # Linear in amplitude and rescalable to a target
+    @test isapprox(matched_filter_snr(3h, fs), 3ρ_expected; rtol = 1e-6)
+    @test isapprox(matched_filter_snr(scale_to_snr(h, fs, 12.0), fs), 12.0; rtol = 1e-6)
+    @test_throws ArgumentError scale_to_snr(zeros(n), fs, 10.0)
+    @test_throws ArgumentError scale_to_snr(h, fs, 0.0)
+end
+
+@testset "Signal placement" begin
+    strain = zeros(10)
+    signal = [1.0, 2.0, 3.0, 4.0]
+    # Anchor sample 3 of the signal on sample 2 of the record: sample 1 is dropped
+    covered = place_signal!(strain, signal, 2, 3)
+    @test covered == 1:3
+    @test strain[1:3] == [2.0, 3.0, 4.0]
+    @test all(iszero, strain[4:end])
+    # Truncation at the end of the record
+    strain2 = zeros(10)
+    @test place_signal!(strain2, signal, 10, 1) == 10:10
+    @test strain2[10] == 1.0
+    # No overlap
+    strain3 = zeros(10)
+    @test isempty(place_signal!(strain3, signal, 20, 1))
+    @test_throws BoundsError place_signal!(strain3, signal, 5, 9)
+end
+
+@testset "Whitened features" begin
+    rng = StableRNG(11)
+    fs = 0.2
+    # Unit-mean band powers for noise, independent of the window length
+    record = highpass_record(synthesize_noise(rng, 40000, fs), fs; cutoff = 5e-4)
+    long = whiten_record(record, fs)
+    p_low_long, p_high_long, ent_long, lstd_long = extract_features(long, fs)
+    @test isapprox(p_low_long, 1.0; atol = 0.15)
+    @test isapprox(p_high_long, 1.0; atol = 0.15)
+    @test 0.85 < ent_long <= 1.0
+    @test abs(lstd_long) < 0.15
+    # Windows cut from the whitened record
+    p_low_short, p_high_short, ent_short, _ = extract_features(view(long, 1:4000), fs)
+    @test isapprox(p_low_short, 1.0; atol = 0.35)
+    @test isapprox(p_high_short, 1.0; atol = 0.15)
+    @test 0.8 < ent_short <= 1.0
+    p_low_win, _, _, _ = extract_features(view(long, 10001:11000), fs)
+    @test isapprox(p_low_win, 1.0; atol = 0.7)
+    # A strong in-band sinusoid raises the low-band power and lowers the entropy
+    t = (0:39999) ./ fs
+    loud = long .+ cos.(2π * 2e-3 .* t)
+    p_low_loud, p_high_loud, ent_loud, _ = extract_features(loud, fs)
+    @test p_low_loud > 5 * p_low_long
+    @test isapprox(p_high_loud, p_high_long; atol = 0.3)
+    @test ent_loud < ent_long
+    @test_throws ArgumentError extract_features(long, 0.0)
+end
+
+@testset "Record high-pass" begin
+    fs = 0.2
+    n = 20000
+    t = (0:(n-1)) ./ fs
+    low = cos.(2π * 1e-4 .* t)
+    inband = cos.(2π * 5e-3 .* t)
+    y = highpass_record(low .+ inband, fs; cutoff = 5e-4, order = 8)
+    # The 0.1 mHz component is suppressed by more than 1e5 in power, the 5 mHz
+    # component is preserved to better than 1 %
+    Xy = abs.(rfft(y))
+    Xl = abs.(rfft(low .+ inband))
+    k_low = round(Int, 1e-4 * n / fs) + 1
+    k_in = round(Int, 5e-3 * n / fs) + 1
+    @test (Xy[k_low] / Xl[k_low])^2 < 1e-5
+    @test isapprox(Xy[k_in] / Xl[k_in], 1.0; atol = 1e-2)
+    @test highpass_record(inband, fs; cutoff = 0.0) == inband
+    @test_throws ArgumentError highpass_record(inband, fs; cutoff = -1.0)
+    @test_throws ArgumentError highpass_record(inband, fs; cutoff = 1e-3, order = 0)
+end
+
+@testset "Feature scaler" begin
+    rng = StableRNG(3)
+    X = randn(rng, 500, 4) .* [1.0 10.0 0.1 100.0] .+ [0.0 5.0 0.5 -50.0]
+    scaler = fit_scaler(X; quantiles = (0.01, 0.99))
+    E = encode_features(scaler, X)
+    @test size(E) == size(X)
+    @test eltype(E) == Float32
+    @test all(0 .<= E .<= Float32(2π))
+    @test minimum(E) == 0.0f0 && isapprox(maximum(E), 2π; atol = 1e-5)
+    # The bounds map to the interval ends; outside values clamp
+    @test encode_features(scaler, reshape(scaler.lower, 1, :)) == zeros(Float32, 1, 4)
+    @test all(
+        isapprox.(encode_features(scaler, reshape(scaler.upper, 1, :)), 2π; atol = 1e-5),
+    )
+    @test all(encode_features(scaler, fill(1e9, 1, 4)) .≈ Float32(2π))
+    @test_throws ArgumentError fit_scaler(hcat(X, ones(500)))
+    @test_throws ArgumentError fit_scaler(X; quantiles = (0.9, 0.1))
+    @test_throws DimensionMismatch encode_features(scaler, X[:, 1:3])
+    @test_throws ArgumentError FeatureScaler([0.0, 1.0], [1.0, 1.0])
 end
 
 @testset "Pipeline smoke test" begin
@@ -255,6 +413,10 @@ end
         stage("generate_data.jl", "--run-id", "smoke") || return
         @test isfile(h5)
         @test nrow(CSV.read(raw_labels, DataFrame)) == n_total
+        events = CSV.read(replace(h5, ".h5" => "_events.csv"), DataFrame)
+        @test nrow(events) == 2
+        @test all(8.0 .<= events.snr .<= 50.0)
+        @test all(events.start_index .<= events.merger_index .<= events.end_index)
 
         stage("preprocess_ldc.jl", "--h5-file", h5, "--label-file", raw_labels) || return
         @test nrow(CSV.read(feats, DataFrame)) == n_windows

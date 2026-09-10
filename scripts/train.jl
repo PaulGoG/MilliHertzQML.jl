@@ -181,6 +181,19 @@ function main()
         ),
     )
 
+    scaler_quantiles =
+        cfgget(train_cfg, "scaler_quantiles", [0.005, 0.995]; type = AbstractVector)
+    (
+        length(scaler_quantiles) == 2 &&
+        all(q -> q isa Real, scaler_quantiles) &&
+        0 <= scaler_quantiles[1] < scaler_quantiles[2] <= 1
+    ) || throw(
+        ArgumentError(
+            "configuration key `scaler_quantiles` = $(repr(scaler_quantiles)); " *
+            "expected two ascending values in [0, 1].",
+        ),
+    )
+    scaler_quantiles = (Float64(scaler_quantiles[1]), Float64(scaler_quantiles[2]))
     seed = cfgget(train_cfg, "seed", 42; type = Int)
     Random.seed!(seed)
 
@@ -202,6 +215,7 @@ function main()
             "lr_decay" => lr_decay,
             "patience" => patience,
             "validation_fraction" => val_fraction,
+            "scaler_quantiles" => collect(scaler_quantiles),
             "train_features" => rootrelative(train_features_path),
             "train_labels" => rootrelative(train_labels_path),
             "test_mode" => test_mode,
@@ -249,6 +263,12 @@ function main()
 
     X_train, y_train = X_raw[train_idx, :], y_raw[train_idx]
     X_val, y_val = X_raw[val_idx, :], y_raw[val_idx]
+
+    # Feature scaler fitted on the training partition only; the validation
+    # partition is encoded with it, never refitted.
+    scaler = fit_scaler(X_train; quantiles = scaler_quantiles)
+    X_train = encode_features(scaler, X_train)
+    X_val = encode_features(scaler, X_val)
 
     # Pre-transpose for DataLoader (features x samples) to avoid allocations
     X_train_t = copy(X_train')
@@ -319,6 +339,7 @@ function main()
                     "val_loss" => avg_val_loss,
                     "config" => final_config,
                 ),
+                scaler = scaler,
             )
         else
             epochs_no_improve += 1
@@ -331,8 +352,13 @@ function main()
     end
 
     if isfile(joinpath(run_dir, "gw_model_best.jld2"))
-        model, best_meta = load_model(joinpath(run_dir, "gw_model_best.jld2"))
-        save_model(joinpath(run_dir, "gw_model.jld2"), model; metadata = best_meta)
+        model, best_meta, best_scaler = load_model(joinpath(run_dir, "gw_model_best.jld2"))
+        save_model(
+            joinpath(run_dir, "gw_model.jld2"),
+            model;
+            metadata = best_meta,
+            scaler = best_scaler,
+        )
     end
 
     println("\n[FINISH] Training Complete. Final Evaluation...")

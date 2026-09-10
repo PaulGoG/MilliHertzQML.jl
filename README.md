@@ -13,13 +13,14 @@ MilliHertzQML/
 │   ├── MilliHertzQML.jl    # Module definition and exports
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, BCE loss, gradient step
-│   ├── data.jl             # Feature extraction and normalization
-│   └── persistence.jl      # JLD2 model save/load (parameters + hyperparameters)
+│   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
+│   ├── data.jl             # Whitened window features, train-fitted feature scaler, CSV loading
+│   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
 │   ├── common.jl           # Shared preamble: activation, paths, validated config access
-│   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels)
-│   ├── preprocess_ldc.jl   # Sliding-window feature extraction (HDF5 -> CSV)
+│   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels + event catalog)
+│   ├── preprocess_ldc.jl   # Sliding-window whitened feature extraction (HDF5 -> CSV)
 │   ├── train.jl            # Training loop with early stopping and terminal dashboard
 │   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
 ├── test/
@@ -72,7 +73,7 @@ it.
 All commands below run from the repository root; scripts resolve relative paths against the project root and may equally be invoked from any working directory. Configuration defaults come from `config.toml` (including model and optimizer hyperparameters under `[model]` and `[training]`, and the output roots under `[paths]`) and are validated on load; CLI flags override them. RNG seeds are set from the configuration. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
 
 ```bash
-# 1. Simulate continuous telemetry (HDF5 strain + point-wise label CSV)
+# 1. Simulate continuous telemetry (HDF5 strain + point-wise labels + event catalog)
 julia scripts/generate_data.jl --days 30.0
 
 # 2. Sliding-window feature extraction
@@ -115,13 +116,13 @@ julia docs/make.jl
 | Component | State |
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
-| Telemetry simulator | Functional and seeded, with known physics defects (confusion-noise spectrum, injection SNR definition, chirp aliasing near merger, injection/label alignment for early merger times) |
-| Feature extraction | Functional on simulator output only; fixed normalization scales are incompatible with physical-strain-amplitude LDC data |
+| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, injections scaled to a matched-filter SNR and anchored on the coalescence sample; the phenomenological MBHB waveform (Nyquist aliasing near merger, no mass-consistent ringdown) awaits the closed-form IMR model |
+| Feature extraction | PSD-whitened, amplitude- and window-length-independent features; scaler fitted on the training partition and persisted with the model |
 | Training script | Runs end-to-end (verified); evaluation protocol still leaks information (random split over overlapping windows, validation set reused as test set) |
 | Inference script | Runs with labeled and blind data; threshold persisted per run; threshold is still fitted on the evaluated dataset |
 | Documentation | Tracks the current state; remediation of the remaining defects is planned |
 
-Version 0.1.x is a pre-release: the physics defects listed above are documented in `docs/src/physics.md` and scheduled for remediation before any science use.
+Version 0.1.x is a pre-release: the remaining physics and evaluation deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.
 
 ## License
 
