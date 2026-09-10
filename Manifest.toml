@@ -2,7 +2,7 @@
 
 julia_version = "1.12.7"
 manifest_format = "2.0"
-project_hash = "b45e72328eca00036c6041f9110e65faf7e2ce2c"
+project_hash = "04be7dbe7b2d3169fa48a7aa94de293adfa97599"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -1016,7 +1016,7 @@ uuid = "128add7d-3638-4c79-886c-908ea0c25c34"
 version = "0.2.0"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "FFTW", "Flux", "Functors", "JLD2", "Statistics", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "FFTW", "Flux", "Functors", "JLD2", "Random", "Statistics", "Yao", "Zygote"]
 path = "."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"

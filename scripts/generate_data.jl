@@ -251,7 +251,7 @@ function main()
     ds = max(1, Int(round(n_total / 5000)))
     t_days = t_arr ./ (24*3600)
 
-    plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
+    plot_dir = joinpath(pipeline_paths(config_file).plots, "run_$run_id")
     mkpath(plot_dir)
 
     p = plot(

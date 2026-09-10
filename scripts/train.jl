@@ -186,8 +186,9 @@ function main()
 
     # --- Run ID & Directory Setup ---
     run_id = isempty(parsed_args["run-id"]) ? string(uuid4())[1:8] : parsed_args["run-id"]
-    run_dir = joinpath(PROJECT_ROOT, "models", "run_$run_id")
-    plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
+    paths = pipeline_paths(config_file)
+    run_dir = joinpath(paths.models, "run_$run_id")
+    plot_dir = joinpath(paths.plots, "run_$run_id")
     mkpath(run_dir)
     mkpath(plot_dir)
 

@@ -1,5 +1,11 @@
 # Paths are resolved relative to the project root unless absolute.
 
+[paths]
+inputs = "data/inputs"              # generated telemetry and feature CSVs
+models = "models"                   # per-run model checkpoints, logs, thresholds
+plots = "data/outputs/plots"        # per-run figures
+results = "data/outputs/results"    # per-run inference tables and snapshots
+
 [generation]
 days = 60.0     # simulated mission duration [days]; > 2.0 required for MBHB injection
 fs = 0.2        # sampling frequency [Hz]

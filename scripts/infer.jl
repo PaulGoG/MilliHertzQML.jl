@@ -64,6 +64,7 @@ function main()
 
     # 1. Load and validate TOML configuration
     config_file = load_config(parsed_args["config"])
+    paths = pipeline_paths(config_file)
     infer_cfg = get(config_file, "inference", Dict{String,Any}())
 
     # 2. Harmonize CLI with TOML defaults (CLI takes precedence)
@@ -100,14 +101,14 @@ function main()
     )
     model_path =
         parsed_args["model"] !== nothing ? resolvepath(parsed_args["model"]) :
-        joinpath(PROJECT_ROOT, "models", "run_$run_id", "gw_model.jld2")
+        joinpath(paths.models, "run_$run_id", "gw_model.jld2")
 
     if isempty(run_id)
         run_id = "standalone_" * string(hash(model_path))[1:6]
     end
 
-    plot_dir = joinpath(PROJECT_ROOT, "data", "outputs", "plots", "run_$run_id")
-    res_dir = joinpath(PROJECT_ROOT, "data", "outputs", "results", "run_$run_id")
+    plot_dir = joinpath(paths.plots, "run_$run_id")
+    res_dir = joinpath(paths.results, "run_$run_id")
     mkpath(plot_dir)
     mkpath(res_dir)
 

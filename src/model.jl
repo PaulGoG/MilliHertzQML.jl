@@ -29,12 +29,16 @@ function build_layer(n_qubits)
 end
 
 """
-    VariationalQuantumClassifier(n_qubits=4, n_layers=2)
+    VariationalQuantumClassifier(n_qubits = 4, n_layers = 2; rng = Random.default_rng())
 
 Constructor for the VQC. Initializes parameters from a zero-mean normal
-distribution with standard deviation 0.5.
+distribution with standard deviation 0.5, drawn from `rng`.
 """
-function VariationalQuantumClassifier(n_qubits::Int = 4, n_layers::Int = 2)
+function VariationalQuantumClassifier(
+    n_qubits::Int = 4,
+    n_layers::Int = 2;
+    rng::AbstractRNG = Random.default_rng(),
+)
     n_qubits >= 2 || throw(
         ArgumentError(
             "n_qubits = $n_qubits; at least 2 qubits are required for the entangling CNOT ring.",
@@ -48,7 +52,7 @@ function VariationalQuantumClassifier(n_qubits::Int = 4, n_layers::Int = 2)
     total_params = n_params_per_layer * n_layers
 
     # Initialize with Float32 for type stability
-    p = randn(Float32, total_params) * 0.5f0
+    p = randn(rng, Float32, total_params) * 0.5f0
 
     idx = 1
     for l in layers

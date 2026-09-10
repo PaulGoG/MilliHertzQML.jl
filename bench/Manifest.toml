@@ -953,7 +953,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "FFTW", "Flux", "Functors", "JLD2", "Statistics", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "FFTW", "Flux", "Functors", "JLD2", "Random", "Statistics", "Yao", "Zygote"]
 path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"

@@ -10,24 +10,63 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    name: Tests — Julia ${{ matrix.version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # "1.12" is the blocking job: the committed Manifests are resolved on
+    # it and it is the compat floor. "1" follows the current stable release
+    # (1.13 at the time of writing) and may fail without failing the
+    # workflow until the quantum-simulation and AD stack is validated there.
+    # Coverage runs once: it disables package images and roughly doubles
+    # the precompile time.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        version: ['1.12']
-        os: [ubuntu-latest]
+        include:
+          - version: "1.12"
+            os: ubuntu-latest
+            coverage: true
+            experimental: false
+          - version: "1"
+            os: ubuntu-latest
+            coverage: false
+            experimental: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
+        if: matrix.coverage
+      - uses: codecov/codecov-action@v7
+        if: matrix.coverage
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+  format:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "1.12"
+      - run: |
+          julia -e 'using Pkg; Pkg.add("JuliaFormatter"); using JuliaFormatter;
+                    format(".", verbose = false) || error("Formatting check failed: run JuliaFormatter over the repository.")'
+  docs:
+    name: Documentation build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "1.12"
+      - uses: julia-actions/cache@v3
+      - run: julia docs/make.jl

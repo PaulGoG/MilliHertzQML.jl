@@ -41,12 +41,13 @@ function load_config(path::AbstractString)
 end
 
 """
-    cfgget(section, key, default; type = Any, min = nothing, max = nothing)
+    cfgget(section, key, default; type = Any, min = nothing, max = nothing, choices = nothing)
 
 Read `key` from a configuration `section`, falling back to `default` when the
-key is absent. Validates the value against an expected `type` and optional
-inclusive bounds, throwing an `ArgumentError` naming the offending key on any
-violation. Numeric values are converted to `type` when the conversion is exact.
+key is absent. Validates the value against an expected `type`, optional
+inclusive bounds, and an optional set of admissible `choices`, throwing an
+`ArgumentError` naming the offending key on any violation. Numeric values are
+converted to `type` when the conversion is exact.
 """
 function cfgget(
     section::AbstractDict,
@@ -55,6 +56,7 @@ function cfgget(
     type::Type = Any,
     min = nothing,
     max = nothing,
+    choices = nothing,
 )
     value = get(section, key, default)
     if type !== Any && !(value isa type)
@@ -74,6 +76,15 @@ function cfgget(
     max !== nothing &&
         value > max &&
         throw(ArgumentError("configuration key `$key` = $value; must be <= $max."))
+    choices !== nothing &&
+        !(value in choices) &&
+        throw(
+            ArgumentError(
+                "configuration key `$key` = $(repr(value)); must be one of " *
+                join(repr.(choices), " | ") *
+                ".",
+            ),
+        )
     return value
 end
 
@@ -83,6 +94,30 @@ end
 CLI-over-configuration precedence: return `cli_value` unless it is `nothing`.
 """
 override(cli_value, cfg_value) = cli_value !== nothing ? cli_value : cfg_value
+
+"""
+    pipeline_paths(config) -> NamedTuple
+
+Output roots of the pipeline from the `[paths]` section — `inputs`, `models`,
+`plots`, `results` — resolved against the project root. Absent keys fall back
+to the standard tree (`data/inputs`, `models`, `data/outputs/plots`,
+`data/outputs/results`).
+"""
+function pipeline_paths(config::AbstractDict)
+    p = get(config, "paths", Dict{String,Any}())
+    return (
+        inputs = resolvepath(
+            cfgget(p, "inputs", joinpath("data", "inputs"); type = String),
+        ),
+        models = resolvepath(cfgget(p, "models", "models"; type = String)),
+        plots = resolvepath(
+            cfgget(p, "plots", joinpath("data", "outputs", "plots"); type = String),
+        ),
+        results = resolvepath(
+            cfgget(p, "results", joinpath("data", "outputs", "results"); type = String),
+        ),
+    )
+end
 
 """
     hardware_fingerprint() -> Dict{String, Any}

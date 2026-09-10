@@ -143,7 +143,7 @@ function main()
 
     # 5. Save Results
     println("\n[4/4] Saving processed data to CSV...")
-    out_dir = joinpath(PROJECT_ROOT, "data", "inputs")
+    out_dir = pipeline_paths(config_file).inputs
     mkpath(out_dir)
 
     feat_path = joinpath(out_dir, "$(output_prefix)_features.csv")
