@@ -1,23 +1,13 @@
 # scripts/generate_data.jl — command-line dispatcher of the telemetry
 # generation stage (`generate_telemetry`). The TOML configuration is the
 # single source of every physical and numerical parameter; the command line
-# adds only the run identifier and an output-path override.
+# adds only the run identifier and an output-path override. The trace figure
+# comes from the CairoMakie extension.
 
-ENV["GKSwstype"] = "100"
 include(joinpath(@__DIR__, "common.jl"))
 
 using ArgParse: ArgParseSettings, @add_arg_table!, parse_args
-using Plots: Plots, default, plot, plot!, savefig
-
-default(
-    dpi = 600,
-    frame = :box,
-    fontfamily = "Computer Modern",
-    grid = true,
-    gridalpha = 0.2,
-    minorgrid = false,
-    margin = 5Plots.mm,
-)
+using CairoMakie: CairoMakie
 
 """
     parse_commandline() -> Dict{String, Any}
@@ -45,44 +35,35 @@ function parse_commandline()
 end
 
 """
-    trace_figure(path, n_total, fs, strain, labels)
+    trace_figure(stem, config, result)
 
-Down-sampled trace of the simulated strain against mission time [days],
-with the positive-label spans shaded, saved at `path`.
+Trace of the simulated strain against mission time with the labeled spans
+and, in a second panel, the record high-passed and whitened by the model
+sensitivity as the pre-processor sees it; exported at `stem` as PDF and
+PNG with a provenance sidecar.
 """
-function trace_figure(
-    path::AbstractString,
-    n_total::Integer,
-    fs::Real,
-    strain::AbstractVector{<:Real},
-    labels::AbstractVector{<:Integer},
-)
-    length(strain) == n_total == length(labels) ||
-        throw(DimensionMismatch("strain and labels must hold n_total = $n_total samples."))
-    ds = max(1, round(Int, n_total / 5000))
-    t_days = ((0:(n_total-1)) ./ fs) ./ (24 * 3600)
-    p = plot(
-        t_days[1:ds:end],
-        strain[1:ds:end];
-        xlabel = "Mission time [days]",
-        ylabel = "Strain",
-        lw = 0.5,
-        color = :gray,
-        label = "Data",
+function trace_figure(stem::AbstractString, config::AbstractDict, result::NamedTuple)
+    gen = generation_settings(config)
+    pre = preprocessing_settings(config)
+    fs = result.fs
+    t_days = ((0:(result.n_total-1)) ./ fs) ./ 86400
+    whitened = whiten_record(
+        highpass_record(
+            result.strain,
+            fs;
+            cutoff = pre.highpass_cutoff_hz,
+            order = pre.highpass_order,
+        ),
+        fs;
+        psd = f -> lisa_noise_psd(f; observation_years = gen.observation_years),
     )
-    plot!(
-        p,
-        t_days[1:ds:end],
-        labels[1:ds:end] .* maximum(abs, strain) / 2;
-        st = :step,
-        color = :red,
-        alpha = 0.5,
-        fill = (0, 0.5, :red),
-        label = "MBHB label span",
+    figure = figure_telemetry_trace(
+        t_days,
+        result.strain,
+        Int.(result.labels);
+        whitened = whitened,
     )
-    mkpath(dirname(path))
-    savefig(p, path)
-    return path
+    return save_figure(figure, stem; run_id = result.run_id)
 end
 
 function main()
@@ -92,14 +73,8 @@ function main()
     result = generate_telemetry(config; run_id = run_id, output = args["output"])
 
     plot_dir = joinpath(pipeline_paths(config).plots, "run_$(result.run_id)")
-    figure = trace_figure(
-        joinpath(plot_dir, "simulated_continuous_trace.png"),
-        result.n_total,
-        result.fs,
-        result.strain,
-        result.labels,
-    )
-    @info "trace figure saved" path = figure
+    written = trace_figure(joinpath(plot_dir, "simulated_continuous_trace"), config, result)
+    @info "trace figure saved" files = written
 
     report_timing()
     return nothing

@@ -23,7 +23,10 @@ MilliHertzQML/
 │   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
 │   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
 │   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
+│   ├── visualization.jl    # Figure interface (theme, export with provenance, one function per figure)
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
+├── ext/
+│   └── MilliHertzQMLCairoMakieExt.jl  # CairoMakie implementation of the figures (loads with CairoMakie)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
 │   ├── common.jl           # Activation of the script environment
@@ -105,6 +108,8 @@ julia scripts/infer.jl config.toml --run-id <RUN_ID> --block test
 `--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
 Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
+
+Figures are designed at the 86 mm single-column width under one theme (Computer Modern, boxed axes, legend above the axes, Okabe–Ito colors) and exported by the scripts as vector PDF plus a 4× PNG with a provenance sidecar per figure (`<plots>/run_<id>/<figure>.{pdf,png,toml}`): the simulated trace with its whitened panel, the training history, the mission trace with the labeled spans and the threshold, the ROC curve, the detection sensitivity versus SNR, and the score distributions. The figure functions live in the package as a CairoMakie extension (`using CairoMakie` activates them), so the core library carries no plotting dependency.
 
 For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`). `config_sangria.toml` holds the benchmark settings (`config_sangria_paper.toml` the paper-parity variant); the HDF5 products are passed on the command line:
 

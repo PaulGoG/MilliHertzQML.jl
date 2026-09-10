@@ -14,6 +14,7 @@ using StableRNGs
 using Aqua, JET, ExplicitImports
 using MilliHertzQML
 using Yao, Flux, Zygote
+using CairoMakie: CairoMakie
 
 const PROJECT_ROOT = dirname(@__DIR__)
 
@@ -859,6 +860,69 @@ end
         @test !haskey(TOML.parsefile(plain), "git")
     end
     @test occursin("Time", sprint(report_timing))
+end
+
+@testset "Figures (CairoMakie extension)" begin
+    rng = StableRNG(21)
+    history = (
+        epochs = collect(1:14),
+        train_loss = 1.0 .- 0.03 .* (1:14),
+        val_loss = 1.05 .- 0.02 .* (1:14),
+        val_acc = 0.6 .+ 0.02 .* (1:14),
+    )
+    n = 2000
+    days = collect(range(0, 10; length = n))
+    labels = zeros(Int, n)
+    labels[400:500] .= 1
+    labels[1200:1350] .= 1
+    probs = clamp.(0.3 .+ 0.08 .* randn(rng, n) .+ 0.3 .* labels, 0, 1)
+    snrs = 8 .+ 40 .* rand(rng, n) .* labels
+    decisions = Int.(probs .>= 0.55)
+    fpr, tpr, _ = roc_curve(labels, probs)
+    @test figure_training_history(history) isa CairoMakie.Figure
+    @test figure_mission_trace(days, probs, 0.55; labels = labels) isa CairoMakie.Figure
+    @test figure_mission_trace(days, probs, 0.55) isa CairoMakie.Figure
+    @test figure_roc(fpr, tpr, roc_auc(fpr, tpr)) isa CairoMakie.Figure
+    @test figure_sensitivity(snrs, labels, decisions) isa CairoMakie.Figure
+    @test figure_sensitivity(snrs, zeros(Int, n), decisions) === nothing
+    @test figure_score_distribution(probs, 0.55; labels = labels) isa CairoMakie.Figure
+    @test figure_score_distribution(probs, 0.55) isa CairoMakie.Figure
+    strain = synthesize_noise(rng, 4000, 0.2; f_min = 1e-5)
+    t_days = ((0:3999) ./ 0.2) ./ 86400
+    lab = zeros(Int, 4000)
+    lab[1500:1800] .= 1
+    @test figure_telemetry_trace(t_days, strain, lab) isa CairoMakie.Figure
+    @test figure_telemetry_trace(
+        t_days,
+        strain,
+        lab;
+        whitened = whiten_record(strain, 0.2),
+    ) isa CairoMakie.Figure
+    @test_throws DimensionMismatch figure_mission_trace(days[1:10], probs, 0.5)
+    @test_throws ArgumentError figure_training_history((
+        epochs = Int[],
+        train_loss = Float32[],
+        val_loss = Float32[],
+        val_acc = Float32[],
+    ))
+    @test_throws ArgumentError figure_theme(; width_mm = 0)
+    theme = figure_theme()
+    @test isapprox(theme.size[][1], 86 * 72 / 25.4; rtol = 1e-12)
+    mktempdir() do dir
+        stem = joinpath(dir, "roc_curve")
+        written = save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
+        @test written == ["$stem.pdf", "$stem.png"]
+        @test all(isfile, written) && filesize("$stem.pdf") > 1000
+        side = TOML.parsefile("$stem.toml")
+        @test side["figure"]["run_id"] == "unit" && haskey(side, "git")
+        save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
+        @test isfile(joinpath(dir, "roc_curve_#1.pdf"))
+        @test_throws ArgumentError save_figure(
+            figure_roc(fpr, tpr, 0.9),
+            stem;
+            formats = ("bmp",),
+        )
+    end
 end
 
 # Validation anchors on the LDC Sangria training product. They run only when

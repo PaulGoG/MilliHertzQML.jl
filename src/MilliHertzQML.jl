@@ -62,6 +62,9 @@ export training_memory_estimate_gib, record_memory_estimate_gib, check_memory
 export generate_telemetry, preprocess_record, label_truth_stream
 export whitening_psd, window_features, window_labels
 export train_classifier, evaluate_classifier
+export FIGURE_WIDTH_MM, FIGURE_COLORS, figure_theme, save_figure
+export figure_training_history, figure_mission_trace, figure_roc, figure_sensitivity
+export figure_score_distribution, figure_telemetry_trace
 
 include("config.jl")
 include("provenance.jl")
@@ -73,6 +76,7 @@ include("data.jl")
 include("persistence.jl")
 include("evaluation.jl")
 include("ldc.jl")
+include("visualization.jl")
 include("stages/generation.jl")
 include("stages/preprocessing.jl")
 include("stages/labeling.jl")

@@ -25,6 +25,15 @@ Notable changes to MilliHertzQML. The format follows
   standard libraries become package dependencies.
 - Preprocessing records a hash of every parameter that determines a
   feature product and reuses an identical product unless `--force`.
+- Publication figures as a CairoMakie package extension
+  (`src/visualization.jl`, `ext/MilliHertzQMLCairoMakieExt.jl`): one
+  theme at the 86 mm single-column width (Computer Modern, boxed axes,
+  no titles, legend above the axes, Okabe–Ito colors, offset multiplier
+  for strain amplitudes), one function per figure (`figure_training_history`,
+  `figure_mission_trace`, `figure_roc`, `figure_sensitivity`,
+  `figure_score_distribution`, `figure_telemetry_trace` with a whitened
+  panel), and `save_figure` exporting PDF and 4× PNG with a provenance
+  sidecar. Plots.jl is dropped from the script environment.
 - Committed `.JuliaFormatter.toml` (default style, 92-column margin, spaced
   keyword arguments); the tree is formatted with it.
 - Auxiliary environments: `scripts/Project.toml`, `bench/Project.toml`, and

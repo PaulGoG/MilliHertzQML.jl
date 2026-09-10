@@ -1134,6 +1134,12 @@ path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
 
+    [deps.MilliHertzQML.extensions]
+    MilliHertzQMLCairoMakieExt = "CairoMakie"
+
+    [deps.MilliHertzQML.weakdeps]
+    CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+
 [[deps.Missings]]
 deps = ["DataAPI"]
 git-tree-sha1 = "ec4f7fbeab05d7747bdf98eb74d130a2a2ed298d"

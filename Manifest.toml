@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "497e44b11cdcfef1312b407db297b73fd43810f5"
+project_hash = "ecca98a14a76e139c0fd1402130a90878507d256"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -1126,6 +1126,12 @@ deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux",
 path = "."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
+
+    [deps.MilliHertzQML.extensions]
+    MilliHertzQMLCairoMakieExt = "CairoMakie"
+
+    [deps.MilliHertzQML.weakdeps]
+    CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 
 [[deps.Missings]]
 deps = ["DataAPI"]

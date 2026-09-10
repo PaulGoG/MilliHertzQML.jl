@@ -2,20 +2,11 @@
 # terminal dashboard, file logger, and the training-history figure. The
 # stage itself is `train_classifier` in the package.
 
-ENV["GKSwstype"] = "100"
 include(joinpath(@__DIR__, "common.jl"))
 
-using ArgParse, Logging, LoggingExtras, Plots, Printf, UnicodePlots
-
-Plots.default(
-    dpi = 600,
-    frame = :box,
-    fontfamily = "Computer Modern",
-    grid = true,
-    gridalpha = 0.2,
-    minorgrid = false,
-    margin = 5Plots.mm,
-)
+using ArgParse, Logging, LoggingExtras, Printf
+using UnicodePlots: lineplot, lineplot!
+using CairoMakie: CairoMakie
 
 function parse_commandline()
     s = ArgParseSettings(
@@ -124,39 +115,17 @@ function update_dashboard(
 end
 
 """
-    plot_training_history(history, path)
+    plot_training_history(history, stem, run_id)
 
-Training and validation loss, and validation accuracy, per epoch.
+Training and validation loss, and validation accuracy, per epoch, exported
+at `stem` as PDF and PNG with a provenance sidecar.
 """
-function plot_training_history(history::NamedTuple, path::AbstractString)
-    p1 = Plots.plot(
-        history.epochs,
-        history.train_loss,
-        label = "Training loss",
-        xlabel = "Epoch",
-        ylabel = "Loss",
-        lw = 2,
-    )
-    Plots.plot!(
-        p1,
-        history.epochs,
-        history.val_loss,
-        label = "Validation loss",
-        lw = 2,
-        linestyle = :dash,
-    )
-    p2 = Plots.plot(
-        history.epochs,
-        history.val_acc,
-        xlabel = "Epoch",
-        ylabel = "Validation accuracy",
-        lw = 2,
-        color = :green,
-        legend = false,
-    )
-    Plots.plot(p1, p2, layout = (2, 1), size = (1000, 800))
-    Plots.savefig(path)
-    return path
+function plot_training_history(
+    history::NamedTuple,
+    stem::AbstractString,
+    run_id::AbstractString,
+)
+    return save_figure(figure_training_history(history), stem; run_id = run_id)
 end
 
 function main()
@@ -186,7 +155,7 @@ function main()
         close(log_stream)
     end
 
-    plot_training_history(result.history, joinpath(plot_dir, "training_metrics.png"))
+    plot_training_history(result.history, joinpath(plot_dir, "training_metrics"), run_id)
     println("Training results and logs saved to $(result.run_dir); figures in $plot_dir")
     report_timing()
     return nothing
