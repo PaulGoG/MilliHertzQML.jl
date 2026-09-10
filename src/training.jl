@@ -75,13 +75,20 @@ function accuracy(model::VariationalQuantumClassifier, X, y)
 end
 
 """
-    loss_function(model, X_batch, y_batch)
+    loss_function(model, X_batch, y_batch; positive_weight = 1)
 
-Calculates the Binary Cross Entropy (BCE) loss for a batch of data.
+Binary cross-entropy loss of a batch, with the positive-class term weighted
+by `positive_weight` (the negative-to-positive count ratio balances the
+classes).
 Supports automatic differentiation by ensuring all stateful circuit updates
 are tracked via the `params` vector.
 """
-function loss_function(model::VariationalQuantumClassifier, X_batch, y_batch)
+function loss_function(
+    model::VariationalQuantumClassifier,
+    X_batch,
+    y_batch;
+    positive_weight::Real = 1,
+)
     size(X_batch, 2) == model.n_qubits || throw(
         DimensionMismatch(
             "feature dimension $(size(X_batch, 2)); expected n_qubits = $(model.n_qubits).",
@@ -121,21 +128,27 @@ function loss_function(model::VariationalQuantumClassifier, X_batch, y_batch)
 
         prob = (1.0f0 - avg_z) / 2.0f0
         p_c = clamp(prob, 1.0f-7, 1.0f0 - 1.0f-7)
-        l -= (y * log(p_c) + (1.0f0 - y) * log(1.0f0 - p_c))
+        l -= (Float32(positive_weight) * y * log(p_c) + (1.0f0 - y) * log(1.0f0 - p_c))
     end
 
     return l / size(X_batch, 1)
 end
 
 """
-    train_step!(model, opt_state, X_batch, y_batch)
+    train_step!(model, opt_state, X_batch, y_batch; positive_weight = 1)
 
 Executes a single optimization step (forward + backward pass) using Zygote.
 Updates the `model.params` in-place.
 """
-function train_step!(model::VariationalQuantumClassifier, opt_state, X_batch, y_batch)
+function train_step!(
+    model::VariationalQuantumClassifier,
+    opt_state,
+    X_batch,
+    y_batch;
+    positive_weight::Real = 1,
+)
     val, grads = Zygote.withgradient(model) do m
-        loss_function(m, X_batch, y_batch)
+        loss_function(m, X_batch, y_batch; positive_weight = positive_weight)
     end
     Flux.update!(opt_state, model.params, grads[1].params)
     return val

@@ -46,8 +46,33 @@ Notable changes to MilliHertzQML. The format follows
 - `FeatureScaler`, `fit_scaler`, `encode_features`: per-feature quantile
   bounds fitted on the training partition, persisted in the JLD2 model
   artifact, and applied at inference; `load_model` returns the scaler.
+- `src/evaluation.jl`: `chronological_split` (contiguous training,
+  validation, and test blocks with a buffer), `roc_curve`/`roc_auc`,
+  `contiguous_runs`, `event_metrics` (window-level precision, recall,
+  F1, balanced accuracy; event recall; false-alarm episodes outside the
+  labeled spans per 30 mission days), and `select_threshold` (`far`,
+  `fpr`, or `youden` criterion on the validation block).
+- `loss_function`/`train_step!` accept `positive_weight`; training
+  balances the classes by the negative-to-positive count ratio
+  (`class_weight`).
+- Preprocessing writes a geometry sidecar `<features>.toml` (window
+  size, step, sampling rate, bands, source) that training and inference
+  read through `feature_geometry`.
+- Training writes `split.toml`, `threshold.toml` (fitted on the validation
+  block), and `metrics.toml` (validation and test blocks); inference
+  writes `metrics.toml` for labeled rows and accepts `--block
+  validation | test`.
 
 ### Changed
+- Evaluation protocol: the random shuffle over overlapping windows is
+  replaced by the chronological block split; early stopping and the
+  decision threshold use the validation block only and the test block is
+  scored once. Configuration keys `train_fraction`,
+  `validation_fraction` (now 0.15), `class_weight`,
+  `threshold_criterion`, `target_far_per_30d`, `target_fpr` under
+  `[training]`; `[inference]` loses `target_fpr` and gains `block`.
+- Inference no longer fits a threshold: it requires the `threshold.toml`
+  written at training time.
 - Simulator: noise synthesized at physical strain amplitude against the
   corrected PSD (the previous confusion term vanished above 0.2 mHz and
   the instrument term lacked the 10/3 and transfer factors); every

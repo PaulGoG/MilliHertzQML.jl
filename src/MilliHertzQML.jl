@@ -32,6 +32,8 @@ export train_step!, predict_probability, predict, loss_function, accuracy
 export load_data, load_features, extract_features
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model
+export chronological_split, roc_curve, roc_auc, contiguous_runs, event_metrics
+export select_threshold
 export lisa_noise_psd, instrument_psd, confusion_psd, synthesize_noise
 export matched_filter_snr, scale_to_snr, highpass_record, whiten_record
 export tapered_periodogram, place_signal!, detectable_span
@@ -44,5 +46,6 @@ include("model.jl")
 include("training.jl")
 include("data.jl")
 include("persistence.jl")
+include("evaluation.jl")
 
 end # module

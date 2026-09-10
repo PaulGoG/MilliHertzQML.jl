@@ -9,18 +9,19 @@ MilliHertzQML/
 ├── src/
 │   ├── MilliHertzQML.jl    # Module definition and exports
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
-│   ├── training.jl         # Forward pass, BCE loss, gradient step
+│   ├── training.jl         # Forward pass, class-weighted BCE loss, gradient step
+│   ├── evaluation.jl       # Chronological block split, ROC, validation-fitted threshold, event-level metrics
 │   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
 │   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
 │   ├── data.jl             # Whitened window features, train-fitted feature scaler, CSV loading
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
-│   ├── common.jl           # Shared preamble: activation, paths, validated config access
+│   ├── common.jl           # Shared preamble: activation, paths, validated config access, feature geometry
 │   ├── generate_data.jl    # Simulated continuous LISA telemetry (HDF5 + labels + event catalog)
-│   ├── preprocess_ldc.jl   # Sliding-window whitened feature extraction (HDF5 -> CSV)
-│   ├── train.jl            # Training loop with early stopping and terminal dashboard
-│   └── infer.jl            # Inference, ROC thresholding, diagnostic figures
+│   ├── preprocess_ldc.jl   # Sliding-window whitened feature extraction (HDF5 -> CSV + geometry sidecar)
+│   ├── train.jl            # Chronological split, training with early stopping, validation-fitted threshold, test-block metrics
+│   └── infer.jl            # Inference with the persisted threshold, event-level metrics, diagnostic figures
 ├── test/
 │   ├── Project.toml        # Test environment (package consumed by path); Manifest committed
 │   └── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
@@ -79,20 +80,23 @@ julia scripts/preprocess_ldc.jl \
     --label-file data/inputs/simulated_telemetry_complex_labels.csv \
     --output-prefix telemetry_sim
 
-# 3. Training (Adam, exponential learning-rate decay, early stopping)
+# 3. Training: chronological train/validation/test blocks, class-weighted BCE,
+#    early stopping and threshold selection on the validation block, test block scored once
 julia scripts/train.jl \
     --train-features data/inputs/telemetry_sim_features.csv \
     --train-labels data/inputs/telemetry_sim_labels.csv --epochs 50
 
-# 4. Inference and diagnostics (ROC, mission trace, sensitivity, score distributions)
+# 4. Inference and diagnostics with the persisted threshold (mission trace, ROC,
+#    sensitivity versus SNR, score distributions); --block test restricts the
+#    evaluation to the test block of the training table
 julia scripts/infer.jl \
     --features data/inputs/telemetry_sim_features.csv \
-    --labels data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID>
+    --labels data/inputs/telemetry_sim_labels.csv --run-id <RUN_ID> --block test
 ```
 
-`--test-mode` restricts training to `test_mode_samples` samples and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
+`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation.
 
-Labeled inference fits the decision threshold from the ROC curve and persists it as `threshold.toml` next to the model. Blind inference (`--labels ""`) requires that persisted threshold and produces per-window scores and decisions without labels.
+Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the validation block by `threshold_criterion`: `far`, false-alarm episodes per 30 days; `fpr`; or `youden`), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
 ## Testing and Benchmarks
 
@@ -115,11 +119,11 @@ julia docs/make.jl
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features; scaler fitted on the training partition and persisted with the model |
-| Training script | Runs end-to-end (verified); evaluation protocol still leaks information (random split over overlapping windows, validation set reused as test set) |
-| Inference script | Runs with labeled and blind data; threshold persisted per run; threshold is still fitted on the evaluated dataset |
+| Training script | Chronological block split with a one-window buffer, class-weighted loss, early stopping and threshold selection on the validation block only, test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
+| Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
 | Documentation | Tracks the current state; remediation of the remaining defects is planned |
 
-Version 0.1.x is a pre-release: the remaining physics and evaluation deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.
+Version 0.1.x is a pre-release: the remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.
 
 ## License
 

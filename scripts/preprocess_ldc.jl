@@ -204,6 +204,27 @@ function main()
         DataFrame(features, [:p_low, :p_high, :spectral_entropy, :log_power_std]),
     )
     println("  - Features saved to: $feat_path")
+    sidecar = replace(feat_path, r"\.csv$" => ".toml")
+    open(sidecar, "w") do io
+        TOML.print(
+            io,
+            Dict(
+                "features" => Dict(
+                    "source" => rootrelative(h5_path),
+                    "window_size" => window_size,
+                    "step_size" => step_size,
+                    "sample_rate" => fs,
+                    "observation_years" => observation_years,
+                    "low_band_hz" => collect(low_band),
+                    "high_band_hz" => collect(high_band),
+                    "highpass_cutoff_hz" => highpass_cutoff,
+                    "highpass_order" => highpass_order,
+                    "n_windows" => n_windows,
+                ),
+            ),
+        )
+    end
+    println("  - Geometry sidecar saved to: $sidecar")
 
     if has_labels
         CSV.write(lab_path, DataFrame(Label = window_labels, SNR = window_snrs))

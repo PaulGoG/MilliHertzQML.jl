@@ -437,6 +437,162 @@ end
     @test_throws ArgumentError FeatureScaler([0.0, 1.0], [1.0, 1.0])
 end
 
+@testset "Evaluation protocol" begin
+    # Chronological split: 70/15/15 of 100 windows with a five-window buffer
+    blocks = chronological_split(100; buffer = 5)
+    @test blocks.train == 1:70
+    @test blocks.validation == 76:90
+    @test blocks.test == 96:100
+    @test chronological_split(20).test == 18:20
+    @test_throws ArgumentError chronological_split(10; buffer = 10)
+    @test_throws ArgumentError chronological_split(100; train_fraction = 0.9)
+    @test_throws ArgumentError chronological_split(100; train_fraction = 0.0)
+    @test_throws ArgumentError chronological_split(100; buffer = -1)
+
+    # ROC: one misordered positive among six windows
+    y6 = [1, 1, 0, 1, 0, 0]
+    s6 = [0.9, 0.8, 0.7, 0.4, 0.3, 0.1]
+    fpr, tpr, thr = roc_curve(y6, s6)
+    @test thr == [Inf, 0.9, 0.8, 0.7, 0.4, 0.3, 0.1]
+    @test fpr ≈ [0, 0, 0, 1, 1, 2, 3] ./ 3
+    @test tpr ≈ [0, 1, 2, 2, 3, 3, 3] ./ 3
+    @test roc_auc(fpr, tpr) ≈ 8 / 9
+    @test roc_auc(roc_curve([1, 1, 0, 0], [0.9, 0.8, 0.2, 0.1])[1:2]...) == 1.0
+    @test roc_auc(roc_curve([1, 0, 1, 0], fill(0.5, 4))[1:2]...) ≈ 0.5
+    @test isnan(roc_auc(roc_curve([1, 1], [0.2, 0.3])[1:2]...))
+    @test_throws DimensionMismatch roc_curve([1, 0], [0.5])
+
+    # Contiguous runs
+    @test contiguous_runs([false, true, true, false, true]) == [2:3, 5:5]
+    @test isempty(contiguous_runs(falses(3)))
+    @test contiguous_runs(trues(4)) == [1:4]
+
+    # Event metrics: two events (3:5, 9:10), one detected; alarms at 4 and at
+    # 7:8 (one false-alarm episode); half-day windows, hence six days
+    labels = [0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0]
+    decisions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0]
+    m = event_metrics(decisions, labels; step_size = 43200, sample_rate = 1.0)
+    @test m.precision ≈ 1 / 3
+    @test m.recall ≈ 1 / 5
+    @test m.f1 ≈ 1 / 4
+    @test m.balanced_accuracy ≈ 16 / 35
+    @test m.n_events == 2 && m.n_detected == 1 && m.event_recall == 0.5
+    @test m.n_false_alarm_episodes == 1
+    @test m.observation_days ≈ 6.0
+    @test m.false_alarms_per_30d ≈ 5.0
+    # A permanent alarm detects every event and is charged for every
+    # unlabeled stretch (before, between, after)
+    m_all = event_metrics(ones(Int, 12), labels; step_size = 43200, sample_rate = 1.0)
+    @test m_all.n_detected == 2 && m_all.n_false_alarm_episodes == 3
+    @test m_all.recall == 1.0
+    m_none = event_metrics(zeros(Int, 12), labels; step_size = 1, sample_rate = 1.0)
+    @test isnan(m_none.precision) && m_none.recall == 0.0
+    @test_throws DimensionMismatch event_metrics(
+        [1, 0],
+        [1];
+        step_size = 1,
+        sample_rate = 1.0,
+    )
+    @test_throws ArgumentError event_metrics([1], [1]; step_size = 0, sample_rate = 1.0)
+
+    # Threshold selection on a validation block of twenty half-day windows
+    # (ten days): one event at 8:10 (scores 0.90, 0.95, 0.85), two spurious
+    # noise scores 0.60 (window 3) and 0.70 (window 15), the rest below 0.25
+    scores = [
+        0.10,
+        0.12,
+        0.60,
+        0.11,
+        0.13,
+        0.14,
+        0.15,
+        0.90,
+        0.95,
+        0.85,
+        0.16,
+        0.17,
+        0.18,
+        0.19,
+        0.70,
+        0.20,
+        0.21,
+        0.22,
+        0.23,
+        0.24,
+    ]
+    yv = zeros(Int, 20)
+    yv[8:10] .= 1
+    geometry = (step_size = 43200, sample_rate = 1.0)
+    # far, one episode per 30 d: no episode is admissible on ten days, so the
+    # lowest threshold clearing both spurious scores is chosen
+    t_far, info = select_threshold(yv, scores; criterion = "far", geometry...)
+    @test 0.70 < t_far <= 0.85
+    @test info["criterion"] == "far"
+    @test info["validation_recall"] == 1.0
+    @test info["validation_false_alarms_per_30d"] == 0.0
+    # far, three episodes per 30 d: one episode (window 15) is admitted
+    t_far3, info3 = select_threshold(
+        yv,
+        scores;
+        criterion = "far",
+        target_far_per_30d = 3.0,
+        geometry...,
+    )
+    @test 0.60 < t_far3 <= 0.70
+    @test info3["validation_false_alarms_per_30d"] ≈ 3.0
+    # fpr: 5 % of 17 negatives admits none, 10 % admits one
+    t_fpr, _ =
+        select_threshold(yv, scores; criterion = "fpr", target_fpr = 0.05, geometry...)
+    @test 0.70 < t_fpr <= 0.85
+    t_fpr10, _ =
+        select_threshold(yv, scores; criterion = "fpr", target_fpr = 0.10, geometry...)
+    @test 0.60 < t_fpr10 <= 0.70
+    # youden: TPR - FPR peaks at the lowest event score
+    t_youden, info_y = select_threshold(yv, scores; criterion = "youden", geometry...)
+    @test t_youden == 0.85
+    @test info_y["criterion"] == "youden"
+    # youden without positives warns and falls back to fpr
+    y0 = zeros(Int, 20)
+    t_fb, info_fb = @test_logs (:warn, r"Youden") match_mode = :any select_threshold(
+        y0,
+        scores;
+        criterion = "youden",
+        target_fpr = 0.05,
+        geometry...,
+    )
+    @test info_fb["criterion"] == "fpr" && info_fb["requested_criterion"] == "youden"
+    @test 0.90 < t_fb <= 0.95
+    # far without positives and no admissible episode disables the alarm
+    t_inf, _ =
+        @test_logs (:warn, r"alarms are disabled") match_mode = :any select_threshold(
+            y0,
+            scores;
+            criterion = "far",
+            target_far_per_30d = 0.0,
+            geometry...,
+        )
+    @test t_inf == Inf
+    @test_throws ArgumentError select_threshold(
+        yv,
+        scores;
+        criterion = "bogus",
+        geometry...,
+    )
+    @test_throws ArgumentError select_threshold(Int[], Float64[]; geometry...)
+    @test_throws DimensionMismatch select_threshold(yv, scores[1:19]; geometry...)
+
+    # Class-weighted loss: weight 1 is the plain BCE; a larger weight raises
+    # the cost of every imperfectly scored positive
+    rng = StableRNG(11)
+    model = VariationalQuantumClassifier(4, 2; rng = rng)
+    Xw = rand(rng, Float32, 6, 4) .* Float32(2π)
+    yw = [1, 0, 1, 0, 0, 0]
+    @test loss_function(model, Xw, yw; positive_weight = 1) == loss_function(model, Xw, yw)
+    @test loss_function(model, Xw, yw; positive_weight = 3) > loss_function(model, Xw, yw)
+    opt_state = Flux.setup(Adam(0.01), model.params)
+    @test isfinite(train_step!(model, opt_state, Xw, yw; positive_weight = 2.0))
+end
+
 @testset "Pipeline smoke test" begin
     # The four scripts run as child processes on a three-day configuration
     # whose [paths] section points into a temporary directory; nothing is
@@ -515,11 +671,36 @@ end
         stage("preprocess_ldc.jl", "--h5-file", h5, "--label-file", raw_labels) || return
         @test nrow(CSV.read(feats, DataFrame)) == n_windows
         @test nrow(CSV.read(labs, DataFrame)) == n_windows
+        sidecar = TOML.parsefile(replace(feats, ".csv" => ".toml"))["features"]
+        @test sidecar["window_size"] == cfg["preprocessing"]["window_size"]
+        @test sidecar["step_size"] == cfg["preprocessing"]["step_size"]
+        @test sidecar["sample_rate"] == fs
+        @test sidecar["n_windows"] == n_windows
 
         stage("train.jl", "--run-id", "smoke") || return
-        model_path = joinpath(dir, "models", "run_smoke", "gw_model.jld2")
+        run_dir = joinpath(dir, "models", "run_smoke")
+        model_path = joinpath(run_dir, "gw_model.jld2")
         @test isfile(model_path)
-        @test isfile(joinpath(dir, "models", "run_smoke", "config.toml"))
+        @test isfile(joinpath(run_dir, "config.toml"))
+        # Chronological blocks with a one-window buffer
+        blocks = TOML.parsefile(joinpath(run_dir, "split.toml"))["split"]
+        buffer = cld(cfg["preprocessing"]["window_size"], cfg["preprocessing"]["step_size"])
+        @test blocks["n_windows"] == n_windows
+        @test blocks["buffer_windows"] == buffer
+        @test blocks["train"] == [1, floor(Int, 0.7 * n_windows)]
+        @test blocks["validation"][1] == blocks["train"][2] + buffer + 1
+        @test blocks["test"][1] == blocks["validation"][2] + buffer + 1
+        @test blocks["test"][2] == n_windows
+        n_test = blocks["test"][2] - blocks["test"][1] + 1
+        # Threshold fitted on the validation block; metrics of both blocks
+        thr = TOML.parsefile(joinpath(run_dir, "threshold.toml"))["threshold"]
+        @test haskey(thr, "value") && haskey(thr, "criterion") && haskey(thr, "auc")
+        @test thr["criterion"] in ("far", "fpr")
+        metrics = TOML.parsefile(joinpath(run_dir, "metrics.toml"))
+        @test haskey(metrics, "validation") && haskey(metrics, "test")
+        @test isfinite(metrics["test"]["false_alarms_per_30d"])
+        @test metrics["test"]["n_windows"] == n_test
+        @test metrics["validation"]["threshold"] == thr["value"]
 
         stage("infer.jl", "--run-id", "smoke") || return
         probs = CSV.read(
@@ -528,7 +709,32 @@ end
         )
         @test nrow(probs) == n_windows
         @test all(0 .<= probs.Probability .<= 1)
-        @test isfile(joinpath(dir, "models", "run_smoke", "threshold.toml"))
+        @test probs.Window == 1:n_windows
+        infer_metrics =
+            TOML.parsefile(joinpath(dir, "results", "run_smoke", "metrics.toml"))["metrics"]
+        @test infer_metrics["n_windows"] == n_windows
+        @test infer_metrics["threshold"] == thr["value"]
+
+        # The test block alone, through the run's split.toml
+        stage(
+            "infer.jl",
+            "--model",
+            model_path,
+            "--run-id",
+            "smoke_test",
+            "--block",
+            "test",
+        ) || return
+        block_probs = CSV.read(
+            joinpath(dir, "results", "run_smoke_test", "inference_probabilities.csv"),
+            DataFrame,
+        )
+        @test nrow(block_probs) == n_test
+        @test first(block_probs.Window) == blocks["test"][1]
+        block_metrics =
+            TOML.parsefile(joinpath(dir, "results", "run_smoke_test", "metrics.toml"))["metrics"]
+        @test block_metrics["block"] == "test"
+        @test block_metrics["n_windows"] == n_test
 
         stage(
             "infer.jl",

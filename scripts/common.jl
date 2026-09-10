@@ -145,3 +145,26 @@ function hardware_fingerprint()
         "distributed_workers" => Distributed.nworkers(),
     )
 end
+
+"""
+    feature_geometry(features_path, pre_cfg) -> NamedTuple
+
+Window geometry (`window_size`, `step_size`, `sample_rate`) of a feature
+table, read from the sidecar `<stem>.toml` that `preprocess_ldc.jl` writes
+next to it; falls back to the `[preprocessing]` section with a warning
+when the sidecar is absent.
+"""
+function feature_geometry(features_path::AbstractString, pre_cfg::AbstractDict)
+    sidecar = replace(features_path, r"\.csv$" => ".toml")
+    section = pre_cfg
+    if isfile(sidecar)
+        section = get(TOML.parsefile(sidecar), "features", Dict{String,Any}())
+    else
+        @warn "no feature sidecar at $sidecar; window geometry taken from [preprocessing]."
+    end
+    return (
+        window_size = cfgget(section, "window_size", 1000; type = Int, min = 2),
+        step_size = cfgget(section, "step_size", 100; type = Int, min = 1),
+        sample_rate = cfgget(section, "sample_rate", 0.2; type = Float64, min = 1e-6),
+    )
+end
