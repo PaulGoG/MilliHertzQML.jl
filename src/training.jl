@@ -1,10 +1,14 @@
-# src/training.jl
+# src/training.jl — forward pass of the data re-uploading circuit, the
+# class-weighted binary cross-entropy, and the batch gradient, serial or
+# over the Julia threads.
 
 """
     dispatch_params!(model::VariationalQuantumClassifier)
 
-Synchronizes the internal ansatz blocks with the global parameter vector `model.params`.
-Required for automatic differentiation via Zygote.
+Synchronizes the ansatz blocks of `model` with its parameter vector
+`model.params`, so that the blocks of a loaded model carry the persisted
+values. The forward pass itself reads `model.params` and never mutates
+the blocks.
 """
 function dispatch_params!(model::VariationalQuantumClassifier)
     idx = 1
@@ -16,11 +20,18 @@ function dispatch_params!(model::VariationalQuantumClassifier)
 end
 
 """
-    predict_probability(model, x)
+    predict_probability(model, x) -> Float32
 
-Performs a forward pass for a single input vector `x`.
-Implements Ensemble Measurement by averaging the expectation value of Z
-across all qubits to produce the final classification probability.
+Classifier probability of one feature vector `x` (length `n_qubits`,
+angles in ``[0, 2π]``): data re-uploading interleaves, for every layer,
+the feature map — ``H`` followed by ``R_z(x_i)`` on qubit ``i`` — with the
+ansatz layer, and the probability is ``(1 - \\langle Z \\rangle)/2`` with
+``\\langle Z \\rangle`` averaged over the qubits. The register is prepared
+from `model.params` alone: the parameter slice of every layer is
+dispatched into a rebuilt copy of the ansatz block (Yao's non-mutating
+`dispatch` constructs new gate objects), so the function is pure,
+differentiable by Zygote with respect to `model.params`, and safe to call
+from several threads at once.
 """
 function predict_probability(model::VariationalQuantumClassifier, x)
     length(x) == model.n_qubits || throw(
@@ -28,21 +39,23 @@ function predict_probability(model::VariationalQuantumClassifier, x)
             "feature vector has length $(length(x)); expected n_qubits = $(model.n_qubits).",
         ),
     )
-    dispatch_params!(model)
-
-    steps = [build_step(model, x, i) for i in 1:model.n_layers]
-    c = chain(model.n_qubits, steps...)
-
-    # Use ComplexF32 for type stability with Float32 network parameters
-    reg = zero_state(ComplexF32, model.n_qubits) |> c
-
-    total_z = 0.0f0
-    for i in 1:model.n_qubits
-        total_z += real(expect(put(model.n_qubits, i=>Z), reg))
+    n_qubits = model.n_qubits
+    np_layer = div(length(model.params), model.n_layers)
+    # ComplexF32 register for type stability with the Float32 parameters
+    st = zero_state(ComplexF32, n_qubits)
+    for layer_idx in 1:model.n_layers
+        for i in 1:n_qubits
+            st = apply(st, put(n_qubits, i=>H))
+            st = apply(st, put(n_qubits, i=>Rz(Float64(x[i]))))
+        end
+        p_layer = model.params[((layer_idx-1)*np_layer+1):(layer_idx*np_layer)]
+        st = apply(st, dispatch(model.ansatz_layers[layer_idx], p_layer))
     end
-    avg_z = total_z / Float32(model.n_qubits)
-
-    return (1.0f0 - avg_z) / 2.0f0
+    total_z = 0.0f0
+    for i in 1:n_qubits
+        total_z += real(expect(put(n_qubits, i=>Z), st))
+    end
+    return (1.0f0 - total_z / Float32(n_qubits)) / 2.0f0
 end
 
 """
@@ -50,8 +63,8 @@ end
 
 Class decision for a single feature vector `x` at the fixed probability
 threshold 0.5: `1` when `predict_probability(model, x) > 0.5`, else `0`.
-Run-specific thresholds selected from the ROC curve live in the inference
-script, not here.
+Run-specific thresholds fitted on the validation block live in the
+training stage, not here.
 """
 function predict(model::VariationalQuantumClassifier, x)
     prob = predict_probability(model, x)
@@ -75,20 +88,36 @@ function accuracy(model::VariationalQuantumClassifier, X, y)
 end
 
 """
-    loss_function(model, X_batch, y_batch; positive_weight = 1)
+    weighted_bce(p, y; positive_weight = 1) -> Float32
 
-Binary cross-entropy loss of a batch, with the positive-class term weighted
-by `positive_weight` (the negative-to-positive count ratio balances the
-classes).
-Supports automatic differentiation by ensuring all stateful circuit updates
-are tracked via the `params` vector.
+Binary cross-entropy of the probability `p` against the label `y` (0 or
+1), the positive term weighted by `positive_weight`; `p` is clamped to
+``[10^{-7}, 1 - 10^{-7}]``.
 """
-function loss_function(
-    model::VariationalQuantumClassifier,
-    X_batch,
-    y_batch;
-    positive_weight::Real = 1,
-)
+function weighted_bce(p::Real, y::Real; positive_weight::Real = 1)
+    p_c = clamp(Float32(p), 1.0f-7, 1.0f0 - 1.0f-7)
+    yf = Float32(y)
+    return -(Float32(positive_weight) * yf * log(p_c) + (1.0f0 - yf) * log(1.0f0 - p_c))
+end
+
+"""
+    sample_loss(model, x, y; positive_weight = 1) -> Float32
+
+Weighted binary cross-entropy ([`weighted_bce`](@ref)) of one feature
+vector `x` with label `y`.
+"""
+function sample_loss(model::VariationalQuantumClassifier, x, y; positive_weight::Real = 1)
+    return weighted_bce(predict_probability(model, x), y; positive_weight = positive_weight)
+end
+
+"""
+    check_batch(model, X_batch, y_batch)
+
+Dimension checks of a batch: `X_batch` holds the samples along its first
+dimension and `n_qubits` features along the second, `y_batch` one label
+per sample.
+"""
+function check_batch(model::VariationalQuantumClassifier, X_batch, y_batch)
     size(X_batch, 2) == model.n_qubits || throw(
         DimensionMismatch(
             "feature dimension $(size(X_batch, 2)); expected n_qubits = $(model.n_qubits).",
@@ -97,48 +126,96 @@ function loss_function(
     size(X_batch, 1) == length(y_batch) || throw(
         DimensionMismatch("$(size(X_batch, 1)) samples but $(length(y_batch)) labels."),
     )
+    return nothing
+end
+
+"""
+    loss_function(model, X_batch, y_batch; positive_weight = 1) -> Float32
+
+Mean weighted binary cross-entropy over the rows of `X_batch` (samples ×
+features), evaluated serially on one automatic-differentiation tape; the
+reference of [`batch_gradient`](@ref).
+"""
+function loss_function(
+    model::VariationalQuantumClassifier,
+    X_batch,
+    y_batch;
+    positive_weight::Real = 1,
+)
+    check_batch(model, X_batch, y_batch)
     l = 0.0f0
-    n_qubits = model.n_qubits
-    n_layers = model.n_layers
-    np_layer = div(length(model.params), n_layers)
-
     for k in 1:size(X_batch, 1)
-        x = @view(X_batch[k, :])
-        y = y_batch[k]
-
-        # Use ComplexF32 for memory efficiency and type stability
-        st = zero_state(ComplexF32, n_qubits)
-
-        for layer_idx in 1:n_layers
-            for i in 1:n_qubits
-                st = apply(st, put(n_qubits, i=>H))
-                st = apply(st, put(n_qubits, i=>Rz(Float64(x[i]))))
-            end
-
-            p_layer = model.params[((layer_idx-1)*np_layer+1):(layer_idx*np_layer)]
-            ansatz = dispatch(model.ansatz_layers[layer_idx], p_layer)
-            st = apply(st, ansatz)
-        end
-
-        total_z = 0.0f0
-        for i in 1:n_qubits
-            total_z += real(expect(put(n_qubits, i=>Z), st))
-        end
-        avg_z = total_z / Float32(n_qubits)
-
-        prob = (1.0f0 - avg_z) / 2.0f0
-        p_c = clamp(prob, 1.0f-7, 1.0f0 - 1.0f-7)
-        l -= (Float32(positive_weight) * y * log(p_c) + (1.0f0 - y) * log(1.0f0 - p_c))
+        l += sample_loss(
+            model,
+            @view(X_batch[k, :]),
+            y_batch[k];
+            positive_weight = positive_weight,
+        )
     end
-
     return l / size(X_batch, 1)
 end
 
 """
-    train_step!(model, opt_state, X_batch, y_batch; positive_weight = 1)
+    batch_gradient(model, X_batch, y_batch; positive_weight = 1,
+                   threaded = Threads.nthreads() > 1, chunk_size = 4)
+        -> (loss, gradient)
 
-Executes a single optimization step (forward + backward pass) using Zygote.
-Updates the `model.params` in-place.
+Mean weighted binary cross-entropy of the batch and its gradient with
+respect to `model.params`. Serial (`threaded = false`, or a batch that
+fits one chunk): one Zygote tape over [`loss_function`](@ref). Threaded:
+the batch is cut into consecutive chunks of `chunk_size` samples, one
+tape per chunk on the Julia threads (`Threads.@threads`); the chunk
+gradients are stored by chunk index and summed in that order, so the
+result depends on `chunk_size` but neither on the thread count nor on
+the scheduling, and differs from the serial gradient only by the
+rounding of the accumulation order.
+"""
+function batch_gradient(
+    model::VariationalQuantumClassifier,
+    X_batch,
+    y_batch;
+    positive_weight::Real = 1,
+    threaded::Bool = Threads.nthreads() > 1,
+    chunk_size::Integer = 4,
+)
+    check_batch(model, X_batch, y_batch)
+    chunk_size >= 1 || throw(ArgumentError("chunk_size = $chunk_size; at least 1."))
+    n = size(X_batch, 1)
+    n >= 1 || throw(ArgumentError("the batch is empty."))
+    if !threaded || n <= chunk_size
+        loss_serial, grads_serial = Zygote.withgradient(model) do m
+            loss_function(m, X_batch, y_batch; positive_weight = positive_weight)
+        end
+        return Float32(loss_serial), Vector{Float32}(grads_serial[1].params)
+    end
+    n_chunks = cld(n, chunk_size)
+    # Per-chunk sums (not means), so that the reduction is exact in the
+    # chunk sizes; divided by the batch size once at the end.
+    losses = Vector{Float32}(undef, n_chunks)
+    gradients = Matrix{Float32}(undef, length(model.params), n_chunks)
+    Threads.@threads for c in 1:n_chunks
+        # Every name assigned in the body is local to the iteration: the
+        # body runs as a closure on several threads, and a name that also
+        # exists in the enclosing scope would be shared between them.
+        local rows = ((c-1)*chunk_size+1):min(n, c*chunk_size)
+        local X_chunk = @view(X_batch[rows, :])
+        local y_chunk = @view(y_batch[rows])
+        local val, grads = Zygote.withgradient(model) do m
+            length(rows) * loss_function(m, X_chunk, y_chunk; positive_weight = positive_weight)
+        end
+        losses[c] = val
+        gradients[:, c] = grads[1].params
+    end
+    return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
+end
+
+"""
+    train_step!(model, opt_state, X_batch, y_batch; positive_weight = 1,
+                threaded = Threads.nthreads() > 1) -> loss
+
+One optimization step: the batch gradient ([`batch_gradient`](@ref))
+applied to `model.params` in place through the Flux optimizer state
+`opt_state`. Returns the batch loss before the update.
 """
 function train_step!(
     model::VariationalQuantumClassifier,
@@ -146,10 +223,15 @@ function train_step!(
     X_batch,
     y_batch;
     positive_weight::Real = 1,
+    threaded::Bool = Threads.nthreads() > 1,
 )
-    val, grads = Zygote.withgradient(model) do m
-        loss_function(m, X_batch, y_batch; positive_weight = positive_weight)
-    end
-    Flux.update!(opt_state, model.params, grads[1].params)
+    val, gradient = batch_gradient(
+        model,
+        X_batch,
+        y_batch;
+        positive_weight = positive_weight,
+        threaded = threaded,
+    )
+    Flux.update!(opt_state, model.params, gradient)
     return val
 end

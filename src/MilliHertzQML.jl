@@ -39,6 +39,7 @@ using Zygote: Zygote
 
 export VariationalQuantumClassifier
 export train_step!, predict_probability, predict, loss_function, accuracy
+export weighted_bce, sample_loss, batch_gradient
 export load_data, load_features, extract_features, feature_names
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model

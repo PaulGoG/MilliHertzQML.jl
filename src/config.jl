@@ -330,7 +330,8 @@ end
     training_settings(config) -> NamedTuple
 
 Validated `[training]` parameters: inputs, optimizer, chronological blocks,
-class weighting, threshold criterion, scaler quantiles, test-mode caps.
+class weighting, threshold criterion, scaler quantiles, test-mode caps,
+threading.
 """
 function training_settings(config::AbstractDict)
     t = section(config, "training")
@@ -394,6 +395,7 @@ function training_settings(config::AbstractDict)
         scaler_quantiles = (Float64(quantiles[1]), Float64(quantiles[2])),
         test_mode_samples = cfgget(t, "test_mode_samples", 5000; type = Int, min = 1),
         test_mode_epochs = cfgget(t, "test_mode_epochs", 20; type = Int, min = 1),
+        threaded = cfgget(t, "threaded", true; type = Bool),
         seed = cfgget(t, "seed", 42; type = Int),
     )
 end

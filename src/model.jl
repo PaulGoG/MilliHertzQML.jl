@@ -65,18 +65,3 @@ function VariationalQuantumClassifier(
 end
 
 Functors.@functor VariationalQuantumClassifier (params,)
-
-"""
-    build_step(model, x, layer_idx)
-
-Creates a single 'Data Re-uploading' block: [Feature Map] -> [Ansatz Layer].
-The Feature Map uses a 1st order Pauli-Z expansion with Hadamard pre-rotation.
-"""
-function build_step(model::VariationalQuantumClassifier, x, layer_idx::Int)
-    fm = chain(
-        model.n_qubits,
-        [put(i => H) for i in 1:model.n_qubits]...,
-        [put(i => Rz(Float64(x[i]))) for i in 1:model.n_qubits]..., # Yao gates often internally prefer Float64 for angles
-    )
-    return chain(model.n_qubits, fm, model.ansatz_layers[layer_idx])
-end

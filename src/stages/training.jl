@@ -5,23 +5,35 @@
 # file logger, and the training-history figure.
 
 """
-    predict_all(model, X; progress = false) -> Vector{Float32}
+    predict_all(model, X; progress = false, threaded = Threads.nthreads() > 1)
+        -> Vector{Float32}
 
 Classifier probability of every row of the encoded feature matrix `X`
-(samples × features); with `progress`, a line is printed at every tenth
-of the rows.
+(samples × features), over the Julia threads when `threaded` (the rows
+are independent, so the result is the same either way); with `progress`,
+a line is printed after every tenth of the rows.
 """
 function predict_all(
     model::VariationalQuantumClassifier,
     X::AbstractMatrix{<:Real};
     progress::Bool = false,
+    threaded::Bool = Threads.nthreads() > 1,
 )
     n = size(X, 1)
     probabilities = Vector{Float32}(undef, n)
-    every = max(1, div(n, 10))
-    for i in 1:n
-        probabilities[i] = predict_probability(model, @view(X[i, :]))
-        progress && i % every == 0 && println("  Progress: $(round(Int, i / n * 100)) %")
+    chunk = max(1, cld(n, 10))
+    for lo in 1:chunk:n
+        hi = min(n, lo + chunk - 1)
+        if threaded
+            Threads.@threads for i in lo:hi
+                probabilities[i] = predict_probability(model, @view(X[i, :]))
+            end
+        else
+            for i in lo:hi
+                probabilities[i] = predict_probability(model, @view(X[i, :]))
+            end
+        end
+        progress && println("  Progress: $(round(Int, hi / n * 100)) %")
     end
     return probabilities
 end
@@ -122,24 +134,31 @@ function block_metrics(
 end
 
 """
-    epoch_validation(model, loader, n; positive_weight) -> (loss, accuracy)
+    epoch_validation(model, X, y; positive_weight, threaded = Threads.nthreads() > 1)
+        -> (loss, accuracy)
 
-Mean weighted binary cross-entropy and accuracy of `model` over the
-batches of `loader`, which together hold `n` windows.
+Mean weighted binary cross-entropy ([`weighted_bce`](@ref)) and accuracy
+at the 0.5 decision of `model` over the rows of `X` with labels `y`, from
+one forward pass ([`predict_all`](@ref)).
 """
 function epoch_validation(
     model::VariationalQuantumClassifier,
-    loader,
-    n::Integer;
+    X::AbstractMatrix{<:Real},
+    y::AbstractVector{<:Integer};
     positive_weight::Real,
+    threaded::Bool = Threads.nthreads() > 1,
 )
+    n = length(y)
+    size(X, 1) == n || throw(DimensionMismatch("$(size(X, 1)) rows for $n labels."))
+    n >= 1 || throw(ArgumentError("the validation block is empty."))
+    p = predict_all(model, X; threaded = threaded)
     loss = 0.0f0
-    correct = 0.0f0
-    for (Xt, y) in loader
-        loss += loss_function(model, Xt', y; positive_weight = positive_weight) * length(y)
-        correct += accuracy(model, Xt', y) * length(y)
+    correct = 0
+    for i in 1:n
+        loss += weighted_bce(p[i], y[i]; positive_weight = positive_weight)
+        correct += (p[i] > 0.5f0) == (y[i] == 1)
     end
-    return loss / n, correct / n
+    return loss / Float32(n), Float32(correct / n)
 end
 
 """
@@ -162,8 +181,10 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    `split.toml`; feature scaler fitted on the training block only;
 5. Adam with exponential learning-rate decay, the positive class weighted
    by the negative-to-positive count ratio under
-   `class_weight = "balanced"`, early stopping on the validation loss
-   with the `patience` of the configuration; the best epoch is kept in
+   `class_weight = "balanced"`, batch gradients and forward passes over
+   the Julia threads when `threaded` ([`batch_gradient`](@ref)), early
+   stopping on the validation loss with the `patience` of the
+   configuration; the best epoch is kept in
    `gw_model_best.jld2` and copied to `gw_model.jld2`;
 6. decision threshold fitted on the validation block alone
    ([`select_threshold`](@ref)), persisted in `threshold.toml`, with the
@@ -228,6 +249,7 @@ function train_classifier(
                 "train_features" => rootrelative(trn.train_features),
                 "train_labels" => rootrelative(trn.train_labels),
                 "test_mode" => test_mode,
+                "threaded" => trn.threaded,
                 "run_id" => run_id,
                 "seed" => trn.seed,
             ),
@@ -299,16 +321,11 @@ function train_classifier(
         @info "training block" windows = length(y_train) positive = n_pos positive_weight =
             positive_weight
 
-        # The loaders batch along the last dimension (features × samples).
+        # The loader batches along the last dimension (features × samples).
         train_loader = Flux.DataLoader(
             (permutedims(X_train), y_train);
             batchsize = trn.batch_size,
             shuffle = true,
-        )
-        val_loader = Flux.DataLoader(
-            (permutedims(X_val), y_val);
-            batchsize = trn.batch_size,
-            shuffle = false,
         )
 
         model = VariationalQuantumClassifier(mdl.n_qubits, mdl.n_layers)
@@ -326,8 +343,10 @@ function train_classifier(
         best_val_loss = Inf32
         epochs_no_improve = 0
         loop_start = time()
+        threaded = trn.threaded && Threads.nthreads() > 1
         @info "training started" batch_size = trn.batch_size max_epochs = max_epochs n_qubits =
-            mdl.n_qubits n_layers = mdl.n_layers
+            mdl.n_qubits n_layers = mdl.n_layers threaded = threaded threads =
+            Threads.nthreads()
 
         for epoch in 1:max_epochs
             current_lr = trn.learning_rate * trn.lr_decay^(epoch - 1)
@@ -335,15 +354,22 @@ function train_classifier(
 
             epoch_train_loss = 0.0f0
             for (Xt, y) in train_loader
-                epoch_train_loss +=
-                    train_step!(model, opt_state, Xt', y; positive_weight = positive_weight)
+                epoch_train_loss += train_step!(
+                    model,
+                    opt_state,
+                    Xt',
+                    y;
+                    positive_weight = positive_weight,
+                    threaded = threaded,
+                )
             end
             avg_train_loss = epoch_train_loss / length(train_loader)
             avg_val_loss, avg_val_acc = epoch_validation(
                 model,
-                val_loader,
-                length(y_val);
+                X_val,
+                y_val;
                 positive_weight = positive_weight,
+                threaded = threaded,
             )
 
             push!(history.epochs, epoch)
@@ -390,7 +416,7 @@ function train_classifier(
 
         # Decision threshold fitted on the validation block only.
         @info "training complete; fitting the decision threshold on the validation block"
-        probs_val = predict_all(model, X_val)
+        probs_val = predict_all(model, X_val; threaded = threaded)
         threshold, info = select_threshold(
             y_val,
             probs_val;
@@ -420,7 +446,7 @@ function train_classifier(
             auc_val
 
         # The isolated test block, evaluated once.
-        probs_test = predict_all(model, X_test)
+        probs_test = predict_all(model, X_test; threaded = threaded)
         m_test, auc_test, metrics_test =
             block_metrics(probs_test, y_test, threshold, geometry)
         metrics = Dict{String,Any}("validation" => metrics_val, "test" => metrics_test)

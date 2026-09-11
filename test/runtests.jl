@@ -81,6 +81,90 @@ end
 
         l_final = loss_function(model, X_batch, y_batch)
         @test l_final < l_init
+
+        # The batch loss is the mean of the sample losses; the weighted
+        # cross-entropy is the plain one at unit weight
+        @test weighted_bce(0.5, 1) ≈ log(2) atol = 1e-6
+        @test weighted_bce(0.5, 0) ≈ log(2) atol = 1e-6
+        @test weighted_bce(0.5, 1; positive_weight = 3) ≈ 3 * log(2) atol = 1e-6
+        @test weighted_bce(1.0, 1) < 1e-6 && weighted_bce(0.0, 1) > 10
+        @test sum(sample_loss(model, X_batch[k, :], y_batch[k]) for k in 1:4) / 4 ≈
+              loss_function(model, X_batch, y_batch)
+
+        # Threaded batch gradient: same loss, the gradient of the serial tape
+        # up to accumulation rounding, deterministic across calls
+        X_big = rand(rng, Float32, 24, 4)
+        y_big = rand(rng, 0:1, 24)
+        l_serial, g_serial =
+            batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = false)
+        l_threads, g_threads =
+            batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = true)
+        @test l_serial ≈ loss_function(model, X_big, y_big; positive_weight = 2.0)
+        @test l_threads ≈ l_serial rtol = 1e-5
+        @test length(g_threads) == length(model.params)
+        @test isapprox(g_threads, g_serial; rtol = 1e-4, atol = 1e-6)
+        @test g_threads ==
+              batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = true)[2]
+        @test g_serial == Zygote.gradient(
+            m -> loss_function(m, X_big, y_big; positive_weight = 2.0),
+            model,
+        )[1].params
+        @test_throws ArgumentError batch_gradient(model, zeros(Float32, 0, 4), Int[])
+        # One training step from the same state along either path lands on
+        # the same parameters to floating-point tolerance. The R_z rotations
+        # of the last layer commute with the Z measurement (pulled back
+        # through the CNOT ring, every measured Z_k is a product of Z's), so
+        # their gradient vanishes and Adam's normalisation turns rounding
+        # noise into an arbitrary step: they are pinned at zero gradient and
+        # excluded from the comparison.
+        m_serial = VariationalQuantumClassifier(4, 2; rng = StableRNG(5))
+        m_threads = VariationalQuantumClassifier(4, 2; rng = StableRNG(5))
+        g_ref = batch_gradient(m_serial, X_big, y_big; threaded = false)[2]
+        @test all(abs.(g_ref[(end-3):end]) .< 1e-6)
+        @test count(abs.(g_ref) .> 1e-5) >= 8
+        live = abs.(g_ref) .> 1e-5
+        train_step!(
+            m_serial,
+            Flux.setup(Adam(0.1), m_serial.params),
+            X_big,
+            y_big;
+            threaded = false,
+        )
+        train_step!(
+            m_threads,
+            Flux.setup(Adam(0.1), m_threads.params),
+            X_big,
+            y_big;
+            threaded = true,
+        )
+        @test isapprox(
+            m_serial.params[live],
+            m_threads.params[live];
+            rtol = 1e-4,
+            atol = 1e-6,
+        )
+
+        # Threaded forward passes reproduce the serial ones exactly
+        p_serial = MilliHertzQML.predict_all(model, X_big; threaded = false)
+        p_threads = MilliHertzQML.predict_all(model, X_big; threaded = true)
+        @test p_threads == p_serial
+        @test p_serial == [predict_probability(model, X_big[k, :]) for k in 1:24]
+        loss_val, acc_val = MilliHertzQML.epoch_validation(
+            model,
+            X_big,
+            y_big;
+            positive_weight = 2.0,
+            threaded = true,
+        )
+        @test loss_val ≈ loss_function(model, X_big, y_big; positive_weight = 2.0) rtol =
+            1e-5
+        @test acc_val ≈ accuracy(model, X_big, y_big)
+        @test_throws DimensionMismatch MilliHertzQML.epoch_validation(
+            model,
+            X_big,
+            y_big[1:5];
+            positive_weight = 1.0,
+        )
     end
 
     @testset "Feature Extraction" begin

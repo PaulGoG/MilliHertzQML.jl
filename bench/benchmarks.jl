@@ -60,3 +60,26 @@ for bs in [16, 32, 64]
     t = @belapsed Zygote.gradient(m -> loss_function(m, $X_bs, $y_bs), $model)
     println("  Batch Size: $bs | Samples/sec: $(round(bs/t, digits=2))")
 end
+
+println("\n8. Batch gradient, serial versus threaded ($(Threads.nthreads()) threads):")
+for bs in [16, 64]
+    X_bs = rand(Float32, bs, 4)
+    y_bs = rand(0:1, bs)
+    t_serial = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = false)
+    t_threads = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = true)
+    println(
+        "  Batch size: $bs | Serial: $(round(bs / t_serial; digits = 1)) samples/s | " *
+        "Threaded: $(round(bs / t_threads; digits = 1)) samples/s | " *
+        "Speed-up: $(round(t_serial / t_threads; digits = 2))",
+    )
+end
+
+println("\n9. Forward pass over a block, serial versus threaded (4096 windows):")
+X_block = rand(Float32, 4096, 4)
+t_serial = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = false)
+t_threads = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = true)
+println(
+    "  Serial: $(round(4096 / t_serial; digits = 1)) windows/s | " *
+    "Threaded: $(round(4096 / t_threads; digits = 1)) windows/s | " *
+    "Speed-up: $(round(t_serial / t_threads; digits = 2))",
+)

@@ -6,7 +6,7 @@ The classifier is a four-qubit VQC with data re-uploading: the encoding block is
 
 - **Encoding block:** Hadamard followed by ``R_z(x_i)`` on qubit ``i``, where ``x_i \in [0, 2\pi]`` is the ``i``-th normalized feature. The number of qubits equals the feature dimension (four).
 - **Trainable layer:** hardware-efficient ansatz — ``R_y`` and ``R_z`` rotations on every qubit followed by a ring of CNOT gates. Each layer holds ``2 n_\mathrm{qubits}`` parameters; the default configuration uses four layers.
-- **Measurement:** the Pauli-``Z`` expectation is averaged over all qubits and mapped to a class probability ``p = (1 - \langle Z \rangle)/2``.
+- **Measurement:** the Pauli-``Z`` expectation is averaged over all qubits and mapped to a class probability ``p = (1 - \langle Z \rangle)/2``. Pulled back through the CNOT ring, every measured ``Z_k`` is a product of ``Z`` operators, which commutes with the ``R_z`` rotations of the last layer: those ``n_\mathrm{qubits}`` parameters do not affect the output and receive a zero gradient (the architecture of the reference paper is kept as is; the test suite pins the property).
 
 Parameters are initialized from a zero-mean normal distribution with standard deviation 0.5.
 
@@ -20,7 +20,8 @@ Sliding windows overlap by 90 %, so neighbouring windows are nearly identical an
 
 ## Training
 
-- Class-weighted binary cross-entropy over mini-batches of the training block, differentiated end-to-end with `Zygote.jl`. The forward pass in `loss_function` is functional: parameter slices are dispatched into freshly constructed blocks so that no global circuit state is mutated under the AD tracer.
+- Class-weighted binary cross-entropy over mini-batches of the training block, differentiated end-to-end with `Zygote.jl`. The forward pass (`predict_probability`) is functional: parameter slices are dispatched into freshly constructed blocks so that no circuit state is mutated under the AD tracer and the same function serves inference, the loss, and concurrent evaluation.
+- Batch gradients over the Julia threads (`batch_gradient`; `threaded` under `[training]`, on by default): one Zygote tape per sample, the per-sample gradients stored by sample index and summed in that order, so the result does not depend on the thread count or on the scheduling and differs from the single-tape serial gradient only by the rounding of the accumulation order (checked in the test suite). The validation forward pass, the threshold fit, and inference use the same thread pool; the rows are independent, so those results are identical either way. Start Julia with `-t auto` (or `JULIA_NUM_THREADS`) to use the machine.
 - `Flux.Adam` with exponential learning-rate decay and patience-based early stopping on the validation loss; the best model is persisted per run as a JLD2 artifact holding the parameter vector, hyperparameters, the feature scaler, and run metadata (the circuit is rebuilt on load).
 - Quantum registers use `ComplexF32` to match the `Float32` parameter vector.
 
@@ -63,4 +64,3 @@ The pipeline is a library with thin command-line entry points. Every stage is a 
 Retained here so the documentation reflects the code as it stands; remediation is planned.
 
 1. **Single evaluation record.** The blocks are cut from one record, so the test block carries the events of one realization; the Sangria blind set is the independent evaluation.
-2. **Serial training loop.** Gradients are evaluated sample by sample on one thread; mission-scale training runs for hours on a workstation. Threaded batch gradients are deferred until the benchmark demands them.

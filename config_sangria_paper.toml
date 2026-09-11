@@ -43,6 +43,7 @@ target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bo
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
+threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
 seed = 9999                # RNG seed for initialization
 
 [inference]

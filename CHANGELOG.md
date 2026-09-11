@@ -7,6 +7,16 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- Threaded training and inference: `batch_gradient` evaluates one Zygote
+  tape per sample over the Julia threads and reduces the per-sample
+  gradients in sample order (deterministic, independent of the thread
+  count; equal to the serial single-tape gradient up to accumulation
+  rounding); `train_step!` takes `threaded`, the `[training] threaded`
+  key (default `true`) selects the path, and the validation forward pass,
+  the threshold fit, and inference score their rows over the same threads.
+  `weighted_bce` and `sample_loss` factor the loss; `predict_probability`
+  is the single functional forward pass of the circuit (the mutating
+  `build_step` path is gone). Benchmarks of both paths in `bench/`.
 - `threshold_sweep`: the event-level operating characteristic of a scored
   block (window precision, recall, and false-positive rate; events
   detected; false-alarm episodes per 30 days) at every candidate
