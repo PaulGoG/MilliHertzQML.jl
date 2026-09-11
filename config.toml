@@ -45,9 +45,10 @@ ldc_model = "sangria"          # noise levels of the "ldc" PSD; one of: "Proposa
 ldc_tdi2 = false               # second-generation TDI factor of the "ldc" PSD
 ldc_observation_years = 0.0    # confusion term of the "ldc" PSD [yr]; 0 disables, else in [0.25, 10]
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
-feature_set = "whitened"       # per-window features; one of: "whitened" | "paper"
+feature_set = "whitened"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
+band_edges_hz = [0.001, 0.005, 0.1]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
 highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
 highpass_order = 8             # Butterworth order of the record high-pass; >= 1
 output_prefix = "telemetry_complex"   # prefix of the output feature/label CSVs

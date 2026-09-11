@@ -2,26 +2,67 @@
 # train-fitted feature scaler, and CSV loading of feature and label tables.
 
 """
-    feature_names(feature_set) -> Vector{Symbol}
+    FEATURE_SETS
+
+The feature sets of [`extract_features`](@ref): `:whitened` (two band
+powers, entropy, log power spread), `:paper` (the raw-window moments of
+Isfan et al. 2025), and `:bands` (one power per band between consecutive
+`band_edges`, entropy, log power spread).
+"""
+const FEATURE_SETS = (:whitened, :paper, :bands)
+
+"""
+    feature_names(feature_set; n_bands = 2) -> Vector{Symbol}
 
 Column names of the feature table produced by [`extract_features`](@ref)
-for `feature_set` (`:whitened` or `:paper`).
+for `feature_set`; `n_bands` is the number of bands of the `:bands` set
+(one less than the number of edges) and is ignored otherwise.
 """
-function feature_names(feature_set::Symbol)
+function feature_names(feature_set::Symbol; n_bands::Integer = 2)
     feature_set == :whitened && return [:p_low, :p_high, :spectral_entropy, :log_power_std]
     feature_set == :paper &&
         return [:spectral_entropy, :log_power_mean, :log_power_std, :log_power_max]
-    throw(ArgumentError("feature_set = $feature_set; expected :whitened or :paper."))
+    if feature_set == :bands
+        n_bands >= 1 || throw(ArgumentError("n_bands = $n_bands; at least 1."))
+        return vcat(
+            [Symbol("p_band_$i") for i in 1:n_bands],
+            [:spectral_entropy, :log_power_std],
+        )
+    end
+    throw(ArgumentError("feature_set = $feature_set; expected one of $(FEATURE_SETS)."))
+end
+
+"""
+    check_band_edges(band_edges)
+
+Validates the edges of the `:bands` feature set: at least two strictly
+ascending positive frequencies [Hz]. Returns them as `Vector{Float64}`.
+"""
+function check_band_edges(band_edges)
+    (
+        band_edges isa AbstractVector &&
+        length(band_edges) >= 2 &&
+        all(e -> e isa Real && isfinite(e), band_edges) &&
+        band_edges[1] > 0 &&
+        all(band_edges[i] < band_edges[i+1] for i in 1:(length(band_edges)-1))
+    ) || throw(
+        ArgumentError(
+            "band_edges = $(repr(band_edges)); expected at least two strictly ascending " *
+            "positive frequencies [Hz].",
+        ),
+    )
+    return Float64.(band_edges)
 end
 
 """
     extract_features(x, sample_rate = 0.2; low_band = (1e-3, 5e-3),
-                     high_band = (5e-3, 1e-1), taper = :hann, feature_set = :whitened)
+                     high_band = (5e-3, 1e-1), band_edges = nothing, taper = :hann,
+                     feature_set = :whitened)
 
-Four-dimensional feature vector of a window `x` sampled at `sample_rate`
-[Hz], computed from its tapered periodogram ``P_k``
-([`tapered_periodogram`](@ref)). Returns a tuple of `Float32` whose entries
-are named by [`feature_names`](@ref).
+Feature vector of a window `x` sampled at `sample_rate` [Hz], computed
+from its tapered periodogram ``P_k`` ([`tapered_periodogram`](@ref)).
+Returns a tuple of `Float32` whose entries are named by
+[`feature_names`](@ref).
 
 `feature_set = :whitened` (the default) expects a window of the
 **whitened** record ([`whiten_record`](@ref)), whose periodogram has unit
@@ -34,6 +75,13 @@ amplitude:
    ``\\ln N_\\mathrm{bins}`` so that it lies in ``[0, 1]``;
 4. ``\\log_{10}`` of the standard deviation of the whitened power (0 for
    white noise, whose periodogram is exponentially distributed).
+
+`feature_set = :bands` generalizes the whitened set to the bands between
+consecutive `band_edges` [Hz] (the first band closed on both sides, the
+others open at their lower edge): the mean whitened power of every band,
+then the entropy and the log power spread as above — `length(band_edges)
++ 1` features. With the edges `[1e-3, 5e-3, 1e-1]` it reproduces the
+whitened set exactly.
 
 `feature_set = :paper` is the set of Isfan et al. (2025) on the raw window:
 the normalized spectral entropy and ``\\log_{10}`` of the mean, standard
@@ -48,12 +96,14 @@ function extract_features(
     sample_rate::Real = 0.2;
     low_band::Tuple{Real,Real} = (1e-3, 5e-3),
     high_band::Tuple{Real,Real} = (5e-3, 1e-1),
+    band_edges::Union{Nothing,AbstractVector{<:Real}} = nothing,
     taper::Symbol = :hann,
     feature_set::Symbol = :whitened,
 )
     sample_rate > 0 || throw(ArgumentError("sample_rate = $sample_rate; must be positive."))
-    feature_set in (:whitened, :paper) ||
-        throw(ArgumentError("feature_set = $feature_set; expected :whitened or :paper."))
+    feature_set in FEATURE_SETS ||
+        throw(ArgumentError("feature_set = $feature_set; expected one of $(FEATURE_SETS)."))
+    edges = feature_set == :bands ? check_band_edges(band_edges) : Float64[]
     power = tapered_periodogram(x; taper = taper)
     n_samples = length(x)
 
@@ -81,6 +131,22 @@ function extract_features(
     end
 
     freqs = rfftfreq(n_samples, sample_rate)
+    if feature_set == :bands
+        n_bands = length(edges) - 1
+        p_bands = Vector{Float32}(undef, n_bands)
+        for i in 1:n_bands
+            lower = i == 1 ? (freqs .>= edges[i]) : (freqs .> edges[i])
+            mask = lower .& (freqs .<= edges[i+1])
+            any(mask) || throw(
+                ArgumentError(
+                    "window of $n_samples samples at $sample_rate Hz has no frequency bin " *
+                    "in the band $(edges[i])–$(edges[i+1]) Hz; use a longer window or wider bands.",
+                ),
+            )
+            p_bands[i] = Float32(mean(@view power[mask]))
+        end
+        return (p_bands..., Float32(entropy), Float32(log_power_std))
+    end
     mask_low = (freqs .>= low_band[1]) .& (freqs .<= low_band[2])
     mask_high = (freqs .> high_band[1]) .& (freqs .<= high_band[2])
     (any(mask_low) && any(mask_high)) || throw(

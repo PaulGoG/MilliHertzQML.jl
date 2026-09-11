@@ -1,4 +1,4 @@
-# Sangria paper-parity run (Isfan et al. 2025 feature set, no filtering or whitening). Sections absent here
+# Sangria capacity experiment `q6_b4_noweight` (R3). Derived from config_sangria.toml; four bands from 0.3 mHz, six qubits, unweighted loss. Sections absent here
 # fall back to the defaults of the scripts; the HDF5 products are passed on
 # the command line. Paths are resolved relative to the project root.
 
@@ -13,23 +13,23 @@ tdi_group = "obs/tdi"   # compound dataset holding t, X, Y, Z
 window_size = 1000      # sliding-window length [samples]; >= 2
 step_size = 100         # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file
-psd = "none"            # whitening PSD; one of: "model" | "ldc" | "welch" | "none" (paper parity: none)
+psd = "welch"           # whitening PSD; one of: "model" | "ldc" | "welch" | "none"
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
-feature_set = "paper"          # per-window features; one of: "whitened" | "paper" | "bands"
+feature_set = "bands"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
-band_edges_hz = [0.001, 0.005, 0.1]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
-highpass_cutoff_hz = 0.0       # zero-phase record high-pass cutoff [Hz]; 0 disables (paper parity: no filtering)
+band_edges_hz = [0.0003, 0.001, 0.003, 0.01, 0.04]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
+highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
 highpass_order = 8             # Butterworth order of the record high-pass; >= 1
-output_prefix = "sangria_paper_train"   # prefix of the output feature/label CSVs
+output_prefix = "sangria_b4_train"   # prefix of the output feature/label CSVs
 
 [model]
-n_qubits = 4    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_qubits = 6    # VQC register size; >= 2, <= 24; must equal the feature dimension
 n_layers = 4    # data re-uploading layers; >= 1
 
 [training]
-train_features = "data/inputs/sangria_paper_train_features.csv"   # training feature CSV
-train_labels = "data/inputs/sangria_paper_train_labels.csv"       # training label CSV
+train_features = "data/inputs/sangria_b4_train_features.csv"   # training feature CSV
+train_labels = "data/inputs/sangria_b4_train_labels.csv"       # training label CSV
 epochs = 50                # maximum training epochs; >= 1
 batch_size = 64            # mini-batch size; >= 1
 learning_rate = 0.01       # initial Adam learning rate; > 0
@@ -37,7 +37,7 @@ lr_decay = 0.95            # multiplicative learning-rate decay per epoch; in (0
 patience = 12              # early-stopping patience [epochs]; >= 1
 train_fraction = 0.7       # chronological training block; in (0, 1)
 validation_fraction = 0.15 # chronological validation block; in (0, 1); the rest is the test block
-class_weight = "balanced"  # positive-class loss weight; one of: "balanced" | "none"
+class_weight = "none"  # positive-class loss weight; one of: "balanced" | "none"
 threshold_criterion = "far"  # threshold fitted on the validation block; one of: "far" | "fpr" | "youden"
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
@@ -48,8 +48,8 @@ threaded = true            # batch gradients and forward passes over the Julia t
 seed = 9999                # RNG seed for initialization
 
 [inference]
-features = "data/inputs/sangria_paper_blind_features.csv"   # blind-set feature CSV
-labels = "data/inputs/sangria_paper_blind_labels.csv"       # blind-set window labels (from the unblinded MBHB stream)
+features = "data/inputs/sangria_b4_blind_features.csv"   # blind-set feature CSV
+labels = "data/inputs/sangria_b4_blind_labels.csv"       # blind-set window labels (from the unblinded MBHB stream)
 block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
 
 [ldc]

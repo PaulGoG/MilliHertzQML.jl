@@ -442,7 +442,8 @@ end
     StreamingDetector(model, scaler, threshold; sample_rate, window_size, step_size,
                       psd = nothing, highpass_cutoff_hz = 5e-4, highpass_order = 8,
                       low_band = (1e-3, 5e-3), high_band = (5e-3, 1e-1),
-                      feature_set = :whitened, context_windows = 4)
+                      band_edges = [1e-3, 5e-3, 1e-1], feature_set = :whitened,
+                      context_windows = 4)
 
 Scoring of complete windows out of a partially delivered record with the
 same conditioning as the batch pipeline. A window is cut from the delivered
@@ -465,6 +466,7 @@ struct StreamingDetector
     highpass_order::Int
     low_band::Tuple{Float64,Float64}
     high_band::Tuple{Float64,Float64}
+    band_edges::Vector{Float64}
     feature_set::Symbol
     context_windows::Int
     function StreamingDetector(
@@ -479,6 +481,7 @@ struct StreamingDetector
         highpass_order::Integer = 8,
         low_band::Tuple{Real,Real} = (1e-3, 5e-3),
         high_band::Tuple{Real,Real} = (5e-3, 1e-1),
+        band_edges::AbstractVector{<:Real} = [1e-3, 5e-3, 1e-1],
         feature_set::Symbol = :whitened,
         context_windows::Integer = 4,
     )
@@ -491,8 +494,8 @@ struct StreamingDetector
         highpass_cutoff_hz >= 0 ||
             throw(ArgumentError("highpass_cutoff_hz must be non-negative."))
         highpass_order >= 1 || throw(ArgumentError("highpass_order must be at least 1."))
-        feature_set in (:whitened, :paper) || throw(
-            ArgumentError("feature_set = $feature_set; expected :whitened or :paper."),
+        feature_set in FEATURE_SETS || throw(
+            ArgumentError("feature_set = $feature_set; expected one of $(FEATURE_SETS)."),
         )
         return new(
             model,
@@ -506,6 +509,7 @@ struct StreamingDetector
             Int(highpass_order),
             (Float64(low_band[1]), Float64(low_band[2])),
             (Float64(high_band[1]), Float64(high_band[2])),
+            check_band_edges(band_edges),
             feature_set,
             Int(context_windows),
         )
@@ -544,6 +548,7 @@ function score_window(
         detector.sample_rate;
         low_band = detector.low_band,
         high_band = detector.high_band,
+        band_edges = detector.band_edges,
         feature_set = detector.feature_set,
     )
     encoded = encode_features(detector.scaler, reshape(collect(Float32.(features)), 1, :))
@@ -903,6 +908,7 @@ function detector_from_run(
     features = get(TOML.parsefile(sidecar_path), "features", Dict{String,Any}())
     low = cfgget(features, "low_band_hz", [1e-3, 5e-3]; type = AbstractVector)
     high = cfgget(features, "high_band_hz", [5e-3, 1e-1]; type = AbstractVector)
+    edges = cfgget(features, "band_edges_hz", [1e-3, 5e-3, 1e-1]; type = AbstractVector)
     return StreamingDetector(
         model,
         scaler,
@@ -915,6 +921,7 @@ function detector_from_run(
         highpass_order = cfgget(features, "highpass_order", 8; type = Int, min = 1),
         low_band = (Float64(low[1]), Float64(low[2])),
         high_band = (Float64(high[1]), Float64(high[2])),
+        band_edges = Float64.(edges),
         feature_set = Symbol(cfgget(features, "feature_set", "whitened"; type = String)),
         context_windows = context_windows,
     )

@@ -64,6 +64,7 @@ MilliHertzQML/
 ├── config.toml             # Pipeline defaults (simulator); overridden by CLI flags
 ├── config_sangria.toml     # Sangria benchmark: Welch-whitened features, truth-stream labels
 ├── config_sangria_paper.toml # Sangria paper-parity run: raw-window feature set of Isfan et al. (2025)
+├── configs/experiments/    # Sangria capacity experiments: one configuration per model width, depth, and band partition
 ├── Project.toml            # Package metadata: only the dependencies of src/
 └── Manifest.toml           # Pinned dependency versions (tracked)
 ```
@@ -184,7 +185,7 @@ julia docs/make.jl
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
-| Feature extraction | PSD-whitened, amplitude- and window-length-independent features (or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
+| Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; Sangria benchmark run pending |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping and threshold selection on the validation block only, test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |

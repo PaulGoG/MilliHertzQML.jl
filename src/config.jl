@@ -296,8 +296,11 @@ function preprocessing_settings(config::AbstractDict)
                 "feature_set",
                 "whitened";
                 type = String,
-                choices = ("whitened", "paper"),
+                choices = ("whitened", "paper", "bands"),
             ),
+        ),
+        band_edges_hz = check_band_edges(
+            cfgget(p, "band_edges_hz", [1e-3, 5e-3, 1e-1]; type = AbstractVector),
         ),
         highpass_cutoff_hz = cfgget(
             p,

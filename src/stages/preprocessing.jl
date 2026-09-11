@@ -82,14 +82,14 @@ function whitening_psd(settings::NamedTuple, A::AbstractVector{<:Real}, fs::Real
 end
 
 """
-    window_features(A, fs; window_size, step_size, low_band, high_band, feature_set)
-        -> Matrix{Float32}
+    window_features(A, fs; window_size, step_size, low_band, high_band,
+                    band_edges = [1e-3, 5e-3, 1e-1], feature_set) -> Matrix{Float32}
 
 Feature matrix of the sliding windows of the (whitened) record `A` sampled
 at `fs` [Hz]: one row per window of `window_size` samples advancing by
-`step_size`, the columns named by [`feature_names`](@ref)`(feature_set)`
-and computed by [`extract_features`](@ref) with the analysis bands
-`low_band`, `high_band` [Hz].
+`step_size`, the columns named by [`feature_names`](@ref) and computed by
+[`extract_features`](@ref) with the analysis bands `low_band`,
+`high_band` [Hz] (`:whitened`) or the `band_edges` [Hz] (`:bands`).
 """
 function window_features(
     A::AbstractVector{<:Real},
@@ -98,10 +98,12 @@ function window_features(
     step_size::Integer,
     low_band::Tuple{Real,Real},
     high_band::Tuple{Real,Real},
+    band_edges::AbstractVector{<:Real} = [1e-3, 5e-3, 1e-1],
     feature_set::Symbol,
 )
     n_windows = window_count(length(A), window_size, step_size)
-    features = Matrix{Float32}(undef, n_windows, length(feature_names(feature_set)))
+    names = feature_names(feature_set; n_bands = length(band_edges) - 1)
+    features = Matrix{Float32}(undef, n_windows, length(names))
     decile = max(1, div(n_windows, 10))
     for i in 1:n_windows
         lo = (i - 1) * step_size + 1
@@ -111,6 +113,7 @@ function window_features(
             fs;
             low_band = low_band,
             high_band = high_band,
+            band_edges = band_edges,
             feature_set = feature_set,
         )
         i % decile == 0 && @info "feature extraction" windows = "$i / $n_windows"
@@ -203,6 +206,7 @@ function preprocessing_parameters(
         "psd" => settings.psd,
         "low_band_hz" => collect(settings.low_band_hz),
         "high_band_hz" => collect(settings.high_band_hz),
+        "band_edges_hz" => collect(settings.band_edges_hz),
         "highpass_cutoff_hz" => settings.highpass_cutoff_hz,
         "highpass_order" => settings.highpass_order,
         "feature_set" => String(settings.feature_set),
@@ -414,13 +418,15 @@ function preprocess_record(
                 step_size = settings.step_size,
                 low_band = settings.low_band_hz,
                 high_band = settings.high_band_hz,
+                band_edges = settings.band_edges_hz,
                 feature_set = settings.feature_set,
             )
-
-            write_csv(
-                features_path,
-                DataFrame(features, feature_names(settings.feature_set)),
+            names = feature_names(
+                settings.feature_set;
+                n_bands = length(settings.band_edges_hz) - 1,
             )
+
+            write_csv(features_path, DataFrame(features, names))
             psd_table !== nothing && write_csv(psd_path, psd_table)
             write_toml(
                 sidecar_path,
@@ -432,11 +438,12 @@ function preprocess_record(
                         "step_size" => settings.step_size,
                         "sample_rate" => fs,
                         "feature_set" => String(settings.feature_set),
-                        "feature_names" => String.(feature_names(settings.feature_set)),
+                        "feature_names" => String.(names),
                         "psd" => settings.psd,
                         "psd_description" => psd_description,
                         "low_band_hz" => collect(settings.low_band_hz),
                         "high_band_hz" => collect(settings.high_band_hz),
+                        "band_edges_hz" => collect(settings.band_edges_hz),
                         "highpass_cutoff_hz" => settings.highpass_cutoff_hz,
                         "highpass_order" => settings.highpass_order,
                         "n_windows" => n_windows,

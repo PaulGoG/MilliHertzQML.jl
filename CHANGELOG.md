@@ -7,9 +7,16 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
-- Threaded training and inference: `batch_gradient` evaluates one Zygote
-  tape per sample over the Julia threads and reduces the per-sample
-  gradients in sample order (deterministic, independent of the thread
+- `feature_set = "bands"`: the mean whitened power of every band between
+  the ascending `band_edges_hz` of `[preprocessing]`, followed by the
+  spectral entropy and the log power spread (`length(band_edges_hz) + 1`
+  features; the default edges reproduce the whitened set exactly). The
+  edges are recorded in the feature sidecar and honoured by the streaming
+  detector; `feature_names` takes `n_bands`.
+- Threaded training and inference: `batch_gradient` cuts the batch into
+  consecutive chunks of `chunk_size` samples (default 4), evaluates one
+  Zygote tape per chunk over the Julia threads, and reduces the chunk
+  gradients in chunk order (deterministic, independent of the thread
   count; equal to the serial single-tape gradient up to accumulation
   rounding); `train_step!` takes `threaded`, the `[training] threaded`
   key (default `true`) selects the path, and the validation forward pass,

@@ -402,6 +402,39 @@ end
     @test isapprox(p_high_loud, p_high_long; atol = 0.3)
     @test ent_loud < ent_long
     @test_throws ArgumentError extract_features(long, 0.0)
+
+    # The bands set with the default edges reproduces the whitened set exactly
+    bands =
+        extract_features(long, fs; feature_set = :bands, band_edges = [1e-3, 5e-3, 1e-1])
+    @test collect(bands) == collect(extract_features(long, fs))
+    @test feature_names(:bands; n_bands = 2) ==
+          [:p_band_1, :p_band_2, :spectral_entropy, :log_power_std]
+    @test length(feature_names(:bands; n_bands = 5)) == 7
+    @test feature_names(:whitened; n_bands = 5) == feature_names(:whitened)
+    # Finer bands: unit mean on white noise; a 1.5 mHz tone lands in the
+    # (1, 2] mHz band and leaves the others alone
+    edges = [5e-4, 1e-3, 2e-3, 4e-3, 1e-2, 4e-2]
+    fine = extract_features(long, fs; feature_set = :bands, band_edges = edges)
+    @test length(fine) == 7
+    @test all(isapprox.(fine[1:5], 1.0; atol = 0.35))
+    tone = long .+ cos.(2π * 1.5e-3 .* t)
+    fine_tone = extract_features(tone, fs; feature_set = :bands, band_edges = edges)
+    @test fine_tone[2] > 5 * fine[2]
+    @test isapprox(fine_tone[4], fine[4]; atol = 0.3) && fine_tone[6] < fine[6]
+    @test_throws ArgumentError extract_features(long, fs; feature_set = :bands)
+    @test_throws ArgumentError extract_features(
+        long,
+        fs;
+        feature_set = :bands,
+        band_edges = [5e-3, 1e-3],
+    )
+    @test_throws ArgumentError extract_features(
+        view(long, 1:1000),
+        fs;
+        feature_set = :bands,
+        band_edges = [1e-5, 5e-5, 1e-1],
+    )
+    @test_throws ArgumentError feature_names(:bands; n_bands = 0)
 end
 
 @testset "IMRPhenomA waveform" begin
@@ -931,6 +964,20 @@ end
     @test generation_settings(empty).snr_max == 50.0
     @test preprocessing_settings(empty).psd == "model"
     @test preprocessing_settings(empty).feature_set == :whitened
+    @test preprocessing_settings(empty).band_edges_hz == [1e-3, 5e-3, 1e-1]
+    @test preprocessing_settings(
+        Dict{String,Any}(
+            "preprocessing" => Dict{String,Any}(
+                "feature_set" => "bands",
+                "band_edges_hz" => [5e-4, 2e-3, 8e-3],
+            ),
+        ),
+    ).band_edges_hz == [5e-4, 2e-3, 8e-3]
+    @test_throws ArgumentError preprocessing_settings(
+        Dict{String,Any}(
+            "preprocessing" => Dict{String,Any}("band_edges_hz" => [5e-3, 1e-3]),
+        ),
+    )
     @test model_settings(empty).n_qubits == 4
     @test training_settings(empty).threshold_criterion == "far"
     @test inference_settings(empty).block == "all"
