@@ -386,7 +386,7 @@ function training_settings(config::AbstractDict)
         target_far_per_30d = cfgget(
             t,
             "target_far_per_30d",
-            1.0;
+            3.0;
             type = Float64,
             min = 0.0,
         ),

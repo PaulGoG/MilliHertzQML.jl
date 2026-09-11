@@ -42,8 +42,9 @@ Diagnostic figures of an inference result in `plot_dir`, each as PDF and
 PNG with a provenance sidecar: the mission trace of the classifier output
 with the threshold (`mission_trace`) and the score distribution
 (`probability_distribution`); with labels also the ROC curve
-(`roc_curve`) and the detection sensitivity versus matched-filter SNR
-(`detection_sensitivity_snr`).
+(`roc_curve`), the event-level operating characteristic with the applied
+threshold (`threshold_sweep`), and the detection sensitivity versus
+matched-filter SNR (`detection_sensitivity_snr`).
 """
 function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
     run_id = result.run_id
@@ -70,6 +71,17 @@ function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
         save_figure(
             figure_roc(result.roc.fpr, result.roc.tpr, result.auc),
             joinpath(plot_dir, "roc_curve");
+            run_id = run_id,
+        )
+        info = result.threshold_info
+        save_figure(
+            figure_threshold_sweep(
+                result.sweep,
+                result.threshold;
+                target_far_per_30d = get(info, "criterion", "") == "far" ?
+                                     info["target_far_per_30d"] : nothing,
+            ),
+            joinpath(plot_dir, "threshold_sweep");
             run_id = run_id,
         )
         sensitivity = figure_sensitivity(result.snrs, result.labels, result.decisions)

@@ -43,7 +43,7 @@ export load_data, load_features, extract_features, feature_names
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model
 export chronological_split, roc_curve, roc_auc, contiguous_runs, event_metrics
-export select_threshold
+export select_threshold, threshold_sweep
 export lisa_noise_psd, instrument_psd, confusion_psd, synthesize_noise
 export matched_filter_snr, scale_to_snr, highpass_record, whiten_record
 export tapered_periodogram, place_signal!, detectable_span
@@ -64,6 +64,7 @@ export whitening_psd, window_features, window_labels
 export train_classifier, evaluate_classifier
 export FIGURE_WIDTH_MM, FIGURE_COLORS, figure_theme, save_figure
 export figure_training_history, figure_mission_trace, figure_roc, figure_sensitivity
+export figure_threshold_sweep
 export figure_score_distribution, figure_telemetry_trace, figure_telemetry_alerts
 export RunGeometry, BatchRecord, ArrivalEvent, WindowRecord, parse_batch_name, batch_rows
 export row_time, event_symbol, AbstractTelemetryRun, run_geometry, list_batches, read_batch

@@ -156,6 +156,17 @@ function main()
     end
 
     plot_training_history(result.history, joinpath(plot_dir, "training_metrics"), run_id)
+    info = result.threshold_info
+    save_figure(
+        figure_threshold_sweep(
+            result.sweep,
+            result.threshold;
+            target_far_per_30d = info["criterion"] == "far" ? info["target_far_per_30d"] :
+                                 nothing,
+        ),
+        joinpath(plot_dir, "threshold_sweep");
+        run_id = run_id,
+    )
     println("Training results and logs saved to $(result.run_dir); figures in $plot_dir")
     report_timing()
     return nothing

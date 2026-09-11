@@ -117,8 +117,9 @@ Window-level and event-level detection statistics of binary `decisions`
 against binary `labels` over chronologically ordered windows advanced by
 `step_size` samples at `sample_rate` [Hz]:
 
-- `precision`, `recall`, `f1`, `balanced_accuracy` at window level
-  (`NaN` where undefined);
+- `precision`, `recall`, `fpr` (the false-positive rate, i.e. the alarm
+  duty cycle on unlabeled windows), `f1`, `balanced_accuracy` at window
+  level (`NaN` where undefined);
 - `n_events`: contiguous runs of positive labels; `n_detected`: events
   with at least one alarm inside their run; `event_recall`;
 - `n_false_alarm_episodes`: contiguous runs of alarmed windows outside
@@ -160,6 +161,7 @@ function event_metrics(
     return (
         precision = precision,
         recall = recall,
+        fpr = tn + fp == 0 ? NaN : fp / (tn + fp),
         f1 = f1,
         balanced_accuracy = balanced_accuracy,
         n_events = length(events),
@@ -173,30 +175,100 @@ function event_metrics(
 end
 
 """
-    select_threshold(y, scores; criterion = "far", target_far_per_30d = 1.0,
+    threshold_sweep(y, scores; step_size, sample_rate, n_candidates = 400) -> DataFrame
+
+Window- and event-level detection statistics ([`event_metrics`](@ref)) of
+the decision `score >= threshold` at every candidate threshold, the
+`n_candidates` quantiles of `scores` in ascending order: one row per
+candidate with `threshold`, `precision`, `recall`, `fpr`, `n_events`,
+`n_detected`, `event_recall`, `n_false_alarm_episodes`, and
+`false_alarms_per_30d`. The table is the event-level operating
+characteristic on which [`select_threshold`](@ref) fits the decision
+threshold; the stages persist it as `threshold_sweep.csv`.
+"""
+function threshold_sweep(
+    y::AbstractVector{<:Integer},
+    scores::AbstractVector{<:Real};
+    step_size::Integer,
+    sample_rate::Real,
+    n_candidates::Integer = 400,
+)
+    length(y) == length(scores) ||
+        throw(DimensionMismatch("$(length(y)) labels for $(length(scores)) scores."))
+    isempty(y) && throw(ArgumentError("no windows to sweep."))
+    n_candidates >= 2 || throw(ArgumentError("n_candidates = $n_candidates; at least 2."))
+    candidates = unique(quantile(scores, range(0, 1; length = n_candidates)))
+    sort!(candidates)
+    sweep = DataFrame(
+        threshold = Float64[],
+        precision = Float64[],
+        recall = Float64[],
+        fpr = Float64[],
+        n_events = Int[],
+        n_detected = Int[],
+        event_recall = Float64[],
+        n_false_alarm_episodes = Int[],
+        false_alarms_per_30d = Float64[],
+    )
+    for c in candidates
+        m = event_metrics(
+            Int.(scores .>= c),
+            y;
+            step_size = step_size,
+            sample_rate = sample_rate,
+        )
+        push!(
+            sweep,
+            (
+                Float64(c),
+                m.precision,
+                m.recall,
+                m.fpr,
+                m.n_events,
+                m.n_detected,
+                m.event_recall,
+                m.n_false_alarm_episodes,
+                m.false_alarms_per_30d,
+            ),
+        )
+    end
+    return sweep
+end
+
+"""
+    select_threshold(y, scores; criterion = "far", target_far_per_30d = 3.0,
                      target_fpr = 0.05, step_size, sample_rate, n_candidates = 400)
         -> (threshold, info)
 
-Decision threshold fitted on a validation block of labels `y` and `scores`:
+Decision threshold fitted on a validation block of labels `y` and `scores`
+from the event-level operating characteristic [`threshold_sweep`](@ref):
 
-- `"far"`: the lowest threshold (highest recall) whose false-alarm
-  episode rate ([`event_metrics`](@ref)) does not exceed
-  `target_far_per_30d`;
-- `"fpr"`: the lowest threshold whose window-level false-positive rate
-  does not exceed `target_fpr`;
+- `"far"`: the operating point of an alert trigger. A candidate is
+  admissible when its false-alarm episode rate does not exceed
+  `target_far_per_30d` and its window false-positive rate (the alarm
+  duty cycle on unlabeled windows) does not exceed `target_fpr`. The
+  candidates are scanned from the highest downwards and the threshold is
+  the lowest candidate of the admissible range that starts at the top —
+  the highest recall reachable while alarms remain short and isolated.
+  The scan direction matters because the episode count is not monotone
+  in the threshold: as the threshold falls, spurious episodes first
+  multiply and then merge into a permanently raised alarm charged with a
+  few long episodes, which an ascending scan would accept.
+- `"fpr"`: the lowest threshold whose window false-positive rate does not
+  exceed `target_fpr` (monotone, so the scan direction is immaterial).
 - `"youden"`: the maximizer of `tpr - fpr` (requires both classes).
 
-Candidate thresholds are the `n_candidates` quantiles of the scores. When
-the block holds no positive window, `"youden"` falls back to `"fpr"` with
-a warning; the other criteria depend on negatives only. `info` records
-the criterion applied, the validation rates at the threshold, and the
-block size.
+When the block holds no positive window, `"youden"` falls back to `"fpr"`
+with a warning; the other criteria depend on negatives only. A block
+without negatives makes every candidate admissible for `"far"` and
+`"fpr"`. `info` records the criterion applied, the targets, the validation
+rates at the threshold, and the block size.
 """
 function select_threshold(
     y::AbstractVector{<:Integer},
     scores::AbstractVector{<:Real};
     criterion::AbstractString = "far",
-    target_far_per_30d::Real = 1.0,
+    target_far_per_30d::Real = 3.0,
     target_fpr::Real = 0.05,
     step_size::Integer,
     sample_rate::Real,
@@ -215,34 +287,31 @@ function select_threshold(
               "falling back to the false-positive-rate criterion." n_positive = n_pos
         applied = "fpr"
     end
-    candidates = unique(quantile(scores, range(0, 1; length = n_candidates)))
-    sort!(candidates)
-    n_neg = length(y) - n_pos
     threshold = Inf
     if applied == "youden"
         fpr, tpr, thresholds = roc_curve(y, scores)
         threshold = thresholds[argmax(tpr .- fpr)]
     else
-        # Ascending scan: the first admissible candidate is the lowest
-        # threshold, hence the highest recall, meeting the constraint.
-        for c in candidates
-            alarms = scores .>= c
-            if applied == "far"
-                m = event_metrics(
-                    Int.(alarms),
-                    y;
-                    step_size = step_size,
-                    sample_rate = sample_rate,
-                )
-                admissible = m.false_alarms_per_30d <= target_far_per_30d
-            else
-                fp = count(alarms .& (y .== 0))
-                admissible = n_neg == 0 || fp / n_neg <= target_fpr
+        sweep = threshold_sweep(
+            y,
+            scores;
+            step_size = step_size,
+            sample_rate = sample_rate,
+            n_candidates = n_candidates,
+        )
+        fpr_admissible(row) = isnan(row.fpr) || row.fpr <= target_fpr
+        if applied == "far"
+            # Descending scan: stop at the first candidate that violates a
+            # target; the previous one is the operating point.
+            for i in nrow(sweep):-1:1
+                row = sweep[i, :]
+                (row.false_alarms_per_30d <= target_far_per_30d && fpr_admissible(row)) ||
+                    break
+                threshold = row.threshold
             end
-            if admissible
-                threshold = c
-                break
-            end
+        else
+            i = findfirst(fpr_admissible, eachrow(sweep))
+            i === nothing || (threshold = sweep.threshold[i])
         end
         threshold == Inf && @warn "no candidate threshold meets the $applied constraint; " *
               "alarms are disabled (threshold = Inf)."
@@ -262,6 +331,7 @@ function select_threshold(
         "validation_positive_windows" => n_pos,
         "validation_recall" => m.recall,
         "validation_precision" => m.precision,
+        "validation_fpr" => m.fpr,
         "validation_false_alarms_per_30d" => m.false_alarms_per_30d,
         "validation_observation_days" => m.observation_days,
     )

@@ -7,6 +7,14 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- `threshold_sweep`: the event-level operating characteristic of a scored
+  block (window precision, recall, and false-positive rate; events
+  detected; false-alarm episodes per 30 days) at every candidate
+  threshold, persisted by training as `threshold_sweep.csv` of the
+  validation block and by labeled inference as the post-hoc sweep of the
+  evaluated rows; the `figure_threshold_sweep` figure (`threshold_sweep`)
+  with the operating point and the `far` target. `event_metrics` reports
+  the window false-positive rate (`fpr`).
 - Pipeline architecture: every stage is a typed library function
   (`generate_telemetry`, `label_truth_stream`, `preprocess_record`,
   `train_classifier`, `evaluate_classifier` under `src/stages/`) returning
@@ -130,6 +138,16 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- The `far` threshold criterion is the operating point of an alert
+  trigger: candidates are scanned from the highest threshold downwards and
+  the threshold is the lowest of the admissible range that starts at the
+  top, where a candidate is admissible when its false-alarm episode rate
+  does not exceed `target_far_per_30d` and its window false-positive rate
+  (the alarm duty cycle on unlabeled windows) does not exceed
+  `target_fpr`. The previous ascending scan accepted the permanently
+  raised alarm — few long episodes — as soon as the target admitted a few
+  episodes per month. The default `target_far_per_30d` is 3 (trigger
+  level; a trigger costs a characterization pass, not an alert).
 - Command-line interface: the configuration file is the first (positional)
   argument of every script and the single source of every parameter; the
   scripts keep only `--run-id`, `--test-mode`, and the location of

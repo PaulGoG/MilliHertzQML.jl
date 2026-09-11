@@ -85,13 +85,17 @@ Artifacts in `<results>/run_<run_id>`: `inference_probabilities.csv`
 the snapshot `config_infer.toml` (section `inference`, plus provenance),
 and with labels `metrics.toml` (section `metrics`, the
 [`event_metrics`](@ref) fields with `auc`, `n_windows`, `threshold`,
-`block`).
+`block`) and `threshold_sweep.csv`, the event-level operating
+characteristic of the evaluated rows ([`threshold_sweep`](@ref)); the
+persisted threshold is applied unchanged, the sweep is a post-hoc
+diagnostic.
 
 Returns `(run_id, results_dir, plot_dir, probabilities, decisions, labels,
-snrs, threshold, metrics, roc, auc, days, geometry)`: `labels`, `snrs`,
-`metrics`, `roc = (fpr, tpr)`, and `auc` are `nothing` in blind mode;
-`days` is the mission time [days] of every evaluated window; `geometry`
-holds `step_size` and `sample_rate`.
+snrs, threshold, threshold_info, metrics, roc, auc, sweep, days,
+geometry)`: `threshold_info` is the dictionary of the run's
+`threshold.toml`; `labels`, `snrs`, `metrics`, `roc = (fpr, tpr)`, `auc`,
+and `sweep` are `nothing` in blind mode; `days` is the mission time [days]
+of every evaluated window; `geometry` holds `step_size` and `sample_rate`.
 """
 function evaluate_classifier(
     config::AbstractDict;
@@ -214,6 +218,7 @@ function evaluate_classifier(
         metrics = nothing
         roc = nothing
         auc = nothing
+        sweep = nothing
         if has_labels
             fpr, tpr, _ = roc_curve(y_true, probabilities)
             roc = (fpr = fpr, tpr = tpr)
@@ -237,6 +242,13 @@ function evaluate_classifier(
                 joinpath(results_dir, "metrics.toml"),
                 Dict{String,Any}("metrics" => metrics),
             )
+            sweep = threshold_sweep(
+                y_true,
+                probabilities;
+                step_size = geometry.step_size,
+                sample_rate = geometry.sample_rate,
+            )
+            write_csv(joinpath(results_dir, "threshold_sweep.csv"), sweep)
             @info "window-level metrics" auc = auc precision = m.precision recall = m.recall f1 =
                 m.f1 balanced_accuracy = m.balanced_accuracy
             @info "event-level metrics" n_events = m.n_events n_detected = m.n_detected n_false_alarm_episodes =
@@ -254,9 +266,11 @@ function evaluate_classifier(
             labels = y_true,
             snrs = snrs,
             threshold = threshold,
+            threshold_info = threshold_info,
             metrics = metrics,
             roc = roc,
             auc = auc,
+            sweep = sweep,
             days = days,
             geometry = geometry,
         )

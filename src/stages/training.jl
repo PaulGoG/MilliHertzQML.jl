@@ -166,19 +166,22 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    with the `patience` of the configuration; the best epoch is kept in
    `gw_model_best.jld2` and copied to `gw_model.jld2`;
 6. decision threshold fitted on the validation block alone
-   ([`select_threshold`](@ref)), persisted in `threshold.toml`;
+   ([`select_threshold`](@ref)), persisted in `threshold.toml`, with the
+   event-level operating characteristic of the block
+   ([`threshold_sweep`](@ref)) in `threshold_sweep.csv`;
 7. the isolated test block scored once; window- and event-level metrics
    of both blocks in `metrics.toml` and printed as a table.
 
 `on_epoch`, when given, is called after every epoch as
 `on_epoch(epoch, max_epochs, learning_rate, history, elapsed_seconds)`.
 
-Returns `(run_id, run_dir, model_path, threshold, threshold_info, metrics,
-history, blocks, elapsed)`: `threshold_info` and `metrics` are the
+Returns `(run_id, run_dir, model_path, threshold, threshold_info, sweep,
+metrics, history, blocks, elapsed)`: `threshold_info` and `metrics` are the
 dictionaries of `threshold.toml` and `metrics.toml` (sections
-`"validation"` and `"test"`), `history` the per-epoch vectors `epochs`,
-`train_loss`, `val_loss`, `val_acc`, `blocks` the split ranges, and
-`elapsed` the wall time of the stage in seconds.
+`"validation"` and `"test"`), `sweep` the table of `threshold_sweep.csv`,
+`history` the per-epoch vectors `epochs`, `train_loss`, `val_loss`,
+`val_acc`, `blocks` the split ranges, and `elapsed` the wall time of the
+stage in seconds.
 """
 function train_classifier(
     config::AbstractDict;
@@ -398,6 +401,13 @@ function train_classifier(
             sample_rate = geometry.sample_rate,
         )
         m_val, auc_val, metrics_val = block_metrics(probs_val, y_val, threshold, geometry)
+        sweep = threshold_sweep(
+            y_val,
+            probs_val;
+            step_size = geometry.step_size,
+            sample_rate = geometry.sample_rate,
+        )
+        write_csv(joinpath(run_dir, "threshold_sweep.csv"), sweep)
         info["auc"] = auc_val
         info["value"] = threshold
         info["fitted_on"] = rootrelative(trn.train_features) * " (validation block)"
@@ -430,6 +440,7 @@ function train_classifier(
             model_path = model_path,
             threshold = threshold,
             threshold_info = info,
+            sweep = sweep,
             metrics = metrics,
             history = history,
             blocks = blocks,

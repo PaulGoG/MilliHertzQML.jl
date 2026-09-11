@@ -24,6 +24,7 @@ import MilliHertzQML:
     figure_training_history,
     figure_mission_trace,
     figure_roc,
+    figure_threshold_sweep,
     figure_sensitivity,
     figure_score_distribution,
     figure_telemetry_trace,
@@ -275,6 +276,176 @@ function figure_roc(fpr::AbstractVector{<:Real}, tpr::AbstractVector{<:Real}, au
         xlims!(axis, -0.01, 1.01)
         ylims!(axis, -0.01, 1.01)
         top_legend!(figure, axis)
+        figure
+    end
+end
+
+"""
+    decade_label(k) -> String
+
+Plain-decimal tick label of ``10^k``: `1`, `10`, `100`, `0.1`, `0.01`.
+"""
+decade_label(k::Integer) = k >= 0 ? string(10^k) : "0." * repeat("0", -k - 1) * "1"
+
+"""
+    compact(x; digits = 2) -> String
+
+`x` with `digits` decimals, or as an integer when it is one.
+"""
+function compact(x::Real; digits::Integer = 2)
+    return isfinite(x) && x == round(x) ? string(round(Int, x)) :
+           string(round(Float64(x); digits = digits))
+end
+
+"""
+    log_ticks(lo, hi) -> (values, labels)
+
+Tick values of a logarithmic axis spanning `[lo, hi]`: the decades inside
+the range, with the 2× and 5× intermediates added when fewer than two
+decades fall inside, labeled as plain decimals.
+"""
+function log_ticks(lo::Real, hi::Real)
+    0 < lo <= hi || throw(ArgumentError("a logarithmic range needs 0 < lo <= hi."))
+    k_lo = floor(Int, log10(lo))
+    k_hi = ceil(Int, log10(hi))
+    decades = [k for k in k_lo:k_hi if lo <= 10.0^k <= hi]
+    if length(decades) >= 2
+        return 10.0 .^ decades, decade_label.(decades)
+    end
+    values = Float64[]
+    labels = String[]
+    for k in k_lo:k_hi, m in (1, 2, 5)
+        v = m * 10.0^k
+        lo <= v <= hi || continue
+        push!(values, v)
+        push!(labels, m == 1 ? decade_label(k) : string(m) * decade_label(k)[2:end])
+    end
+    return values, labels
+end
+
+function figure_threshold_sweep(
+    sweep::DataFrame,
+    threshold::Real;
+    target_far_per_30d::Union{Nothing,Real} = nothing,
+)
+    nrow(sweep) >= 1 || throw(ArgumentError("the sweep table is empty."))
+    for column in (
+        "threshold",
+        "recall",
+        "event_recall",
+        "false_alarms_per_30d",
+        "n_events",
+        "n_detected",
+    )
+        column in names(sweep) ||
+            throw(ArgumentError("the sweep table lacks the column $column."))
+    end
+    thresholds = Float64.(sweep.threshold)
+    finite = findall(isfinite, thresholds)
+    isempty(finite) && throw(ArgumentError("the sweep table holds no finite threshold."))
+    order = finite[sortperm(thresholds[finite])]
+    θ = thresholds[order]
+    event_recall = Float64.(sweep.event_recall[order])
+    window_recall = Float64.(sweep.recall[order])
+    far = Float64.(sweep.false_alarms_per_30d[order])
+    has_far = any(x -> x > 0, far)
+    # Thresholds without a false alarm are blank on the logarithmic axis
+    far_log = [x > 0 ? x : NaN for x in far]
+    lo, hi = extrema(θ)
+    pad = 0.02 * max(hi - lo, 1e-3)
+    operating = if isfinite(threshold)
+        row = sweep[order[argmin(abs.(θ .- threshold))], :]
+        "Threshold $(round(threshold; digits = 3)): $(row.n_detected)/$(row.n_events) events, " *
+        "$(compact(row.false_alarms_per_30d)) per 30 d"
+    else
+        ""
+    end
+    return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
+        figure = Figure()
+        ax_recall = Axis(figure[1, 1]; ylabel = "Recall")
+        lines!(ax_recall, θ, event_recall; color = FIGURE_COLORS.data, label = "Events")
+        lines!(
+            ax_recall,
+            θ,
+            window_recall;
+            color = FIGURE_COLORS.data,
+            linestyle = :dash,
+            label = "Windows",
+        )
+        isfinite(threshold) && vlines!(
+            ax_recall,
+            [threshold];
+            color = FIGURE_COLORS.threshold,
+            linestyle = :dash,
+            label = operating,
+        )
+        ylims!(ax_recall, -0.03, 1.03)
+        ax_far = if has_far
+            f_lo = minimum(x for x in far if x > 0) / 1.5
+            f_hi = maximum(far) * 1.5
+            if target_far_per_30d !== nothing && target_far_per_30d > 0
+                f_lo = min(f_lo, target_far_per_30d / 1.5)
+                f_hi = max(f_hi, target_far_per_30d * 1.5)
+            end
+            axis = Axis(
+                figure[2, 1];
+                xlabel = "Decision threshold",
+                ylabel = "False alarms per 30 d",
+                yscale = log10,
+                yticks = log_ticks(f_lo, f_hi),
+            )
+            lines!(axis, θ, far_log; color = FIGURE_COLORS.signal)
+            ylims!(axis, f_lo, f_hi)
+            axis
+        else
+            axis = Axis(
+                figure[2, 1];
+                xlabel = "Decision threshold",
+                ylabel = "False alarms per 30 d",
+            )
+            text!(
+                axis,
+                0.5,
+                0.5;
+                text = "No false-alarm episode at any threshold",
+                space = :relative,
+                align = (:center, :center),
+                fontsize = 7,
+                color = FIGURE_COLORS.signal,
+            )
+            ylims!(
+                axis,
+                0,
+                target_far_per_30d === nothing ? 1.0 : max(1.0, 1.3 * target_far_per_30d),
+            )
+            axis
+        end
+        if target_far_per_30d !== nothing && (!has_far || target_far_per_30d > 0)
+            hlines!(
+                ax_far,
+                [target_far_per_30d];
+                color = FIGURE_COLORS.threshold,
+                linestyle = :dot,
+            )
+            text!(
+                ax_far,
+                hi,
+                Float64(target_far_per_30d);
+                text = "Target $(compact(target_far_per_30d)) per 30 d",
+                align = (:right, :bottom),
+                offset = (0, 2),
+                fontsize = 7,
+                color = FIGURE_COLORS.threshold,
+            )
+        end
+        isfinite(threshold) &&
+            vlines!(ax_far, [threshold]; color = FIGURE_COLORS.threshold, linestyle = :dash)
+        linkxaxes!(ax_recall, ax_far)
+        hidexdecorations!(ax_recall; grid = false, ticks = false)
+        xlims!(ax_far, lo - pad, hi + pad)
+        # One legend row per entry: the operating-point statement is long
+        top_legend!(figure, ax_recall; nbanks = isfinite(threshold) ? 3 : 2)
+        rowgap!(figure.layout, 4)
         figure
     end
 end

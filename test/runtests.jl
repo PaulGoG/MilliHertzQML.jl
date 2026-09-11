@@ -538,23 +538,78 @@ end
     yv = zeros(Int, 20)
     yv[8:10] .= 1
     geometry = (step_size = 43200, sample_rate = 1.0)
+    # The sweep: ascending candidates, monotone window rates, one event
+    sweep = threshold_sweep(yv, scores; geometry...)
+    @test issorted(sweep.threshold) && allunique(sweep.threshold)
+    @test issorted(sweep.fpr; rev = true) && issorted(sweep.recall; rev = true)
+    @test all(==(1), sweep.n_events)
+    @test first(sweep.threshold) == 0.10 && first(sweep.recall) == 1.0
+    @test first(sweep.fpr) == 1.0 && first(sweep.n_false_alarm_episodes) == 2
+    @test last(sweep.threshold) == 0.95 && last(sweep.recall) ≈ 1 / 3
+    @test last(sweep.fpr) == 0.0 && last(sweep.event_recall) == 1.0
+    @test all(sweep.false_alarms_per_30d .≈ sweep.n_false_alarm_episodes .* 3.0)
+    @test_throws ArgumentError threshold_sweep(Int[], Float64[]; geometry...)
+    @test_throws ArgumentError threshold_sweep(yv, scores; n_candidates = 1, geometry...)
+    @test_throws DimensionMismatch threshold_sweep(yv, scores[1:19]; geometry...)
     # far, one episode per 30 d: no episode is admissible on ten days, so the
     # lowest threshold clearing both spurious scores is chosen
-    t_far, info = select_threshold(yv, scores; criterion = "far", geometry...)
+    t_far, info = select_threshold(
+        yv,
+        scores;
+        criterion = "far",
+        target_far_per_30d = 1.0,
+        geometry...,
+    )
     @test 0.70 < t_far <= 0.85
     @test info["criterion"] == "far"
     @test info["validation_recall"] == 1.0
+    @test info["validation_fpr"] == 0.0
     @test info["validation_false_alarms_per_30d"] == 0.0
-    # far, three episodes per 30 d: one episode (window 15) is admitted
+    # far, three episodes per 30 d: one episode (window 15) is admitted once
+    # the duty-cycle guard allows one of seventeen negatives
     t_far3, info3 = select_threshold(
         yv,
         scores;
         criterion = "far",
         target_far_per_30d = 3.0,
+        target_fpr = 0.1,
         geometry...,
     )
     @test 0.60 < t_far3 <= 0.70
     @test info3["validation_false_alarms_per_30d"] ≈ 3.0
+    @test info3["validation_fpr"] ≈ 1 / 17
+    # The duty-cycle guard alone (every episode rate admissible) stops at
+    # the first false positive
+    t_guard, _ = select_threshold(
+        yv,
+        scores;
+        criterion = "far",
+        target_far_per_30d = 100.0,
+        target_fpr = 0.05,
+        geometry...,
+    )
+    @test 0.70 < t_guard <= 0.85
+    # Descending scan: with the event at the start of the block, a permanent
+    # alarm is one long episode (3 per 30 d) and admissible by rate alone;
+    # the operating point must nevertheless stay on the branch of short
+    # episodes, above the second spurious score
+    y_head = zeros(Int, 20)
+    y_head[1:3] .= 1
+    s_head = fill(0.2, 20)
+    s_head[1:3] .= [0.90, 0.95, 0.85]
+    s_head[8] = 0.60
+    s_head[15] = 0.70
+    t_head, info_head = select_threshold(
+        y_head,
+        s_head;
+        criterion = "far",
+        target_far_per_30d = 3.0,
+        target_fpr = 1.0,
+        geometry...,
+    )
+    @test 0.60 < t_head <= 0.70
+    @test info_head["validation_false_alarms_per_30d"] ≈ 3.0
+    @test event_metrics(ones(Int, 20), y_head; geometry...).false_alarms_per_30d ≈ 3.0
     # fpr: 5 % of 17 negatives admits none, 10 % admits one
     t_fpr, _ =
         select_threshold(yv, scores; criterion = "fpr", target_fpr = 0.05, geometry...)
@@ -884,6 +939,17 @@ end
     @test figure_mission_trace(days, probs, 0.55; labels = labels) isa CairoMakie.Figure
     @test figure_mission_trace(days, probs, 0.55) isa CairoMakie.Figure
     @test figure_roc(fpr, tpr, roc_auc(fpr, tpr)) isa CairoMakie.Figure
+    sweep = threshold_sweep(labels, probs; step_size = 432, sample_rate = 1.0)
+    @test figure_threshold_sweep(sweep, 0.55; target_far_per_30d = 3.0) isa
+          CairoMakie.Figure
+    @test figure_threshold_sweep(sweep, Inf) isa CairoMakie.Figure
+    # A block without negatives has no false alarm at any threshold
+    clean = threshold_sweep(ones(Int, n), probs; step_size = 432, sample_rate = 1.0)
+    @test all(==(0), clean.false_alarms_per_30d) && all(isnan, clean.fpr)
+    @test figure_threshold_sweep(clean, 0.55; target_far_per_30d = 3.0) isa
+          CairoMakie.Figure
+    @test_throws ArgumentError figure_threshold_sweep(DataFrame(), 0.5)
+    @test_throws ArgumentError figure_threshold_sweep(DataFrame(threshold = [Inf]), 0.5)
     @test figure_sensitivity(snrs, labels, decisions) isa CairoMakie.Figure
     @test figure_sensitivity(snrs, zeros(Int, n), decisions) === nothing
     @test figure_score_distribution(probs, 0.55; labels = labels) isa CairoMakie.Figure
@@ -1116,6 +1182,11 @@ end
         @test isfinite(metrics["test"]["false_alarms_per_30d"])
         @test metrics["test"]["n_windows"] == n_test
         @test metrics["validation"]["threshold"] == thr["value"]
+        # The operating characteristic of the validation block and its figure
+        sweep = CSV.read(joinpath(run_dir, "threshold_sweep.csv"), DataFrame)
+        @test issorted(sweep.threshold) && "false_alarms_per_30d" in names(sweep)
+        @test all(==(metrics["validation"]["n_events"]), sweep.n_events)
+        @test isfile(joinpath(dir, "plots", "run_smoke", "threshold_sweep.pdf"))
 
         stage("infer.jl", "--run-id", "smoke") || return
         probs = CSV.read(
@@ -1129,6 +1200,9 @@ end
             TOML.parsefile(joinpath(dir, "results", "run_smoke", "metrics.toml"))["metrics"]
         @test infer_metrics["n_windows"] == n_windows
         @test infer_metrics["threshold"] == thr["value"]
+        @test haskey(infer_metrics, "fpr")
+        @test isfile(joinpath(dir, "results", "run_smoke", "threshold_sweep.csv"))
+        @test isfile(joinpath(dir, "plots", "run_smoke", "threshold_sweep.pdf"))
 
         # The test block alone, through the run's split.toml
         stage(
@@ -1168,6 +1242,7 @@ end
             DataFrame,
         )
         @test nrow(blind_probs) == n_windows
+        @test !isfile(joinpath(dir, "results", "run_smoke_blind", "threshold_sweep.csv"))
 
         # The project tree received nothing
         @test !isdir(joinpath(PROJECT_ROOT, "models", "run_smoke"))
