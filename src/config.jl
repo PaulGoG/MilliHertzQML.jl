@@ -310,6 +310,7 @@ function preprocessing_settings(config::AbstractDict)
             min = 0.0,
         ),
         highpass_order = cfgget(p, "highpass_order", 8; type = Int, min = 1),
+        edge_margin = cfgget(p, "edge_margin", 0.0; type = Float64, min = 0.0),
         low_band_hz = analysis_band(p, "low_band_hz", [1e-3, 5e-3]),
         high_band_hz = analysis_band(p, "high_band_hz", [5e-3, 1e-1]),
         output_prefix = cfgget(p, "output_prefix", "telemetry"; type = String),
@@ -566,10 +567,12 @@ end
 """
     feature_geometry(features_path, config) -> NamedTuple
 
-Window geometry (`window_size`, `step_size`, `sample_rate`) of a feature
-table, read from the sidecar `<stem>.toml` written beside it by the
-pre-processor; falls back to the `[preprocessing]` section with a warning
-when the sidecar is absent.
+Window geometry (`window_size`, `step_size`, `sample_rate`, and
+`first_window`, the record window index of the table's first row, above 1
+when an edge margin was dropped) of a feature table, read from the
+sidecar `<stem>.toml` written beside it by the pre-processor; falls back
+to the `[preprocessing]` section with a warning when the sidecar is
+absent.
 """
 function feature_geometry(features_path::AbstractString, config::AbstractDict)
     sidecar = replace(features_path, r"\.csv$" => ".toml")
@@ -583,5 +586,6 @@ function feature_geometry(features_path::AbstractString, config::AbstractDict)
         window_size = cfgget(sec, "window_size", 1000; type = Int, min = 2),
         step_size = cfgget(sec, "step_size", 100; type = Int, min = 1),
         sample_rate = cfgget(sec, "sample_rate", 0.2; type = Float64, min = 1e-6),
+        first_window = cfgget(sec, "first_window", 1; type = Int, min = 1),
     )
 end

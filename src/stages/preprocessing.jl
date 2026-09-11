@@ -82,6 +82,17 @@ function whitening_psd(settings::NamedTuple, A::AbstractVector{<:Real}, fs::Real
 end
 
 """
+    edge_margin_windows(settings) -> Int
+
+Number of windows dropped at each end of a record for the `edge_margin`
+of the `[preprocessing]` settings, given in window lengths:
+`round(edge_margin * window_size / step_size)`.
+"""
+function edge_margin_windows(settings::NamedTuple)
+    return round(Int, settings.edge_margin * settings.window_size / settings.step_size)
+end
+
+"""
     window_features(A, fs; window_size, step_size, low_band, high_band,
                     band_edges = [1e-3, 5e-3, 1e-1], feature_set) -> Matrix{Float32}
 
@@ -209,6 +220,7 @@ function preprocessing_parameters(
         "band_edges_hz" => collect(settings.band_edges_hz),
         "highpass_cutoff_hz" => settings.highpass_cutoff_hz,
         "highpass_order" => settings.highpass_order,
+        "edge_margin" => settings.edge_margin,
         "feature_set" => String(settings.feature_set),
     )
     if settings.psd == "model"
@@ -426,7 +438,26 @@ function preprocess_record(
                 n_bands = length(settings.band_edges_hz) - 1,
             )
 
-            write_csv(features_path, DataFrame(features, names))
+            # Edge margin: the circular high-pass and whitening filters ring
+            # over a stretch of the record at each end (the whitening
+            # filter's impulse response is long when the PSD carries sharp
+            # features such as the TDI null), so the first and last windows
+            # are not validly conditioned and are dropped from the product.
+            n_record = n_windows
+            margin = edge_margin_windows(settings)
+            2 * margin < n_record || throw(
+                ArgumentError(
+                    "edge_margin = $(settings.edge_margin) window lengths drops " *
+                    "$(2 * margin) windows, but the record holds only $n_record.",
+                ),
+            )
+            kept = (margin+1):(n_record-margin)
+            n_windows = length(kept)
+            margin > 0 &&
+                @info "edge margin" edge_margin = settings.edge_margin dropped_each_end =
+                    margin first_window = first(kept) n_windows
+
+            write_csv(features_path, DataFrame(features[kept, :], names))
             psd_table !== nothing && write_csv(psd_path, psd_table)
             write_toml(
                 sidecar_path,
@@ -446,6 +477,10 @@ function preprocess_record(
                         "band_edges_hz" => collect(settings.band_edges_hz),
                         "highpass_cutoff_hz" => settings.highpass_cutoff_hz,
                         "highpass_order" => settings.highpass_order,
+                        "edge_margin" => settings.edge_margin,
+                        "edge_margin_windows" => margin,
+                        "first_window" => first(kept),
+                        "n_windows_record" => n_record,
                         "n_windows" => n_windows,
                         "parameter_hash" => digest,
                     ),
@@ -459,7 +494,7 @@ function preprocess_record(
                     window_size = settings.window_size,
                     step_size = settings.step_size,
                 )
-                write_csv(labels_path, DataFrame(Label = labels, SNR = snrs))
+                write_csv(labels_path, DataFrame(Label = labels[kept], SNR = snrs[kept]))
             end
             geometry = (
                 window_size = settings.window_size,

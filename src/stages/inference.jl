@@ -7,19 +7,24 @@
 """
     inference_geometry(features_path, config) -> NamedTuple
 
-Window `step_size` [samples] and `sample_rate` [Hz] of a feature table:
-from its sidecar TOML when present ([`feature_geometry`](@ref)), otherwise
-from the `[inference]` section with a warning.
+Window `step_size` [samples], `sample_rate` [Hz], and `first_window` (the
+record window index of the table's first row) of a feature table: from
+its sidecar TOML when present ([`feature_geometry`](@ref)), otherwise
+from the `[inference]` section with a warning (`first_window = 1`).
 """
 function inference_geometry(features_path::AbstractString, config::AbstractDict)
     sidecar = replace(features_path, r"\.csv$" => ".toml")
     if isfile(sidecar)
         g = feature_geometry(features_path, config)
-        return (step_size = g.step_size, sample_rate = g.sample_rate)
+        return (
+            step_size = g.step_size,
+            sample_rate = g.sample_rate,
+            first_window = g.first_window,
+        )
     end
     @warn "no feature sidecar at $sidecar; window geometry taken from [inference]."
     inf = inference_settings(config)
-    return (step_size = inf.step_size, sample_rate = inf.sample_rate)
+    return (step_size = inf.step_size, sample_rate = inf.sample_rate, first_window = 1)
 end
 
 """
@@ -185,7 +190,11 @@ function evaluate_classifier(
         decisions = Int.(probabilities .>= threshold)
         windows = row_offset .+ (1:n_windows)
         step_duration = geometry.step_size / geometry.sample_rate
-        days = Float64[w * step_duration / 86400 for w in windows]
+        # Mission time of a row: its record window index (the table may
+        # start after an edge margin) times the step
+        days = Float64[
+            (geometry.first_window - 1 + w) * step_duration / 86400 for w in windows
+        ]
 
         # Per-window scores and decisions, the snapshot, and the metrics.
         results = DataFrame(

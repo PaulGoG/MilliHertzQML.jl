@@ -965,6 +965,12 @@ end
     @test preprocessing_settings(empty).psd == "model"
     @test preprocessing_settings(empty).feature_set == :whitened
     @test preprocessing_settings(empty).band_edges_hz == [1e-3, 5e-3, 1e-1]
+    @test preprocessing_settings(empty).edge_margin == 0.0
+    @test_throws ArgumentError preprocessing_settings(
+        Dict{String,Any}("preprocessing" => Dict{String,Any}("edge_margin" => -1.0)),
+    )
+    @test feature_geometry(joinpath(tempdir(), "absent_features.csv"), empty).first_window ==
+          1
     @test preprocessing_settings(
         Dict{String,Any}(
             "preprocessing" => Dict{String,Any}(
@@ -1234,6 +1240,7 @@ end
             ),
         )
         cfg["preprocessing"]["output_prefix"] = "smoke"
+        cfg["preprocessing"]["edge_margin"] = 1.0
         feats = joinpath(inputs, "smoke_features.csv")
         labs = joinpath(inputs, "smoke_labels.csv")
         merge!(
@@ -1268,6 +1275,12 @@ end
                 n_total - cfg["preprocessing"]["window_size"],
                 cfg["preprocessing"]["step_size"],
             ) + 1
+        margin = round(
+            Int,
+            cfg["preprocessing"]["edge_margin"] * cfg["preprocessing"]["window_size"] /
+            cfg["preprocessing"]["step_size"],
+        )
+        n_kept = n_windows - 2 * margin
 
         stage("generate_data.jl", "--run-id", "smoke") || return
         @test isfile(h5)
@@ -1281,13 +1294,16 @@ end
         @test all(events.label_end_index .<= events.end_index .+ 999)
 
         stage("preprocess_ldc.jl", "--h5-file", h5, "--label-file", raw_labels) || return
-        @test nrow(CSV.read(feats, DataFrame)) == n_windows
-        @test nrow(CSV.read(labs, DataFrame)) == n_windows
+        @test nrow(CSV.read(feats, DataFrame)) == n_kept
+        @test nrow(CSV.read(labs, DataFrame)) == n_kept
         sidecar = TOML.parsefile(replace(feats, ".csv" => ".toml"))["features"]
         @test sidecar["window_size"] == cfg["preprocessing"]["window_size"]
         @test sidecar["step_size"] == cfg["preprocessing"]["step_size"]
         @test sidecar["sample_rate"] == fs
-        @test sidecar["n_windows"] == n_windows
+        @test sidecar["n_windows"] == n_kept
+        @test sidecar["first_window"] == margin + 1 &&
+              sidecar["edge_margin_windows"] == margin
+        @test sidecar["n_windows_record"] == n_windows && margin == 10
 
         stage("train.jl", "--run-id", "smoke") || return
         run_dir = joinpath(dir, "models", "run_smoke")
@@ -1297,12 +1313,12 @@ end
         # Chronological blocks with a one-window buffer
         blocks = TOML.parsefile(joinpath(run_dir, "split.toml"))["split"]
         buffer = cld(cfg["preprocessing"]["window_size"], cfg["preprocessing"]["step_size"])
-        @test blocks["n_windows"] == n_windows
+        @test blocks["n_windows"] == n_kept
         @test blocks["buffer_windows"] == buffer
-        @test blocks["train"] == [1, floor(Int, 0.7 * n_windows)]
+        @test blocks["train"] == [1, floor(Int, 0.7 * n_kept)]
         @test blocks["validation"][1] == blocks["train"][2] + buffer + 1
         @test blocks["test"][1] == blocks["validation"][2] + buffer + 1
-        @test blocks["test"][2] == n_windows
+        @test blocks["test"][2] == n_kept
         n_test = blocks["test"][2] - blocks["test"][1] + 1
         # Threshold fitted on the validation block; metrics of both blocks
         thr = TOML.parsefile(joinpath(run_dir, "threshold.toml"))["threshold"]
@@ -1324,12 +1340,12 @@ end
             joinpath(dir, "results", "run_smoke", "inference_probabilities.csv"),
             DataFrame,
         )
-        @test nrow(probs) == n_windows
+        @test nrow(probs) == n_kept
         @test all(0 .<= probs.Probability .<= 1)
-        @test probs.Window == 1:n_windows
+        @test probs.Window == 1:n_kept
         infer_metrics =
             TOML.parsefile(joinpath(dir, "results", "run_smoke", "metrics.toml"))["metrics"]
-        @test infer_metrics["n_windows"] == n_windows
+        @test infer_metrics["n_windows"] == n_kept
         @test infer_metrics["threshold"] == thr["value"]
         @test haskey(infer_metrics, "fpr")
         @test isfile(joinpath(dir, "results", "run_smoke", "threshold_sweep.csv"))
@@ -1372,7 +1388,7 @@ end
             joinpath(dir, "results", "run_smoke_blind", "inference_probabilities.csv"),
             DataFrame,
         )
-        @test nrow(blind_probs) == n_windows
+        @test nrow(blind_probs) == n_kept
         @test !isfile(joinpath(dir, "results", "run_smoke_blind", "threshold_sweep.csv"))
 
         # The project tree received nothing

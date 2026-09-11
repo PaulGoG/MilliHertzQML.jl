@@ -7,6 +7,12 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- `edge_margin` under `[preprocessing]` (window lengths, default 0; 10 in
+  the Sangria configurations): the first and last windows of a record,
+  where the circular high-pass and whitening filters ring, are dropped
+  from the feature and label products; the sidecar records
+  `first_window`, `edge_margin_windows`, and `n_windows_record`, and
+  inference places every row at its record window index.
 - `feature_set = "bands"`: the mean whitened power of every band between
   the ascending `band_edges_hz` of `[preprocessing]`, followed by the
   spectral entropy and the log power spread (`length(band_edges_hz) + 1`

@@ -21,6 +21,7 @@ high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
 band_edges_hz = [0.001, 0.005, 0.1]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
 highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
 highpass_order = 8             # Butterworth order of the record high-pass; >= 1
+edge_margin = 10.0              # windows dropped at each record end, in window lengths (conditioning transients); >= 0
 output_prefix = "sangria_train"   # prefix of the output feature/label CSVs
 
 [model]
