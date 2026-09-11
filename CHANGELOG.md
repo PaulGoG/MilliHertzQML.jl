@@ -161,6 +161,13 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- `figure_threshold_sweep` states the metrics of the applied threshold
+  from an `operating_point` given by the caller instead of reading the
+  nearest row of the sweep. The sweep's candidates are score quantiles
+  and are sparse in the far tail, so no row of it reports the applied
+  threshold faithfully and the legend could contradict the run's own
+  `metrics.toml`. Without an operating point the legend states the
+  threshold alone.
 - The `far` threshold criterion is the operating point of an alert
   trigger: candidates are scanned from the highest threshold downwards and
   the threshold is the lowest of the admissible range that starts at the

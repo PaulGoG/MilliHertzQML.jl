@@ -157,12 +157,18 @@ function main()
 
     plot_training_history(result.history, joinpath(plot_dir, "training_metrics"), run_id)
     info = result.threshold_info
+    validation = result.metrics["validation"]
     save_figure(
         figure_threshold_sweep(
             result.sweep,
             result.threshold;
             target_far_per_30d = info["criterion"] == "far" ? info["target_far_per_30d"] :
                                  nothing,
+            operating_point = (
+                n_detected = validation["n_detected"],
+                n_events = validation["n_events"],
+                false_alarms_per_30d = validation["false_alarms_per_30d"],
+            ),
         ),
         joinpath(plot_dir, "threshold_sweep");
         run_id = run_id,

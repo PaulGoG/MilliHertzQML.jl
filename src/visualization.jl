@@ -79,15 +79,19 @@ under the curve stated in the legend. Requires CairoMakie.
 function figure_roc end
 
 """
-    figure_threshold_sweep(sweep, threshold; target_far_per_30d = nothing) -> Figure
+    figure_threshold_sweep(sweep, threshold; target_far_per_30d = nothing,
+                           operating_point = nothing) -> Figure
 
 Event-level operating characteristic of a scored block: two stacked
 panels over the decision threshold, the event recall (solid) with the
 window recall (dashed), and the false-alarm episodes per 30 days on a
 logarithmic axis (thresholds without a false alarm are left blank). The
-operating point `threshold` is marked, its event count and false-alarm
-rate stated in the legend, and the `target_far_per_30d` of the `far`
-criterion drawn when given. `sweep` is the table of
+operating point `threshold` is marked and the `target_far_per_30d` of the
+`far` criterion drawn when given. `operating_point`, anything carrying
+`n_detected`, `n_events`, and `false_alarms_per_30d`, puts the metrics of
+the applied threshold in the legend; they cannot be read off `sweep`,
+whose candidates are score quantiles and are sparse in the far tail.
+Without it the legend states the threshold alone. `sweep` is the table of
 [`threshold_sweep`](@ref). Requires CairoMakie.
 """
 function figure_threshold_sweep end

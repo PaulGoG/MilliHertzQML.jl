@@ -1079,6 +1079,17 @@ end
     sweep = threshold_sweep(labels, probs; step_size = 432, sample_rate = 1.0)
     @test figure_threshold_sweep(sweep, 0.55; target_far_per_30d = 3.0) isa
           CairoMakie.Figure
+    @test figure_threshold_sweep(
+        sweep,
+        0.55;
+        target_far_per_30d = 3.0,
+        operating_point = (n_detected = 2, n_events = 2, false_alarms_per_30d = 1.5),
+    ) isa CairoMakie.Figure
+    @test_throws ArgumentError figure_threshold_sweep(
+        sweep,
+        0.55;
+        operating_point = (n_detected = 2,),
+    )
     @test figure_threshold_sweep(sweep, Inf) isa CairoMakie.Figure
     # A block without negatives has no false alarm at any threshold
     clean = threshold_sweep(ones(Int, n), probs; step_size = 432, sample_rate = 1.0)

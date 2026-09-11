@@ -80,6 +80,11 @@ function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
                 result.threshold;
                 target_far_per_30d = get(info, "criterion", "") == "far" ?
                                      info["target_far_per_30d"] : nothing,
+                operating_point = (
+                    n_detected = result.metrics["n_detected"],
+                    n_events = result.metrics["n_events"],
+                    false_alarms_per_30d = result.metrics["false_alarms_per_30d"],
+                ),
             ),
             joinpath(plot_dir, "threshold_sweep");
             run_id = run_id,

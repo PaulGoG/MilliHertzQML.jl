@@ -327,7 +327,18 @@ function figure_threshold_sweep(
     sweep::DataFrame,
     threshold::Real;
     target_far_per_30d::Union{Nothing,Real} = nothing,
+    operating_point = nothing,
 )
+    operating_point === nothing ||
+        all(
+            k -> hasproperty(operating_point, k),
+            (:n_detected, :n_events, :false_alarms_per_30d),
+        ) ||
+        throw(
+            ArgumentError(
+                "operating_point must carry n_detected, n_events, and false_alarms_per_30d.",
+            ),
+        )
     nrow(sweep) >= 1 || throw(ArgumentError("the sweep table is empty."))
     for column in (
         "threshold",
@@ -353,12 +364,20 @@ function figure_threshold_sweep(
     far_log = [x > 0 ? x : NaN for x in far]
     lo, hi = extrema(θ)
     pad = 0.02 * max(hi - lo, 1e-3)
-    operating = if isfinite(threshold)
-        row = sweep[order[argmin(abs.(θ .- threshold))], :]
-        "Threshold $(round(threshold; digits = 3)): $(row.n_detected)/$(row.n_events) events, " *
-        "$(compact(row.false_alarms_per_30d)) per 30 d"
-    else
+    # The candidates are score quantiles and are sparse in the far tail, so
+    # no row of the sweep reports the applied threshold faithfully: the
+    # nearest candidate lies on either side of it and the next one above can
+    # be far above. The counts therefore come from the caller, which holds
+    # the metrics of the threshold it applied; without them the legend
+    # states the threshold alone.
+    operating = if !isfinite(threshold)
         ""
+    elseif operating_point === nothing
+        "Threshold $(round(threshold; digits = 3))"
+    else
+        "Threshold $(round(threshold; digits = 3)): " *
+        "$(operating_point.n_detected)/$(operating_point.n_events) events, " *
+        "$(compact(operating_point.false_alarms_per_30d)) per 30 d"
     end
     return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
         figure = Figure()
