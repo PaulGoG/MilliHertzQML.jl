@@ -581,6 +581,14 @@ end
     @test_throws ArgumentError chronological_split(100; train_fraction = 0.0)
     @test_throws ArgumentError chronological_split(100; buffer = -1)
 
+    # Calibration block: the validation block alone, or validation and test
+    # pooled across the buffer so that the range stays contiguous in time
+    @test threshold_rows(blocks, "validation") == 76:90
+    @test threshold_rows(blocks, "held_out") == 76:100
+    @test length(threshold_rows(blocks, "held_out")) ==
+          length(blocks.validation) + length(blocks.test) + 5
+    @test_throws ArgumentError threshold_rows(blocks, "test")
+
     # ROC: one misordered positive among six windows
     y6 = [1, 1, 0, 1, 0, 0]
     s6 = [0.9, 0.8, 0.7, 0.4, 0.3, 0.1]
@@ -679,9 +687,9 @@ end
     )
     @test 0.70 < t_far <= 0.85
     @test info["criterion"] == "far"
-    @test info["validation_recall"] == 1.0
-    @test info["validation_fpr"] == 0.0
-    @test info["validation_false_alarms_per_30d"] == 0.0
+    @test info["fit_recall"] == 1.0
+    @test info["fit_fpr"] == 0.0
+    @test info["fit_false_alarms_per_30d"] == 0.0
     # far, three episodes per 30 d: one episode (window 15) is admitted once
     # the duty-cycle guard allows one of seventeen negatives
     t_far3, info3 = select_threshold(
@@ -693,8 +701,8 @@ end
         geometry...,
     )
     @test 0.60 < t_far3 <= 0.70
-    @test info3["validation_false_alarms_per_30d"] ≈ 3.0
-    @test info3["validation_fpr"] ≈ 1 / 17
+    @test info3["fit_false_alarms_per_30d"] ≈ 3.0
+    @test info3["fit_fpr"] ≈ 1 / 17
     # The duty-cycle guard alone (every episode rate admissible) stops at
     # the first false positive
     t_guard, _ = select_threshold(
@@ -725,7 +733,7 @@ end
         geometry...,
     )
     @test 0.60 < t_head <= 0.70
-    @test info_head["validation_false_alarms_per_30d"] ≈ 3.0
+    @test info_head["fit_false_alarms_per_30d"] ≈ 3.0
     @test event_metrics(ones(Int, 20), y_head; geometry...).false_alarms_per_30d ≈ 3.0
     # fpr: 5 % of 17 negatives admits none, 10 % admits one
     t_fpr, _ =
@@ -986,6 +994,13 @@ end
     )
     @test model_settings(empty).n_qubits == 4
     @test training_settings(empty).threshold_criterion == "far"
+    @test training_settings(empty).threshold_block == "held_out"
+    @test training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("threshold_block" => "validation")),
+    ).threshold_block == "validation"
+    @test_throws ArgumentError training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("threshold_block" => "test")),
+    )
     @test inference_settings(empty).block == "all"
     @test ldc_settings(empty).label_before_sec == 4 * 86400.0
     @test_throws ArgumentError training_settings(
@@ -1331,19 +1346,23 @@ end
         @test blocks["test"][1] == blocks["validation"][2] + buffer + 1
         @test blocks["test"][2] == n_kept
         n_test = blocks["test"][2] - blocks["test"][1] + 1
-        # Threshold fitted on the validation block; metrics of both blocks
+        # Threshold fitted on the calibration block; metrics of both blocks
         thr = TOML.parsefile(joinpath(run_dir, "threshold.toml"))["threshold"]
         @test haskey(thr, "value") && haskey(thr, "criterion") && haskey(thr, "auc")
         @test thr["criterion"] in ("far", "fpr")
+        @test thr["block"] == "held_out"
+        @test thr["fit_windows"] == blocks["test"][2] - blocks["validation"][1] + 1
+        @test haskey(thr, "fit_false_alarm_episodes")
         metrics = TOML.parsefile(joinpath(run_dir, "metrics.toml"))
         @test haskey(metrics, "validation") && haskey(metrics, "test")
         @test isfinite(metrics["test"]["false_alarms_per_30d"])
         @test metrics["test"]["n_windows"] == n_test
         @test metrics["validation"]["threshold"] == thr["value"]
-        # The operating characteristic of the validation block and its figure
+        # The operating characteristic of the calibration block and its figure
         sweep = CSV.read(joinpath(run_dir, "threshold_sweep.csv"), DataFrame)
         @test issorted(sweep.threshold) && "false_alarms_per_30d" in names(sweep)
-        @test all(==(metrics["validation"]["n_events"]), sweep.n_events)
+        @test allequal(sweep.n_events)
+        @test first(sweep.n_events) >= metrics["validation"]["n_events"]
         @test isfile(joinpath(dir, "plots", "run_smoke", "threshold_sweep.pdf"))
 
         stage("infer.jl", "--run-id", "smoke") || return

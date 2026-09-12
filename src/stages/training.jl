@@ -1,8 +1,8 @@
 # src/stages/training.jl — training stage: chronological block split,
-# class-weighted training with early stopping on the validation block,
-# validation-fitted decision threshold, and a single scoring of the test
-# block. The script scripts/train.jl adds only the terminal dashboard, the
-# file logger, and the training-history figure.
+# class-weighted training with early stopping on the validation block, a
+# decision threshold fitted on the calibration block, and a single scoring
+# of the test block. The script scripts/train.jl adds only the terminal
+# dashboard, the file logger, and the training-history figure.
 
 """
     predict_all(model, X; progress = false, threaded = Threads.nthreads() > 1)
@@ -186,12 +186,16 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    stopping on the validation loss with the `patience` of the
    configuration; the best epoch is kept in
    `gw_model_best.jld2` and copied to `gw_model.jld2`;
-6. decision threshold fitted on the validation block alone
-   ([`select_threshold`](@ref)), persisted in `threshold.toml`, with the
-   event-level operating characteristic of the block
-   ([`threshold_sweep`](@ref)) in `threshold_sweep.csv`;
-7. the isolated test block scored once; window- and event-level metrics
-   of both blocks in `metrics.toml` and printed as a table.
+6. decision threshold fitted on the calibration block selected by
+   `threshold_block` ([`threshold_rows`](@ref), [`select_threshold`](@ref)),
+   persisted in `threshold.toml`, with the event-level operating
+   characteristic of that block ([`threshold_sweep`](@ref)) in
+   `threshold_sweep.csv`;
+7. the test block scored once; window- and event-level metrics of both
+   blocks in `metrics.toml` and printed as a table. Under the default
+   `threshold_block = "held_out"` the test block is part of the
+   calibration set and its metrics are not an independent check of the
+   operating point; a separate observation record is.
 
 `on_epoch`, when given, is called after every epoch as
 `on_epoch(epoch, max_epochs, learning_rate, history, elapsed_seconds)`.
@@ -414,38 +418,57 @@ function train_classifier(
         model, best_meta, best_scaler = load_model(best_path)
         save_model(model_path, model; metadata = best_meta, scaler = best_scaler)
 
-        # Decision threshold fitted on the validation block only.
-        @info "training complete; fitting the decision threshold on the validation block"
-        probs_val = predict_all(model, X_val; threaded = threaded)
+        # Decision threshold fitted on the calibration block.
+        fit_rows = threshold_rows(blocks, trn.threshold_block)
+        block_label =
+            trn.threshold_block == "validation" ? "validation block" :
+            "held-out block (validation and test)"
+        @info "training complete; fitting the decision threshold" block = block_label rows =
+            fit_rows
+        X_fit =
+            fit_rows == blocks.validation ? X_val :
+            encode_features(scaler, X_raw[fit_rows, :])
+        y_fit = fit_rows == blocks.validation ? y_val : y_raw[fit_rows]
+        probs_fit = predict_all(model, X_fit; threaded = threaded)
         threshold, info = select_threshold(
-            y_val,
-            probs_val;
+            y_fit,
+            probs_fit;
             criterion = trn.threshold_criterion,
             target_far_per_30d = trn.target_far_per_30d,
             target_fpr = trn.target_fpr,
             step_size = geometry.step_size,
             sample_rate = geometry.sample_rate,
         )
+        probs_val =
+            fit_rows == blocks.validation ? probs_fit :
+            predict_all(model, X_val; threaded = threaded)
         m_val, auc_val, metrics_val = block_metrics(probs_val, y_val, threshold, geometry)
         sweep = threshold_sweep(
-            y_val,
-            probs_val;
+            y_fit,
+            probs_fit;
             step_size = geometry.step_size,
             sample_rate = geometry.sample_rate,
         )
         write_csv(joinpath(run_dir, "threshold_sweep.csv"), sweep)
         info["auc"] = auc_val
         info["value"] = threshold
-        info["fitted_on"] = rootrelative(trn.train_features) * " (validation block)"
+        info["block"] = trn.threshold_block
+        info["fitted_on"] = rootrelative(trn.train_features) * " ($block_label)"
         info["fitted_at"] = string(Dates.now())
         write_toml(
             joinpath(run_dir, "threshold.toml"),
             Dict{String,Any}("threshold" => info),
         )
-        @info "threshold" value = threshold criterion = info["criterion"] validation_auc =
+        @info "threshold" value = threshold criterion = info["criterion"] block =
+            trn.threshold_block episodes = info["fit_false_alarm_episodes"] validation_auc =
             auc_val
+        info["fit_false_alarm_episodes"] < 5 && @warn "the fitted false-alarm rate rests " *
+              "on fewer than five episodes; its relative error exceeds 45 % and the " *
+              "operating point may not transfer to another record." episodes =
+            info["fit_false_alarm_episodes"] block = trn.threshold_block
 
-        # The isolated test block, evaluated once.
+        # The test block, scored once; part of the calibration set under
+        # `threshold_block = "held_out"`, independent of it otherwise.
         probs_test = predict_all(model, X_test; threaded = threaded)
         m_test, auc_test, metrics_test =
             block_metrics(probs_test, y_test, threshold, geometry)

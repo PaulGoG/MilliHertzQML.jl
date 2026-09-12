@@ -1,6 +1,6 @@
 # src/evaluation.jl — chronological partitioning, ROC analysis, decision
-# thresholds fitted on the validation block, and event-level detection
-# metrics with the operational false-alarm rate.
+# thresholds fitted on a held-out calibration block, and event-level
+# detection metrics with the operational false-alarm rate.
 
 """
     chronological_split(n; train_fraction = 0.7, validation_fraction = 0.15, buffer = 0)
@@ -39,6 +39,35 @@ function chronological_split(
         ),
     )
     return (train = train, validation = validation, test = test)
+end
+
+"""
+    threshold_rows(blocks, threshold_block) -> UnitRange{Int}
+
+Rows of the training table on which the decision threshold is fitted,
+given the `blocks` of [`chronological_split`](@ref):
+
+- `"validation"`: the validation block alone, the classical split.
+- `"held_out"`: validation and test together, including the buffer
+  windows between them so that the range stays contiguous in mission
+  time and an alarm episode spanning the join is counted once.
+
+The pooled block doubles the mission time behind the fitted false-alarm
+rate, whose relative error scales as the inverse square root of the
+episodes it charges; a 55-day block routinely charges fewer than five.
+The test block carries no information the fit could leak, being scored
+once after training and entering neither model selection nor early
+stopping, but it ceases to be an independent check of the operating
+point — that role belongs to a separate observation record.
+"""
+function threshold_rows(blocks::NamedTuple, threshold_block::AbstractString)
+    threshold_block in ("validation", "held_out") || throw(
+        ArgumentError(
+            "threshold_block = $(repr(threshold_block)); expected validation or held_out.",
+        ),
+    )
+    return threshold_block == "validation" ? blocks.validation :
+           (first(blocks.validation):last(blocks.test))
 end
 
 """
@@ -240,8 +269,9 @@ end
                      target_fpr = 0.05, step_size, sample_rate, n_candidates = 400)
         -> (threshold, info)
 
-Decision threshold fitted on a validation block of labels `y` and `scores`
-from the event-level operating characteristic [`threshold_sweep`](@ref):
+Decision threshold fitted on a calibration block of labels `y` and `scores`
+from the event-level operating characteristic [`threshold_sweep`](@ref);
+[`threshold_rows`](@ref) selects the rows of that block:
 
 - `"far"`: the operating point of an alert trigger. A candidate is
   admissible when its false-alarm episode rate does not exceed
@@ -261,8 +291,12 @@ from the event-level operating characteristic [`threshold_sweep`](@ref):
 When the block holds no positive window, `"youden"` falls back to `"fpr"`
 with a warning; the other criteria depend on negatives only. A block
 without negatives makes every candidate admissible for `"far"` and
-`"fpr"`. `info` records the criterion applied, the targets, the validation
-rates at the threshold, and the block size.
+`"fpr"`. `info` records the criterion applied, the targets, the rates on
+the fitting block at the threshold (`fit_*`), and the block size. Among
+them `fit_false_alarm_episodes` is the count the fitted rate rests on:
+its inverse square root is the relative error of that rate, and an
+operating point placed on a handful of episodes does not transfer to
+another record.
 """
 function select_threshold(
     y::AbstractVector{<:Integer},
@@ -279,11 +313,11 @@ function select_threshold(
     criterion in ("far", "fpr", "youden") || throw(
         ArgumentError("criterion = $(repr(criterion)); expected far, fpr, or youden."),
     )
-    isempty(y) && throw(ArgumentError("the validation block is empty."))
+    isempty(y) && throw(ArgumentError("the threshold fitting block is empty."))
     n_pos = count(==(1), y)
     applied = criterion
     if criterion == "youden" && (n_pos == 0 || n_pos == length(y))
-        @warn "Youden's J is undefined with a single class in the validation block; " *
+        @warn "Youden's J is undefined with a single class in the fitting block; " *
               "falling back to the false-positive-rate criterion." n_positive = n_pos
         applied = "fpr"
     end
@@ -327,13 +361,14 @@ function select_threshold(
         "requested_criterion" => criterion,
         "target_far_per_30d" => Float64(target_far_per_30d),
         "target_fpr" => Float64(target_fpr),
-        "validation_windows" => length(y),
-        "validation_positive_windows" => n_pos,
-        "validation_recall" => m.recall,
-        "validation_precision" => m.precision,
-        "validation_fpr" => m.fpr,
-        "validation_false_alarms_per_30d" => m.false_alarms_per_30d,
-        "validation_observation_days" => m.observation_days,
+        "fit_windows" => length(y),
+        "fit_positive_windows" => n_pos,
+        "fit_recall" => m.recall,
+        "fit_precision" => m.precision,
+        "fit_fpr" => m.fpr,
+        "fit_false_alarms_per_30d" => m.false_alarms_per_30d,
+        "fit_false_alarm_episodes" => m.n_false_alarm_episodes,
+        "fit_observation_days" => m.observation_days,
     )
     return Float64(threshold), info
 end

@@ -39,7 +39,8 @@ patience = 12              # early-stopping patience [epochs]; >= 1
 train_fraction = 0.7       # chronological training block; in (0, 1)
 validation_fraction = 0.15 # chronological validation block; in (0, 1); the rest is the test block
 class_weight = "balanced"  # positive-class loss weight; one of: "balanced" | "none"
-threshold_criterion = "far"  # threshold fitted on the validation block; one of: "far" | "fpr" | "youden"
+threshold_criterion = "far"  # criterion fitting the threshold on the calibration block; one of: "far" | "fpr" | "youden"
+threshold_block = "held_out"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]

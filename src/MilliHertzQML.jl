@@ -44,7 +44,7 @@ export load_data, load_features, extract_features, feature_names
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model
 export chronological_split, roc_curve, roc_auc, contiguous_runs, event_metrics
-export select_threshold, threshold_sweep
+export select_threshold, threshold_sweep, threshold_rows
 export lisa_noise_psd, instrument_psd, confusion_psd, synthesize_noise
 export matched_filter_snr, scale_to_snr, highpass_record, whiten_record
 export tapered_periodogram, place_signal!, detectable_span

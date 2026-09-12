@@ -7,6 +7,18 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- `threshold_block` under `[training]` (`"validation"` or `"held_out"`,
+  default `"held_out"`) and `threshold_rows`: the decision threshold is
+  fitted on the validation block alone or on validation and test pooled
+  across the buffer between them. The fitted false-alarm rate is a
+  Poisson count of the episodes its block charges, so a 55-day block
+  places the operating point on fewer than five and carries a 50 %
+  uncertainty; pooling doubles the exposure without leakage, the test
+  block entering neither model selection nor early stopping. It ceases to
+  be an independent check of the operating point, which a separate
+  observation record must supply. `threshold.toml` records the block and
+  the episode count (`fit_false_alarm_episodes`); training warns below
+  five.
 - `edge_margin` under `[preprocessing]` (window lengths, default 0; 10 in
   the Sangria configurations): the first and last windows of a record,
   where the circular high-pass and whitening filters ring, are dropped
@@ -161,6 +173,11 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- The `info` of `select_threshold` and the `threshold.toml` it feeds name
+  the fitting block's rates `fit_*` instead of `validation_*`, the block
+  no longer being the validation block by default, and add
+  `fit_false_alarm_episodes`. `threshold_sweep.csv` of a training run is
+  the operating characteristic of the calibration block.
 - `figure_threshold_sweep` states the metrics of the applied threshold
   from an `operating_point` given by the caller instead of reading the
   nearest row of the sweep. The sweep's candidates are score quantiles

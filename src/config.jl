@@ -334,8 +334,8 @@ end
     training_settings(config) -> NamedTuple
 
 Validated `[training]` parameters: inputs, optimizer, chronological blocks,
-class weighting, threshold criterion, scaler quantiles, test-mode caps,
-threading.
+class weighting, threshold criterion and fitting block, scaler quantiles,
+test-mode caps, threading.
 """
 function training_settings(config::AbstractDict)
     t = section(config, "training")
@@ -387,6 +387,13 @@ function training_settings(config::AbstractDict)
             "far";
             type = String,
             choices = ("far", "fpr", "youden"),
+        ),
+        threshold_block = cfgget(
+            t,
+            "threshold_block",
+            "held_out";
+            type = String,
+            choices = ("validation", "held_out"),
         ),
         target_far_per_30d = cfgget(
             t,

@@ -63,7 +63,7 @@ end
 
 Class decision for a single feature vector `x` at the fixed probability
 threshold 0.5: `1` when `predict_probability(model, x) > 0.5`, else `0`.
-Run-specific thresholds fitted on the validation block live in the
+Run-specific thresholds fitted on the calibration block live in the
 training stage, not here.
 """
 function predict(model::VariationalQuantumClassifier, x)
