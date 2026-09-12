@@ -872,18 +872,39 @@ end
 """
     detector_from_run(model_path; threshold_path = joinpath(dirname(model_path), "threshold.toml"),
                       config_path = joinpath(dirname(model_path), "config.toml"),
-                      context_windows = 4) -> StreamingDetector
+                      psd_sidecar = "", context_windows = 4) -> StreamingDetector
 
 The [`StreamingDetector`](@ref) of a training run: model and scaler from
-the artifact, the validation-fitted threshold from `threshold.toml`, and
-the conditioning — window geometry, whitening PSD, analysis bands, record
+the artifact, the fitted threshold from `threshold.toml`, and the
+conditioning — window geometry, whitening PSD, analysis bands, record
 high-pass, feature set — from the sidecar of the feature table the run was
 trained on (recorded in its `config.toml` snapshot).
+
+`psd_sidecar`, when given, supplies the whitening PSD from a different
+feature sidecar while everything else still comes from the training one.
+A whitening PSD is a calibration of the record being scored, not a
+property of the model: the persisted training PSD describes the noise of
+the training record, and where that noise is not stationary between
+records — the Galactic foreground is modulated over the year by the
+constellation's antenna pattern — whitening a later record with it
+mis-scales every band power, the feature scaler clips the result, and the
+scores collapse. Give the sidecar of the record under analysis whenever
+one exists.
+
+`context_windows` must reach past the conditioning kernel. The kernel of
+the record high-pass followed by whitening decays as a power law, not
+exponentially, when the PSD resolves sharp spectral features; with the
+Sangria Welch estimate its envelope is still 7 % of the peak eight window
+lengths from the impulse and the streamed scores agree with the batch
+pipeline only from about twenty window lengths upward, not monotonically
+below that. Measure the agreement against the batch path for the record
+at hand rather than assuming a value is large enough.
 """
 function detector_from_run(
     model_path::AbstractString;
     threshold_path::AbstractString = joinpath(dirname(model_path), "threshold.toml"),
     config_path::AbstractString = joinpath(dirname(model_path), "config.toml"),
+    psd_sidecar::AbstractString = "",
     context_windows::Integer = 4,
 )
     isfile(model_path) || throw(ArgumentError("model artifact not found: $model_path"))
@@ -909,6 +930,12 @@ function detector_from_run(
     low = cfgget(features, "low_band_hz", [1e-3, 5e-3]; type = AbstractVector)
     high = cfgget(features, "high_band_hz", [5e-3, 1e-1]; type = AbstractVector)
     edges = cfgget(features, "band_edges_hz", [1e-3, 5e-3, 1e-1]; type = AbstractVector)
+    if !isempty(psd_sidecar)
+        isfile(psd_sidecar) ||
+            throw(ArgumentError("whitening sidecar not found: $psd_sidecar"))
+        @info "whitening with a sidecar other than the training run's" psd_sidecar =
+            psd_sidecar training_sidecar = sidecar_path
+    end
     return StreamingDetector(
         model,
         scaler,
@@ -916,7 +943,7 @@ function detector_from_run(
         sample_rate = cfgget(features, "sample_rate", 0.2; type = Float64, min = 1e-6),
         window_size = cfgget(features, "window_size", 1000; type = Int, min = 2),
         step_size = cfgget(features, "step_size", 100; type = Int, min = 1),
-        psd = whitening_psd_from_sidecar(sidecar_path),
+        psd = whitening_psd_from_sidecar(isempty(psd_sidecar) ? sidecar_path : psd_sidecar),
         highpass_cutoff_hz = cfgget(features, "highpass_cutoff_hz", 5e-4; type = Float64),
         highpass_order = cfgget(features, "highpass_order", 8; type = Int, min = 1),
         low_band = (Float64(low[1]), Float64(low[2])),

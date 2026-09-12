@@ -87,6 +87,7 @@ function main()
     detector = detector_from_run(
         resolvepath(args["model"]);
         context_windows = settings.context_windows,
+        psd_sidecar = settings.psd_sidecar,
     )
     run = open_telemetry_run(run_dir; producer_compat = settings.producer_compat)
     geometry = run_geometry(run)

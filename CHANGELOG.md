@@ -7,6 +7,12 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- `psd_sidecar` on `detector_from_run` and under `[telemetry]`: the
+  whitening PSD of the streaming detector may come from the feature
+  sidecar of the record being scored instead of the one persisted with
+  the training run. A whitening PSD calibrates a record, not a model, and
+  with the annually modulated Galactic foreground the training record's
+  PSD costs every detection on a later one.
 - `threshold_block` under `[training]` (`"validation"` or `"held_out"`,
   default `"held_out"`) and `threshold_rows`: the decision threshold is
   fitted on the validation block alone or on validation and test pooled

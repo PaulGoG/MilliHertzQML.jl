@@ -217,6 +217,37 @@
         @test d.threshold == 0.42f0 && d.window_size == 1000 && d.context_windows == 3
         @test d.psd !== nothing && d.feature_set == :whitened
         @test isapprox(d.psd(1e-3), lisa_noise_psd(1e-3))
+        # A whitening sidecar other than the training run's is honoured —
+        # here one that whitens not at all, so the override is unambiguous —
+        # while the rest of the conditioning still comes from the training
+        # sidecar; a missing one fails fast rather than falling back silently
+        other_sidecar = joinpath(dir, "other_features.toml")
+        open(other_sidecar, "w") do io
+            TOML.print(
+                io,
+                Dict(
+                    "features" => Dict(
+                        "window_size" => 1000,
+                        "step_size" => 100,
+                        "sample_rate" => 0.2,
+                        "psd" => "none",
+                        "highpass_cutoff_hz" => 5e-4,
+                        "highpass_order" => 8,
+                        "feature_set" => "whitened",
+                    ),
+                ),
+            )
+        end
+        d_other =
+            detector_from_run(model_path; psd_sidecar = other_sidecar, context_windows = 3)
+        @test d_other.psd === nothing
+        @test d_other.threshold == d.threshold &&
+              d_other.window_size == d.window_size &&
+              d_other.feature_set == d.feature_set
+        @test_throws ArgumentError detector_from_run(
+            model_path;
+            psd_sidecar = joinpath(dir, "absent.toml"),
+        )
         @test_throws ArgumentError detector_from_run(joinpath(dir, "absent.jld2"))
         @test whitening_psd_from_sidecar(joinpath(dir, "feat_features.toml"))(1e-3) ==
               lisa_noise_psd(1e-3)

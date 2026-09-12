@@ -118,6 +118,7 @@ mode = "replay"                 # arrival feed handling; one of: "replay" | "liv
 min_coverage = 1.0              # fraction of a window's samples on the ground before scoring; in (0, 1]
 tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch [s]; >= 0
 context_windows = 4             # window lengths of delivered context on each side used for whitening; >= 0
+psd_sidecar = ""                # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
 producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver)
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0

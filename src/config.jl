@@ -532,7 +532,7 @@ Validated `[telemetry]` parameters of the coupling to a DeepSpaceTelemetry
 run: the exported scenario geometry (`segment_duration_sec`, `batch_size`,
 `start_sim_time`, `output_prefix`) and the consumer's replay settings
 (`run_dir`, `mode`, `min_coverage`, `tdi_gap_dilation_sec`,
-`context_windows`, `poll_interval_sec`, `producer_compat`,
+`context_windows`, `psd_sidecar`, `poll_interval_sec`, `producer_compat`,
 `processing_latency_hours`, `events_csv`).
 """
 function telemetry_settings(config::AbstractDict)
@@ -546,6 +546,7 @@ function telemetry_settings(config::AbstractDict)
     )
     run_dir = cfgget(t, "run_dir", ""; type = String)
     events_csv = cfgget(t, "events_csv", ""; type = String)
+    psd_sidecar = cfgget(t, "psd_sidecar", ""; type = String)
     return (
         segment_duration_sec = cfgget(
             t,
@@ -575,6 +576,7 @@ function telemetry_settings(config::AbstractDict)
             min = 0.0,
         ),
         context_windows = cfgget(t, "context_windows", 4; type = Int, min = 0),
+        psd_sidecar = isempty(psd_sidecar) ? "" : resolvepath(psd_sidecar),
         poll_interval_sec = cfgget(t, "poll_interval_sec", 1.0; type = Float64, min = 1e-3),
         producer_compat = cfgget(t, "producer_compat", "1.0"; type = String),
         processing_latency_hours = cfgget(
