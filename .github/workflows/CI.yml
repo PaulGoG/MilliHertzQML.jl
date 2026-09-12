@@ -2,7 +2,9 @@
 # GitHub Actions minutes are not available on this private repository, so
 # the workflow runs on manual dispatch only. Re-enable the push and
 # pull-request triggers at publication, together with the coverage upload
-# (CODECOV_TOKEN), the documentation deployment, and TagBot.
+# (CODECOV_TOKEN) and the documentation deployment. The package is not
+# registered in General, so there is no TagBot and no registration
+# workflow: release tags are created by hand.
 name: CI
 on:
   workflow_dispatch:

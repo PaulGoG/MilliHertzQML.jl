@@ -75,8 +75,13 @@ Julia 1.13 is the development release: the committed `Manifest.toml` files
 are resolved on it. The `[compat]` floor is 1.12, where the suite last
 passed on 2026-09-10; the floor is retained until continuous integration
 exercises it again. With [juliaup](https://github.com/JuliaLang/juliaup),
-`juliaup update` keeps the `release` channel current. From a clone of this
-repository:
+`juliaup update` keeps the `release` channel current.
+
+The package is not registered in the General registry and is not intended
+to be: it is used from a clone, and a downstream environment consumes it by
+path or by git source — `Pkg.develop(path = ...)`, or a `[sources]` entry
+pinning the URL and a revision — with released states marked by git tags.
+From a clone of this repository:
 
 ```bash
 git clone git@github.com:PaulGoG/MilliHertzQML.jl.git
@@ -89,10 +94,10 @@ environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
 package by path and activates itself, so the step above is optional for
 them; the first invocation of each environment resolves and precompiles
 it. The script and test environments also pin the telemetry producer
-DeepSpaceTelemetry.jl as a git source of its private repository; on a
-machine whose git configuration rewrites GitHub URLs to SSH, instantiate
-them with `JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses
-the command-line git client and its agent.
+DeepSpaceTelemetry.jl, unregistered likewise, as a git source of its
+private repository; on a machine whose git configuration rewrites GitHub
+URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true` so that
+the package manager uses the command-line git client and its agent.
 
 ## Usage
 
