@@ -185,9 +185,8 @@ ground-station passes, the same model detects all six at 2.56 per 30 days.
 **Four of the alerts precede their merger by 1.9 to 2.7 days**, the
 classifier firing on the inspiral; a fifth arrives nineteen minutes before
 its merger and, with the one-hour processing budget, forty minutes after
-it; the sixth fifteen hours after. The delivery in that mission is
-lossless — the coupling excludes delivery holes from scoring rather than
-handling them.
+it; the sixth fifteen hours after. That mission lost no data, and the
+coupling excludes delivery holes from scoring rather than handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
