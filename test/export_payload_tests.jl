@@ -123,8 +123,12 @@
             payload_meta = scenario["payload"]
             @test payload_meta["n_rows"] == n
             @test payload_meta["tdi_group"] == "obs/tdi"
-            @test resolvepath(payload_meta["source"]) == h5
-            @test resolvepath(payload_meta["catalog"]) == catalog_path
+            # Inputs outside the package root are recorded by file name, the
+            # directory belonging to the machine that ran the stage rather
+            # than to the run (`provenance_path`)
+            @test payload_meta["source"] == basename(h5)
+            @test payload_meta["catalog"] == basename(catalog_path)
+            @test !occursin(homedir(), payload_meta["source"])
             @test payload_meta["samples_per_batch"] == 100
             @test payload_meta["n_batches"] == 30
         end
