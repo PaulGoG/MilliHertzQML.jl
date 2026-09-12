@@ -15,6 +15,7 @@ makedocs(
         "Physics & Data" => "physics.md",
         "Quantum Architecture" => "architecture.md",
         "Telemetry Coupling" => "telemetry.md",
+        "Sangria Benchmark" => "benchmark.md",
         "API Reference" => "api.md",
     ],
 )

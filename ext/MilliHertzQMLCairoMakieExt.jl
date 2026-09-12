@@ -446,12 +446,15 @@ function figure_threshold_sweep(
                 color = FIGURE_COLORS.threshold,
                 linestyle = :dot,
             )
+            # Left of centre, where the false-alarm curve runs far above the
+            # target: the right end is where the fitted threshold's vertical
+            # rule crosses the line.
             text!(
                 ax_far,
-                hi,
+                lo + 0.35 * (hi - lo),
                 Float64(target_far_per_30d);
                 text = "Target $(compact(target_far_per_30d)) per 30 d",
-                align = (:right, :bottom),
+                align = (:left, :bottom),
                 offset = (0, 2),
                 fontsize = 7,
                 color = FIGURE_COLORS.threshold,
@@ -673,53 +676,55 @@ function figure_telemetry_alerts(
     return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
         figure = Figure()
         ax_score = Axis(figure[1, 1]; ylabel = "MBHB probability")
+        span_handle = nothing
         if label_spans !== nothing
-            for (k, (a, b)) in enumerate(label_spans)
-                vspan!(
+            for (a, b) in label_spans
+                p = vspan!(
                     ax_score,
                     days_since(epoch, a),
                     days_since(epoch, b);
                     color = (FIGURE_COLORS.label, 0.25),
-                    label = k == 1 ? "Labeled span" : nothing,
                 )
+                span_handle === nothing && (span_handle = p)
             end
         end
-        lines!(
-            ax_score,
-            t_days,
-            scores;
-            color = FIGURE_COLORS.data,
-            linewidth = 0.7,
-            label = "Classifier output",
-        )
-        isempty(alarmed) || scatter!(
-            ax_score,
-            t_days[alarmed],
-            scores[alarmed];
-            color = FIGURE_COLORS.signal,
-            markersize = 4,
-            label = "Alarm",
-        )
-        hlines!(
+        score_handle =
+            lines!(ax_score, t_days, scores; color = FIGURE_COLORS.data, linewidth = 0.7)
+        alarm_handle =
+            isempty(alarmed) ? nothing :
+            scatter!(
+                ax_score,
+                t_days[alarmed],
+                scores[alarmed];
+                color = FIGURE_COLORS.signal,
+                markersize = 4,
+            )
+        threshold_handle = hlines!(
             ax_score,
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
-            label = "Threshold $(round(threshold; digits = 3))",
         )
         ylims!(ax_score, 0, 1)
-        ax_lat = Axis(
-            figure[2, 1];
-            xlabel = "Mission time [days]",
-            ylabel = "Ground latency [h]",
-        )
-        lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 0.7)
+        # The lower panel carries two different latencies against the same
+        # mission time: the delivery latency of every scored window, and, per
+        # event, the alert time measured from the coalescence — negative when
+        # the inspiral is alarmed before the merger.
+        ax_lat = Axis(figure[2, 1]; xlabel = "Mission time [days]", ylabel = "Latency [h]")
+        delivery_handle =
+            lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 0.7)
+        merger_handle =
+            hlines!(ax_lat, [0.0]; color = :black, linestyle = :dot, linewidth = 0.8)
+        alert_handle = nothing
+        alert_y = Float64[]
         if latencies !== nothing
             for row in eachrow(latencies)
                 row.detected || continue
                 x = days_since(epoch, row.t_alarm)
                 y = Dates.value(row.t_alarm - row.t_merger) / 3.6e6
-                scatter!(ax_lat, [x], [y]; color = FIGURE_COLORS.signal, markersize = 5)
+                p = scatter!(ax_lat, [x], [y]; color = FIGURE_COLORS.signal, markersize = 5)
+                alert_handle === nothing && (alert_handle = p)
+                push!(alert_y, y)
                 text!(
                     ax_lat,
                     x,
@@ -736,7 +741,26 @@ function figure_telemetry_alerts(
         hidexdecorations!(ax_score; grid = false, ticks = false)
         lo, hi = extrema(t_days)
         xlims!(ax_lat, lo, hi == lo ? lo + 1 : hi)
-        Legend(figure[0, 1], ax_score; LEGEND_STYLE..., nbanks = 2)
+        # Room for the annotations, which sit above their markers
+        y_lo, y_hi = extrema(vcat(latency_h, alert_y))
+        pad = max(1.0, 0.10 * (y_hi - y_lo))
+        ylims!(ax_lat, y_lo - 0.4 * pad, y_hi + pad)
+        handles = Any[]
+        labels = String[]
+        for (h, l) in (
+            (span_handle, "Labeled span"),
+            (score_handle, "Classifier output"),
+            (alarm_handle, "Alarm"),
+            (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
+            (delivery_handle, "Delivery"),
+            (alert_handle, "Alert time"),
+            (merger_handle, "Merger"),
+        )
+            h === nothing && continue
+            push!(handles, h)
+            push!(labels, l)
+        end
+        Legend(figure[0, 1], handles, labels; LEGEND_STYLE..., nbanks = 3)
         rowgap!(figure.layout, 4)
         figure
     end

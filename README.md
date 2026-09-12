@@ -15,11 +15,11 @@ MilliHertzQML/
 │   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
 │   │   ├── export_payload.jl #  export_telemetry_payload: A-channel payload and scenario fragment for the telemetry producer
 │   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
-│   │   ├── training.jl     #   train_classifier: chronological blocks, training, validation-fitted threshold
+│   │   ├── training.jl     #   train_classifier: chronological blocks, training, threshold fitted on the calibration block
 │   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, class-weighted BCE loss, gradient step
-│   ├── evaluation.jl       # Chronological block split, ROC, validation-fitted threshold, event-level metrics
+│   ├── evaluation.jl       # Chronological block split, ROC, calibration-block threshold, event-level metrics
 │   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
 │   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
 │   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
@@ -52,7 +52,7 @@ MilliHertzQML/
 ├── docs/
 │   ├── Project.toml        # Documentation environment (package consumed by path)
 │   ├── make.jl             # Documenter.jl build script
-│   └── src/                # Manual pages (build/ is generated, not tracked)
+│   └── src/                # Manual pages incl. the Sangria benchmark and its figures (build/ is generated, not tracked)
 ├── data/
 │   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
 │   └── outputs/            # Per-run plots and results (not tracked)
@@ -164,6 +164,32 @@ julia scripts/infer_telemetry.jl config.toml --run-dir <DeepSpaceTelemetry run d
 
 Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the calibration block of `threshold_block` by `threshold_criterion`: `far`, at most `target_far_per_30d` false-alarm episodes per 30 days and an alarm duty cycle of at most `target_fpr` on unlabeled windows, scanned from the highest threshold down so that the operating point stays on the branch of short, isolated episodes; `fpr`; or `youden`), `threshold_sweep.csv` (event and window recall and false-alarm rate of the calibration block at every candidate threshold, drawn as the `threshold_sweep` figure), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` and the post-hoc `threshold_sweep.csv` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
+## Results
+
+On the LISA Data Challenge 2a "Sangria" blind year, the eight-qubit model
+(`configs/experiments/q8_b6.toml`: 8 qubits, 4 re-uploading layers, six
+sub-mHz band powers) detects **all five labelled MBHB events at 2.47
+false-alarm episodes per 30 mission days**, from a decision threshold
+fitted on held-out data of the *training* year and applied without
+adjustment; the fit predicted 2.20. Replayed through a simulated
+year-long telemetry mission with daily ground-station passes, the same
+model detects all six catalogued coalescences at 2.56 per 30 days, and
+**five of the six alerts are raised before the merger**, by two to two and
+a half days, the classifier firing on the inspiral.
+
+![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
+
+Two results of the benchmark are worth more than the numbers. The ROC area
+ranks the seven models tried in almost the opposite order to their
+delivered false-alarm rate, because the two observation years' noise
+distributions agree only in the far tail and an operating point placed
+below it inherits the annual modulation of the Galactic foreground. And
+the conditioning is not causal: the whitening is zero-phase, so a window
+scored the moment its samples arrive finds two of five events, and an
+alert carries an irreducible look-ahead of 1.16 days. Both are set out,
+with the evidence, in the [benchmark page](docs/src/benchmark.md), which
+also states where a 14.6 k-parameter classical baseline does better.
+
 ## Testing and Benchmarks
 
 ```bash
@@ -186,11 +212,11 @@ julia docs/make.jl
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
-| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; Sangria benchmark run pending |
+| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block, or validation and test pooled by default so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
 | Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector, replay and live modes, alert-latency table and figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
-| Documentation | Tracks the current state; remediation of the remaining defects is planned |
+| Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; remediation of the remaining defects is planned |
 
 Version 0.1.x is a pre-release: the remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.
 

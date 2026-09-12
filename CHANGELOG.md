@@ -7,6 +7,12 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- `docs/src/benchmark.md`: the Sangria benchmark page — data, labels and
+  protocol; the seven models tried and what separates them; the
+  comparison with the classical GWEEP baseline, which does better; the
+  telemetry replay with its alert latencies; and the limits of the
+  result. Its figures are the provenance-tracked exports of the runs
+  behind them, under `docs/src/assets/` with their sidecars.
 - `psd_sidecar` on `detector_from_run` and under `[telemetry]`: the
   whitening PSD of the streaming detector may come from the feature
   sidecar of the record being scored instead of the one persisted with
