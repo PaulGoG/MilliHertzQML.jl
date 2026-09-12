@@ -1176,16 +1176,18 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "Random", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
 path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
 
     [deps.MilliHertzQML.extensions]
     MilliHertzQMLCairoMakieExt = "CairoMakie"
+    MilliHertzQMLDeepSpaceTelemetryExt = "DeepSpaceTelemetry"
 
     [deps.MilliHertzQML.weakdeps]
     CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+    DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
