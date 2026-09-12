@@ -19,6 +19,7 @@ using MilliHertzQML:
     ArrivalEvent,
     parse_batch_name,
     batch_rows,
+    time_row,
     row_time,
     event_symbol
 import MilliHertzQML:
@@ -126,19 +127,39 @@ function list_batches(run::DeepSpaceTelemetryRun)
                 continue      # a foreign directory
             end
             meta = TelemetryCore.read_batch_metadata(batch_dir)
-            rows = batch_rows(k, P)
-            epoch =
+            # The batch's first row comes from the content epoch the producer
+            # stamps on it. Reconstructing it from the index is only correct
+            # while the producer stores every batch it produces; when its
+            # recorder overflows it discards production and keeps numbering
+            # what it stores, so the index drifts behind the content.
+            stamped =
                 haskey(meta, "content_epoch") ?
-                something(
-                    tryparse(DateTime, String(meta["content_epoch"])),
-                    row_time(run.geometry, first(rows)),
-                ) : row_time(run.geometry, first(rows))
+                tryparse(DateTime, String(meta["content_epoch"])) : nothing
+            rows = batch_rows(k, P)
+            if stamped !== nothing
+                row0 = time_row(run.geometry, stamped)
+                if row0 >= 1
+                    rows = row0:(row0+P-1)
+                else
+                    @warn "a batch is stamped before the mission epoch; falling back " *
+                          "to its index for the payload rows." batch = name content_epoch =
+                        stamped
+                end
+            end
+            epoch = stamped === nothing ? row_time(run.geometry, first(rows)) : stamped
             batch_state =
                 state == :ground && isfile(joinpath(batch_dir, "PRUNED")) ? :pruned : state
             push!(records, BatchRecord(name, k, live, rows, epoch, batch_state))
         end
     end
     sort!(records; by = r -> r.index)
+    # A stored index that has fallen behind the content means the producer
+    # discarded production: the record then has permanent gaps that no arrival
+    # will fill, which the coverage handles, but it must not pass unremarked.
+    drifted = count(r -> first(r.rows) != first(batch_rows(r.index, P)), records)
+    drifted == 0 || @warn "the producer discarded production: the stored batch index " *
+          "no longer tracks the payload rows, so the record carries permanent gaps." batches_affected =
+        drifted total_batches = length(records)
     return records
 end
 

@@ -70,7 +70,8 @@ export figure_training_history, figure_mission_trace, figure_roc, figure_sensiti
 export figure_threshold_sweep
 export figure_score_distribution, figure_telemetry_trace, figure_telemetry_alerts
 export RunGeometry, BatchRecord, ArrivalEvent, WindowRecord, parse_batch_name, batch_rows
-export row_time, event_symbol, AbstractTelemetryRun, run_geometry, list_batches, read_batch
+export row_time,
+    time_row, event_symbol, AbstractTelemetryRun, run_geometry, list_batches, read_batch
 export arrival_events, run_state, MemoryTelemetryRun, Coverage, add!, remove!
 export covered_fraction, holes, covered_stretch, WindowScheduler, window_rows
 export conditioning_rows

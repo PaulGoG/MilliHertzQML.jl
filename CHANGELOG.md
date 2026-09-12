@@ -179,6 +179,13 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- A delivered batch is anchored to its payload rows by the `content_epoch`
+  the producer stamps on it rather than by its stored index, and
+  `time_row` inverts `row_time`. The index tracks the rows only while the
+  producer stores everything it produces; when its recorder overflows it
+  discards production and keeps numbering what it stores, so every later
+  batch was attributed to the wrong rows, silently. `list_batches` now
+  warns when the two disagree.
 - The replay scores a window once its conditioning stretch has been
   delivered, not once the window itself has: `WindowScheduler` takes
   `context_rows` and `payload_rows`, and `conditioning_rows` gives the

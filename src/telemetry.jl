@@ -131,6 +131,20 @@ function row_time(geometry::RunGeometry, row::Integer)
 end
 
 """
+    time_row(geometry, t) -> Int
+
+Payload row whose mission time is `t`, the inverse of [`row_time`](@ref)
+rounded to the nearest row. Rows are 1-based and a time before
+`start_sim_time` yields a row below 1, which callers must reject rather
+than clamp: it means the batch does not belong to the payload the run was
+started from.
+"""
+function time_row(geometry::RunGeometry, t::Dates.DateTime)
+    ms = Dates.value(Dates.Millisecond(t - geometry.start_sim_time))
+    return round(Int, ms * geometry.sample_rate / 1000) + 1
+end
+
+"""
     event_symbol(value) -> Symbol
 
 `:ingested`, `:retry`, `:lost`, or `:pruned` for the producer's event

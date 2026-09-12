@@ -14,6 +14,10 @@
     @test batch_rows(1, 100) == 1:100 && batch_rows(7, 100) == 601:700
     @test row_time(geometry, 1) == epoch
     @test row_time(geometry, 101) == epoch + Dates.Second(500)
+    @test time_row(geometry, epoch) == 1
+    @test time_row(geometry, epoch + Dates.Second(500)) == 101
+    @test time_row(geometry, row_time(geometry, 54_321)) == 54_321
+    @test time_row(geometry, epoch - Dates.Second(500)) == -99
     @test event_symbol("Ingested") == :ingested && event_symbol("weird") == :other
 
     # Coverage algebra is order-agnostic; erosion and holes
