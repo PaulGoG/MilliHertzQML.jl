@@ -175,12 +175,19 @@ On the LISA Data Challenge 2a "Sangria" blind year, the eight-qubit model
 (`configs/experiments/q8_b6.toml`: 8 qubits, 4 re-uploading layers, six
 sub-mHz band powers) detects **all five labelled MBHB events at 2.47
 false-alarm episodes per 30 mission days**, from a decision threshold
-fitted on held-out data of the *training* year and applied without
-adjustment; the fit predicted 2.20. Replayed through a simulated
-year-long telemetry mission with daily ground-station passes, the same
-model detects all six catalogued coalescences at 2.56 per 30 days, and
-**five of the six alerts are raised before the merger**, by two to two and
-a half days, the classifier firing on the inspiral.
+fitted on the pooled held-out block of the *training* year — validation
+and test together, 110 days — and applied without adjustment; the fit
+predicted 2.20. The blind year carries six catalogued coalescences, two of
+them within a day of each other and so covered by one label span, which is
+why the batch metrics count five events and the telemetry table six.
+Replayed through a simulated year-long telemetry mission with daily
+ground-station passes, the same model detects all six at 2.56 per 30 days.
+**Four of the alerts precede their merger by 1.9 to 2.7 days**, the
+classifier firing on the inspiral; a fifth arrives nineteen minutes before
+its merger and, with the one-hour processing budget, forty minutes after
+it; the sixth fifteen hours after. The delivery in that mission is
+lossless — the coupling excludes delivery holes from scoring rather than
+handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
@@ -194,6 +201,29 @@ scored the moment its samples arrive finds two of five events, and an
 alert carries an irreducible look-ahead of 1.16 days. Both are set out,
 with the evidence, in the [benchmark page](docs/src/benchmark.md), which
 also states where a 14.6 k-parameter classical baseline does better.
+
+## Limitations
+
+- **One blind realisation of five events.** The recall is 5 of 5 and the
+  false-alarm rate is measured over 364 days, but five events do not
+  measure a detection efficiency. Read the recall as a result, not a rate.
+- **One initialisation.** Every experiment runs at `seed = 9999`; the
+  spread of the operating point under re-initialisation has not been
+  measured.
+- **Single channel.** Only A is used. E and T carry independent
+  information and would allow a null-channel veto.
+- **No gaps.** The Sangria products are gapless and the mission replayed
+  here lost no data. The coupling discards windows that cross a delivery
+  hole instead of scoring them, and the classifier has never been trained
+  on gapped data; gap-tolerant features are planned, not implemented.
+- **The threshold comes from the same mission's earlier year.** A real
+  chain would recalibrate as the mission proceeds; the transfer measured
+  here spans one year, in one direction.
+
+The physical and methodological deficiencies behind these — waveform and
+noise-model scope, the single evaluation record — are listed in
+[`docs/src/physics.md`](docs/src/physics.md) and
+[`docs/src/architecture.md`](docs/src/architecture.md).
 
 ## Testing and Benchmarks
 

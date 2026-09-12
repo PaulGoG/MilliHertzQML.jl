@@ -246,15 +246,17 @@ coalescences at 2.56 false alarms per 30 days** — the batch benchmark's
 | 5 | 2035-09-21T21:39 | **−51.3** | −50.3 |
 | 6 | 2035-11-10T00:11 | +15.1 | +16.1 |
 
-A negative latency is an alert raised *before* the coalescence. **Five of
-the six alerts are pre-merger, by two to two and a half days**, and they
+A negative latency is an alert raised *before* the coalescence. **Four of
+the six alerts precede their merger by 1.9 to 2.7 days**, and they
 already include the 1.16-day conditioning lag and the ground segment's
 own delivery latency, which the lower panel shows running between 25 and
 48 hours as batches wait for the next pass. The classifier fires on the
 inspiral, which its four-day label span covers, rather than on the
 coalescence itself; that is the operationally interesting behaviour for a
-multi-messenger alert, and it is what buys back the conditioning lag.
-Event 3 is caught 20 minutes before merger and event 6 fifteen hours
+multi-messenger alert, and it is what buys back the conditioning lag. The
+remaining two are marginal in opposite directions: event 3 is caught 19
+minutes before its merger in data time, which the one-hour processing
+budget turns into 42 minutes after it, and event 6 arrives fifteen hours
 after.
 
 Both are consequences of one thing: the conditioning kernel of the record
@@ -272,11 +274,17 @@ shorten it and is the natural next step.
 - **One blind realisation of five events.** The event recall is 5 of 5 and
   the false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Treat the recall as a result, not a rate.
+- **One initialisation.** Every configuration in the grid runs at
+  `seed = 9999`. The differences between models are therefore differences
+  between single training runs, and the spread of the operating point
+  under re-initialisation is not measured.
 - **Single channel.** Only A is used; E and T carry independent
   information and would also permit a null-channel veto.
-- **No gaps.** The Sangria products are gapless. The telemetry coupling
-  handles delivery holes, but the classifier has never been trained on
-  data with them.
+- **No gaps.** The Sangria products are gapless, and the mission replayed
+  above delivered all 63,043 batches: nothing was lost or pruned, so the
+  hole handling of the coupling — discard a window that crosses a hole,
+  never wait on it — is exercised by the unit tests only, not by this
+  result. The classifier has never been trained on data with gaps.
 - **The threshold is fitted on the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here is over one year, in one direction.

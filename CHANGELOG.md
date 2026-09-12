@@ -185,6 +185,22 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- The alert latencies are reported per event instead of as a group: four
+  of the six alerts precede their merger by 1.9 to 2.7 days, event 3 by
+  nineteen minutes of data latency which the one-hour processing budget
+  turns into forty-two minutes after the merger, and event 6 fifteen hours
+  after. The previous wording — five pre-merger alerts "by two to two and
+  a half days" — counted event 3 among them on its data latency alone and
+  misstated the range of the other four.
+- The README carries its own limitations section (one blind realisation of
+  five events, one initialisation, single channel, no gaps, a threshold
+  fitted on the same mission's earlier year), names the pooled held-out
+  block where it reports the operating point, and explains why the batch
+  metrics count five events where the telemetry table counts six.
+- The benchmark page's caveats record that the replayed mission delivered
+  all 63,043 batches with nothing lost or pruned, so the coupling's hole
+  handling is exercised by the unit tests and not by that result, and that
+  every configuration of the grid was trained at one seed.
 - A delivered batch is anchored to its payload rows by the `content_epoch`
   the producer stamps on it rather than by its stored index, and
   `time_row` inverts `row_time`. The index tracks the rows only while the
