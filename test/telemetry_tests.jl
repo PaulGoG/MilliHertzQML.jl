@@ -53,6 +53,27 @@
     add!(cov2, 1:500)
     @test newly_evaluable!(partial, cov2, 1:500) == [1]
 
+    # With a conditioning stretch a window waits for the data after it,
+    # and an arriving batch can release a window that lies earlier
+    sched = WindowScheduler(10, 5; context_rows = 10, payload_rows = 60)
+    @test conditioning_rows(sched, 1) == 1:20
+    @test conditioning_rows(sched, 3) == 1:30
+    @test conditioning_rows(sched, 6) == 16:45
+    cov = Coverage()
+    add!(cov, 1:20)
+    @test newly_evaluable!(sched, cov, 1:20) == [1]
+    add!(cov, 21:30)
+    @test newly_evaluable!(sched, cov, 21:30) == [2, 3]
+    # The record's end is not waited for beyond the payload
+    sched_end = WindowScheduler(10, 5; context_rows = 10, payload_rows = 30)
+    @test conditioning_rows(sched_end, 5) == 11:30
+    cov_end = Coverage()
+    add!(cov_end, 1:30)
+    @test 5 in newly_evaluable!(sched_end, cov_end, 1:30)
+    # Without a stretch the scheduler behaves as before
+    plain = WindowScheduler(10, 5)
+    @test conditioning_rows(plain, 3) == window_rows(plain, 3)
+
     # Streaming detector on an in-memory run: a burst is scored where it lies
     rng = StableRNG(31)
     fs = 0.2
@@ -104,15 +125,18 @@
     @test all(0 .<= windows.score .<= 1)
     @test all(windows.decision .== Int.(windows.score .>= 0.5f0))
     @test issorted(windows.complete_at)
-    # A window completes when its last batch arrives: window 1 needs batches
-    # 1–10, and under the pairwise swap batch 9 is the tenth event
-    @test windows.complete_at[1] == epoch + Dates.Second(600 * 10)
+    # A window is scored when its conditioning stretch is delivered, not when
+    # its own rows are: with two window lengths of context, window 1 waits for
+    # rows 1:3000, batches 1–30, the last of which is the thirtieth event
+    @test windows.complete_at[1] == epoch + Dates.Second(600 * 30)
     @test windows.row_start[1] == 1 && windows.row_end[end] == n_rows
     @test all(windows.inference_wall_ms .>= 0)
     # The scored value equals a direct evaluation on the same delivered
-    # stretch: window 11 (rows 1001:2000) completes with batch 19 as the
-    # twentieth event, when rows 1:2000 are on the ground
-    direct = score_window(detector, payload[1:2000], 1001)
+    # stretch: window 11 (rows 1001:2000) is scored once its stretch 1:4000
+    # is on the ground, the window sitting at offset 1001 inside it. The
+    # batches reach the consumer in single precision, so the comparison is
+    # made against the same rounding.
+    direct = score_window(detector, Float32.(payload[1:4000]), 1001)
     @test isapprox(windows.score[11], direct; atol = 1e-6)
     # Lost batches are removed with erosion and their windows never complete
     lossy = ArrivalEvent[]
@@ -128,12 +152,28 @@
         )
     end
     run_lossy = MemoryTelemetryRun(geometry, payload, lossy; lost = ["LIVE_batch_30"])
-    lossy_windows = replay_run(run_lossy, detector; tdi_gap_dilation_sec = 100.0)
-    # Window m covers rows [1 + 100 (m − 1), 100 (m − 1) + 1000]; batch 30 is rows
-    # 2901:3000, eroded to 2881:3020, so windows 21–31 never complete — including
-    # window 31, whose first rows arrive only after the loss
+    # Without a conditioning stretch a hole blocks exactly the windows it
+    # touches: window m covers rows [1 + 100 (m − 1), 100 (m − 1) + 1000], batch
+    # 30 is rows 2901:3000, eroded to 2881:3020, so windows 21–31 never complete
+    # — including window 31, whose first rows arrive only after the loss
+    bare = StreamingDetector(
+        model,
+        scaler,
+        0.5;
+        sample_rate = fs,
+        window_size = 1000,
+        step_size = 100,
+        psd = lisa_noise_psd,
+        context_windows = 0,
+    )
+    lossy_windows = replay_run(run_lossy, bare; tdi_gap_dilation_sec = 100.0)
     @test all(w -> w <= 20 || w >= 32, lossy_windows.window)
     @test nrow(lossy_windows) == nrow(windows) - 11
+    # The stretch widens that reach considerably: with two window lengths of
+    # context every window of this 6000-row record needs rows within 2000 of the
+    # hole, so none of them can be conditioned at all. A permanent hole is
+    # expensive in proportion to the context the whitening demands.
+    @test nrow(replay_run(run_lossy, detector; tdi_gap_dilation_sec = 100.0)) == 0
     # Live mode on a completed run drains the feed once and stops
     followed = follow_run(run, detector; poll_interval_sec = 0.01, max_wall_sec = 30)
     @test nrow(followed) == nrow(windows) && followed.score == windows.score

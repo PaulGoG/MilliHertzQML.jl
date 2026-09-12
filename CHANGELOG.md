@@ -179,6 +179,15 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- The replay scores a window once its conditioning stretch has been
+  delivered, not once the window itself has: `WindowScheduler` takes
+  `context_rows` and `payload_rows`, and `conditioning_rows` gives the
+  rows a window waits for. The whitening is zero-phase and its kernel
+  two-sided, so a window scored on arrival is not conditioned as the
+  batch pipeline conditions it — on the Sangria blind year that costs
+  three of five events, and past context does not compensate. An alert
+  consequently carries a conditioning lag of `context_windows` window
+  lengths behind the delivery front.
 - Provenance snapshots are written to be publishable. The hardware
   fingerprint identifies the host by `machine_id`, the first twelve hex
   characters of the SHA-256 digest of its name, instead of by `hostname`;

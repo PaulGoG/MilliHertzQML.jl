@@ -363,28 +363,49 @@ end
 # --- Window scheduling -------------------------------------------------
 
 """
-    WindowScheduler(window_size, step_size; min_coverage = 1.0)
+    WindowScheduler(window_size, step_size; min_coverage = 1.0, context_rows = 0, payload_rows = 0)
 
 Bookkeeping of the sliding windows (window `m` covers rows
 `[1 + (m − 1) S, (m − 1) S + W]`) that have become evaluable: a window is
 evaluable once at least `min_coverage` of its rows are delivered, and each
 window is emitted once.
+
+`context_rows` is the conditioning stretch the detector needs on each
+side of a window: a window becomes evaluable only once that stretch, cut
+to the record by `payload_rows` (0 meaning unknown, so no cut at the
+end), is covered. The whitening is zero-phase and its kernel therefore
+two-sided, so a window scored before the data after it has arrived is not
+conditioned as the batch pipeline conditions it; the price of matching it
+is a lag of `context_rows` samples behind the delivery front.
 """
 mutable struct WindowScheduler
     window_size::Int
     step_size::Int
     min_coverage::Float64
+    context_rows::Int
+    payload_rows::Int
     emitted::Set{Int}
     function WindowScheduler(
         window_size::Integer,
         step_size::Integer;
         min_coverage::Real = 1.0,
+        context_rows::Integer = 0,
+        payload_rows::Integer = 0,
     )
         window_size >= 2 || throw(ArgumentError("window_size must be at least 2."))
         1 <= step_size <= window_size ||
             throw(ArgumentError("step_size must lie in [1, window_size]."))
         0 < min_coverage <= 1 || throw(ArgumentError("min_coverage must lie in (0, 1]."))
-        return new(Int(window_size), Int(step_size), Float64(min_coverage), Set{Int}())
+        context_rows >= 0 || throw(ArgumentError("context_rows must be non-negative."))
+        payload_rows >= 0 || throw(ArgumentError("payload_rows must be non-negative."))
+        return new(
+            Int(window_size),
+            Int(step_size),
+            Float64(min_coverage),
+            Int(context_rows),
+            Int(payload_rows),
+            Set{Int}(),
+        )
     end
 end
 
@@ -397,6 +418,23 @@ function window_rows(scheduler::WindowScheduler, m::Integer)
     m >= 1 || throw(ArgumentError("window index $m; windows are 1-based."))
     lo = 1 + (m - 1) * scheduler.step_size
     return lo:(lo+scheduler.window_size-1)
+end
+
+"""
+    conditioning_rows(scheduler, m) -> UnitRange{Int}
+
+Payload rows that must be delivered before window `m` can be scored: its
+own rows widened by `context_rows` on each side and cut to the record
+(`payload_rows`, when known). At the ends of a record the stretch cannot
+be centred on the window and the score is edge-affected, exactly as the
+first and last windows of a batch-processed record are.
+"""
+function conditioning_rows(scheduler::WindowScheduler, m::Integer)
+    w = window_rows(scheduler, m)
+    lo = max(1, first(w) - scheduler.context_rows)
+    hi = last(w) + scheduler.context_rows
+    scheduler.payload_rows > 0 && (hi = min(hi, scheduler.payload_rows))
+    return lo:max(hi, last(w))
 end
 
 """
@@ -417,8 +455,11 @@ end
 """
     newly_evaluable!(scheduler, coverage, rows) -> Vector{Int}
 
-Windows touching `rows` that are now evaluable under `coverage` and have
-not been emitted before; they are recorded as emitted.
+Windows whose conditioning stretch ([`conditioning_rows`](@ref))
+intersects `rows` and is now covered under `coverage`, and that have not
+been emitted before; they are recorded as emitted. An arriving batch can
+therefore make a window evaluable that lies up to `context_rows` earlier
+in the record, which is why the search range is widened.
 """
 function newly_evaluable!(
     scheduler::WindowScheduler,
@@ -426,9 +467,11 @@ function newly_evaluable!(
     rows::AbstractUnitRange{<:Integer},
 )
     ready = Int[]
-    for m in windows_touching(scheduler, rows)
+    widened = (first(rows)-scheduler.context_rows):(last(rows)+scheduler.context_rows)
+    for m in windows_touching(scheduler, widened)
         m in scheduler.emitted && continue
-        if covered_fraction(coverage, window_rows(scheduler, m)) >= scheduler.min_coverage
+        if covered_fraction(coverage, conditioning_rows(scheduler, m)) >=
+           scheduler.min_coverage
             push!(scheduler.emitted, m)
             push!(ready, m)
         end
@@ -668,6 +711,8 @@ mutable struct ReplayState
                 detector.window_size,
                 detector.step_size;
                 min_coverage = min_coverage,
+                context_rows = detector.context_windows * detector.window_size,
+                payload_rows = max(0, geometry.payload_rows),
             ),
             Dict{Int,Vector{Float32}}(),
             WindowRecord[],

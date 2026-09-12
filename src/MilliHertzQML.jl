@@ -73,6 +73,7 @@ export RunGeometry, BatchRecord, ArrivalEvent, WindowRecord, parse_batch_name, b
 export row_time, event_symbol, AbstractTelemetryRun, run_geometry, list_batches, read_batch
 export arrival_events, run_state, MemoryTelemetryRun, Coverage, add!, remove!
 export covered_fraction, holes, covered_stretch, WindowScheduler, window_rows
+export conditioning_rows
 export windows_touching, newly_evaluable!, StreamingDetector, score_window
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
