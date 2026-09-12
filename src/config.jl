@@ -34,6 +34,23 @@ function rootrelative(p::AbstractString)
 end
 
 """
+    provenance_path(p) -> String
+
+`p` as recorded in a provenance snapshot: relative to
+[`project_root`](@ref) when it lies inside it, and otherwise its file
+name alone. A path outside the package root belongs to the machine that
+ran the stage, not to the run, and carries the account name and the
+directory layout of that machine into artifacts that are meant to be
+published; the file name is what identifies the input. Use
+[`rootrelative`](@ref) instead wherever the recorded path is read back
+and resolved rather than only reported.
+"""
+function provenance_path(p::AbstractString)
+    rel = rootrelative(p)
+    return isabspath(rel) ? basename(rel) : rel
+end
+
+"""
     load_config(path) -> Dict{String, Any}
 
 Parse the TOML configuration at `path`, failing fast when the file is

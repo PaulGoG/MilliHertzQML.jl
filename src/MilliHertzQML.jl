@@ -14,6 +14,7 @@ using JLD2: JLD2, jldsave
 using LinearAlgebra: LinearAlgebra
 using Logging: NullLogger, with_logger
 using Random: Random, AbstractRNG, Xoshiro
+using SHA: sha256
 using Statistics: mean, median, quantile, std
 using TOML: TOML
 using TimerOutputs: TimerOutput, @timeit, print_timer
@@ -53,7 +54,8 @@ export phenoma_start_frequency, phenoma_waveform
 export ldc_tdi_psd, ldc_confusion_psd, tdi_to_aet, read_tdi, read_catalog
 export welch_psd, interpolated_psd, windowed_snr, snr_peaks
 export detectable_spans, fixed_spans, span_labels
-export project_root, resolvepath, rootrelative, load_config, cfgget, override, section
+export project_root, resolvepath, rootrelative, provenance_path, load_config
+export cfgget, override, section
 export analysis_band, pipeline_paths, feature_geometry
 export generation_settings, preprocessing_settings, model_settings, training_settings
 export inference_settings, ldc_settings, resource_settings, telemetry_settings

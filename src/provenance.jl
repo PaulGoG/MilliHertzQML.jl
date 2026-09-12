@@ -31,23 +31,51 @@ Eight-character run identifier drawn from a UUID.
 new_run_id() = string(uuid4())[1:8]
 
 """
+    machine_id() -> String
+
+Stable anonymous identifier of the host: the first twelve hexadecimal
+characters of the SHA-256 digest of its name. Two runs on the same
+machine share it and runs on different machines do not, which is what
+provenance needs, while the machine's name — which is personal data in a
+published artifact — is not recoverable from it.
+"""
+machine_id() = bytes2hex(sha256(gethostname()))[1:12]
+
+"""
+    sanitized_versioninfo() -> String
+
+`InteractiveUtils.versioninfo()` output with the user's home directory
+replaced by `~`. The `Environment:` block echoes every `JULIA_*`
+variable, several of which customarily hold paths under the home
+directory and with it the account name.
+"""
+function sanitized_versioninfo()
+    text = sprint(InteractiveUtils.versioninfo)
+    home = homedir()
+    return isempty(home) ? text : replace(text, home => "~")
+end
+
+"""
     hardware_fingerprint() -> Dict{String, Any}
 
-Platform fingerprint recorded in run provenance snapshots: hostname, OS
-kernel, CPU model and logical core count, total memory, Julia version with
-the full `versioninfo()` output, and thread/worker counts (Julia threads,
-BLAS threads, `Distributed` workers). Together with the configuration
-snapshot and the git description this makes every result attributable to
-configuration, code version, and hardware. GPU fields are to be appended
-once a functional GPU backend is part of the pipeline.
+Platform fingerprint recorded in run provenance snapshots: an anonymous
+machine identifier ([`machine_id`](@ref)), OS kernel, CPU model and
+logical core count, total memory, Julia version with the sanitized
+`versioninfo()` output ([`sanitized_versioninfo`](@ref)), and
+thread/worker counts (Julia threads, BLAS threads, `Distributed`
+workers). Together with the configuration snapshot and the git
+description this makes every result attributable to configuration, code
+version, and hardware. The host's name never enters a snapshot. GPU
+fields are to be appended once a functional GPU backend is part of the
+pipeline.
 """
 function hardware_fingerprint()
     cpu = Sys.cpu_info()
     return Dict{String,Any}(
-        "hostname" => gethostname(),
+        "machine_id" => machine_id(),
         "kernel" => string(Sys.KERNEL),
         "julia_version" => string(VERSION),
-        "versioninfo" => sprint(InteractiveUtils.versioninfo),
+        "versioninfo" => sanitized_versioninfo(),
         "cpu_model" => isempty(cpu) ? "unknown" : first(cpu).model,
         "cpu_threads_logical" => Sys.CPU_THREADS,
         "total_memory_gib" => round(Sys.total_memory() / 2^30; digits = 2),

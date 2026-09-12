@@ -269,7 +269,7 @@ function label_truth_stream(
             snapshot_path,
             Dict{String,Any}(
                 "labels" => Dict{String,Any}(
-                    "source" => rootrelative(source),
+                    "source" => provenance_path(source),
                     "truth_group" => settings.truth_group,
                     "psd_model" => psd_model,
                     "tdi2" => tdi2,

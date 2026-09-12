@@ -211,9 +211,9 @@ function evaluate_classifier(
             joinpath(results_dir, "config_infer.toml"),
             Dict{String,Any}(
                 "inference" => Dict{String,Any}(
-                    "features" => rootrelative(features_path),
-                    "labels" => has_labels ? rootrelative(labels_path) : "",
-                    "model" => rootrelative(model_path),
+                    "features" => provenance_path(features_path),
+                    "labels" => has_labels ? provenance_path(labels_path) : "",
+                    "model" => provenance_path(model_path),
                     "block" => block_name,
                     "step_size" => geometry.step_size,
                     "sample_rate" => geometry.sample_rate,

@@ -364,7 +364,7 @@ function generate_telemetry(
             write_csv(label_file, DataFrame(Label = labels, SNR = snrs))
             write_csv(catalog_file, catalog)
             snapshot = Dict{String,Any}(String(k) => getfield(g, k) for k in keys(g))
-            snapshot["output"] = rootrelative(h5_file)
+            snapshot["output"] = provenance_path(h5_file)
             snapshot["run_id"] = run_id
             snapshot["n_events_injected"] = nrow(catalog)
             write_toml(snapshot_file, Dict{String,Any}("generation" => snapshot))

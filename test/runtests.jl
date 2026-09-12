@@ -950,6 +950,20 @@ end
     @test rootrelative(joinpath(project_root(), "data", "x.csv")) ==
           joinpath("data", "x.csv")
     @test rootrelative("/elsewhere/x.csv") == "/elsewhere/x.csv"
+    # Provenance paths: relative inside the root, bare file name outside,
+    # so that no snapshot carries the account name of the running machine
+    @test provenance_path(joinpath(PROJECT_ROOT, "data", "x.csv")) ==
+          joinpath("data", "x.csv")
+    @test provenance_path(joinpath(homedir(), "elsewhere", "product.h5")) == "product.h5"
+    @test !occursin(homedir(), provenance_path(joinpath(homedir(), "p.h5")))
+    # The fingerprint identifies the host without naming it
+    fp = hardware_fingerprint()
+    @test !haskey(fp, "hostname")
+    @test length(fp["machine_id"]) == 12 &&
+          all(c -> c in "0123456789abcdef", fp["machine_id"])
+    @test fp["machine_id"] == MilliHertzQML.machine_id()
+    @test !occursin(gethostname(), fp["machine_id"])
+    @test !occursin(homedir(), fp["versioninfo"])
     @test_throws ArgumentError load_config(joinpath(project_root(), "absent.toml"))
     sec = Dict{String,Any}("a" => 3, "b" => 2.5, "c" => "x", "d" => [1, 2])
     @test cfgget(sec, "a", 0; type = Float64) === 3.0

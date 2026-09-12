@@ -173,6 +173,18 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- Provenance snapshots are written to be publishable. The hardware
+  fingerprint identifies the host by `machine_id`, the first twelve hex
+  characters of the SHA-256 digest of its name, instead of by `hostname`;
+  the `versioninfo` output has the home directory replaced by `~`, its
+  `Environment:` block otherwise echoing whatever paths the `JULIA_*`
+  variables hold; and input paths go through the new `provenance_path`,
+  which records a path inside the package root relative to it and a path
+  outside it by file name alone. Machine names and account names
+  therefore no longer reach an artifact, while the facts provenance needs
+  — which machine, which file, which hardware — remain. The functional
+  `external_data_path` of the telemetry scenario fragment still uses
+  `rootrelative`, being resolved rather than only reported.
 - The `info` of `select_threshold` and the `threshold.toml` it feeds name
   the fitting block's rates `fit_*` instead of `validation_*`, the block
   no longer being the validation block by default, and add

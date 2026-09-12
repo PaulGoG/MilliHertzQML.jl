@@ -208,7 +208,7 @@ function preprocessing_parameters(
     label_path::AbstractString,
 )
     parameters = Dict{String,Any}(
-        "source" => rootrelative(h5_path),
+        "source" => provenance_path(h5_path),
         "source_size" => filesize(h5_path),
         "source_mtime" => mtime(h5_path),
         "tdi_group" => String(tdi_group),
@@ -233,7 +233,7 @@ function preprocessing_parameters(
         parameters["welch_segment_length"] = settings.welch_segment_length
     end
     if !isempty(label_path)
-        parameters["label_file"] = rootrelative(label_path)
+        parameters["label_file"] = provenance_path(label_path)
         parameters["label_file_size"] = filesize(label_path)
         parameters["label_file_mtime"] = mtime(label_path)
     end
@@ -463,7 +463,7 @@ function preprocess_record(
                 sidecar_path,
                 Dict{String,Any}(
                     "features" => Dict{String,Any}(
-                        "source" => rootrelative(h5_path),
+                        "source" => provenance_path(h5_path),
                         "tdi_group" => group,
                         "window_size" => settings.window_size,
                         "step_size" => settings.step_size,

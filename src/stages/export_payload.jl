@@ -230,10 +230,11 @@ function export_telemetry_payload(
                 ],
             ),
             "payload" => Dict{String,Any}(
-                "source" => rootrelative(source),
+                "source" => provenance_path(source),
                 "tdi_group" => group,
                 "n_rows" => n_rows,
-                "catalog" => catalog_path === nothing ? "" : rootrelative(catalog_path),
+                "catalog" =>
+                    catalog_path === nothing ? "" : provenance_path(catalog_path),
                 "samples_per_batch" => rows_per_batch,
                 "n_batches" => div(n_rows, rows_per_batch),
             ),
