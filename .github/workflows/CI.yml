@@ -1,12 +1,17 @@
-# Continuous integration is deferred until the repository becomes public:
-# GitHub Actions minutes are not available on this private repository, so
-# the workflow runs on manual dispatch only. Re-enable the push and
-# pull-request triggers at publication, together with the coverage upload
-# (CODECOV_TOKEN) and the documentation deployment. The package is not
-# registered in General, so there is no TagBot and no registration
-# workflow: release tags are created by hand.
+# The repository is private, so the workflow runs against the free-tier
+# Actions allowance: the triggers are the default branch, pull requests
+# into it, version tags, and manual dispatch. The documentation job builds
+# but does not deploy — Pages for a private repository needs a paid plan —
+# and the coverage upload is a no-op until CODECOV_TOKEN is set, which it
+# tolerates. The package is not registered in General, so there is no
+# TagBot and no registration workflow: release tags are created by hand.
 name: CI
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,6 +43,14 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
+      # The committed manifests are resolved on the current release. A leg
+      # on another version discards them and resolves its own environment,
+      # because standard-library membership moves between versions; that
+      # leg verifies the compat bounds, the blocking leg the manifests as
+      # committed.
+      - name: Discard the committed manifests off the resolution version
+        if: matrix.version != '1'
+        run: rm -f Manifest.toml test/Manifest.toml docs/Manifest.toml
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
