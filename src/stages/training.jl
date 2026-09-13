@@ -418,6 +418,10 @@ function train_classifier(
         model, best_meta, best_scaler = load_model(best_path)
         save_model(model_path, model; metadata = best_meta, scaler = best_scaler)
 
+        # The per-epoch history as a table, so the training figure can be
+        # redrawn — or animated — from the run instead of from a retraining.
+        write_csv(joinpath(run_dir, "history.csv"), history)
+
         # Decision threshold fitted on the calibration block.
         fit_rows = threshold_rows(blocks, trn.threshold_block)
         block_label =

@@ -23,6 +23,10 @@ function parse_commandline()
         "--test-mode"
         help = "Sample and epoch caps from [training] for a fast validation run"
         action = :store_true
+        "--seed"
+        help = "Override [training] seed, for initialization-variance studies"
+        arg_type = Int
+        default = nothing
     end
     return parse_args(s)
 end
@@ -131,6 +135,11 @@ end
 function main()
     args = parse_commandline()
     config = load_config(args["config"])
+    # The override lands in the configuration itself, so the run's snapshot
+    # records the seed the run actually used rather than the file's value.
+    if args["seed"] !== nothing
+        get!(config, "training", Dict{String,Any}())["seed"] = args["seed"]
+    end
     run_id = isempty(args["run-id"]) ? new_run_id() : args["run-id"]
     test_mode = args["test-mode"]
     paths = pipeline_paths(config)
