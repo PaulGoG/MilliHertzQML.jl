@@ -94,14 +94,17 @@ environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
 package by path and activates itself, so the step above is optional for
 them; the first invocation of each environment resolves and precompiles
 it. The script and test environments also pin the telemetry producer
-DeepSpaceTelemetry.jl, unregistered likewise, as a git source of its
-private repository; on a machine whose git configuration rewrites GitHub
-URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true` so that
-the package manager uses the command-line git client and its agent.
+[DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl),
+unregistered likewise, as a git source at a release commit; its
+[manual](https://PaulGoG.github.io/DeepSpaceTelemetry.jl/stable/)
+documents the run directory this package reads. On a machine whose git
+configuration rewrites GitHub URLs to SSH, instantiate them with
+`JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses the
+command-line git client and its agent.
 
 ## Usage
 
-Every script takes the configuration file as its first argument (default `config.toml` at the repository root) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, and a configuration snapshot are stored.
+Every script takes the configuration file as its first argument (default `config.toml` at the repository root) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, a seed override, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, the per-epoch training history, and a configuration snapshot are stored.
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise labels + event catalog)
@@ -123,7 +126,7 @@ julia scripts/train.jl config.toml --run-id <RUN_ID>
 julia scripts/infer.jl config.toml --run-id <RUN_ID> --block test
 ```
 
-`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
+`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialization-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
 Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
 

@@ -7,6 +7,24 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- A `PrecompileTools` workload over the inference path — circuit
+  construction, feature scaling, the forward pass — which every script
+  enters first. Time to first inference falls from 1.85 s to 0.024 s for
+  1.4 s of added precompilation. The gradient path is deliberately left
+  out: its Zygote tape dominates the precompile cost and is compiled once
+  per training run in any case.
+- A bibliography in the manual (`DocumenterCitations`): `docs/src/refs.bib`
+  and a References page, with the noise model, the waveform family, and
+  the paper this pipeline follows cited where the prose already names
+  them.
+- `--seed` on `scripts/train.jl`, overriding `[training] seed` for one
+  run. The override is written into the configuration before the stage
+  runs, so the run's own snapshot records the seed it used; an
+  initialization-variance study is therefore reconstructible from the
+  run directories alone.
+- `history.csv` in every training run directory: the per-epoch training
+  loss, validation loss and validation accuracy. The training figure was
+  previously reproducible only by retraining.
 - `docs/src/benchmark.md`: the Sangria benchmark page — data, labels and
   protocol; the seven models tried and what separates them; the
   comparison with the classical GWEEP baseline, which does better; the
@@ -185,6 +203,20 @@ Notable changes to MilliHertzQML. The format follows
   raw-window feature set).
 
 ### Changed
+- Continuous integration runs on the default branch, pull requests into
+  it, and version tags, rather than on manual dispatch alone: the
+  producer it pins is now a public repository, which is what had made an
+  automatic run impossible. A leg off the resolution version discards the
+  committed manifests and resolves its own environment, so that it
+  verifies the compat bounds rather than failing on standard-library
+  membership that moved between Julia versions. The documentation job
+  builds without deploying.
+- The script and test environments consume DeepSpaceTelemetry v1.2.0
+  (previously v1.0.0). `[compat]` and `[telemetry] producer_compat` stay
+  at `"1.0"`: both are lower bounds, and raising them would reject the
+  run directories written by earlier producer versions for no gain. The
+  README states that the producer repository is public and links its
+  manual, which the installation section had described as private.
 - The alert latencies are reported per event instead of as a group: four
   of the six alerts precede their merger by 1.9 to 2.7 days, event 3 by
   nineteen minutes of data latency which the one-hour processing budget
