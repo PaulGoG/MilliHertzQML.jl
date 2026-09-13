@@ -13,6 +13,7 @@ using InteractiveUtils: InteractiveUtils
 using JLD2: JLD2, jldsave
 using LinearAlgebra: LinearAlgebra
 using Logging: NullLogger, with_logger
+using PrecompileTools: @compile_workload, @setup_workload
 using Random: Random, AbstractRNG, Xoshiro
 using SHA: sha256
 using Statistics: mean, median, quantile, std
@@ -99,5 +100,32 @@ include("stages/labeling.jl")
 include("stages/export_payload.jl")
 include("stages/training.jl")
 include("stages/inference.jl")
+
+# Precompilation of the inference path — circuit construction, feature
+# scaling, and the forward pass — which every script and every inference run
+# enters first. The gradient path is left out: its Zygote tape dominates the
+# precompile cost and is compiled once per training run anyway. The feature
+# matrix is a literal, so the workload touches neither the filesystem nor a
+# random stream beyond the seeded parameter initialization.
+@setup_workload begin
+    features = Float32[
+        0.10 0.90
+        0.35 0.70
+        0.60 0.45
+        0.85 0.20
+        0.20 0.65
+        0.55 0.30
+        0.75 0.95
+        0.40 0.05
+    ]
+    @compile_workload begin
+        model = VariationalQuantumClassifier(2, 1; rng = Xoshiro(0))
+        scaler = fit_scaler(features)
+        encoded = encode_features(scaler, features)
+        predict_probability(model, @view(encoded[1, :]))
+        predict(model, @view(encoded[1, :]))
+        predict_all(model, encoded; threaded = false)
+    end
+end
 
 end # module

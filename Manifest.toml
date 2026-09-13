@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "fee62e8fe14e19a89d98584489f9493913ebf834"
+project_hash = "9bd29f271bde42ccce8d346271012702a8a97007"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -1122,7 +1122,7 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "PrecompileTools", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
 path = "."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
