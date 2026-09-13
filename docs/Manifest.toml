@@ -2,7 +2,7 @@
 
 julia_version = "1.13.0"
 manifest_format = "2.1"
-project_hash = "23c2675b008cd4484205e533296619751712b2dd"
+project_hash = "f37529628f57524c3e36f1069a699a76ac840b60"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -110,6 +110,53 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "441db9f0399bcfb4eeb8b891a6b03f7acc5dc731"
 registries = "General"
 uuid = "a9ab73d0-e05c-5df1-8fde-d6a4645b8d8e"
+version = "0.2.2"
+
+[[deps.BibInternal]]
+deps = ["TestItems"]
+git-tree-sha1 = "ec1f1c78c1a6c917125abdee98518685fe653e64"
+registries = "General"
+uuid = "2027ae74-3657-4b95-ae00-e2f7d55c3e64"
+version = "0.4.0"
+
+[[deps.BibParser]]
+deps = ["BibInternal", "DataStructures", "TestItems"]
+git-tree-sha1 = "5a6aeb593475157a5911cda3e0297f1552d45102"
+registries = "General"
+uuid = "13533e5b-e1c2-4e57-8cef-cac5e52f6474"
+version = "0.3.0"
+
+    [deps.BibParser.extensions]
+    BibParserCFFExt = ["Dates", "JSONSchema", "YAML"]
+    BibParserCSLExt = "JSON3"
+    BibParserXMLExt = "EzXML"
+
+    [deps.BibParser.weakdeps]
+    Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+    EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
+    JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+    JSONSchema = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
+    YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+
+[[deps.Bibliography]]
+deps = ["BibInternal", "BibParser", "DataStructures", "Dates", "FileIO", "JSONSchema", "TestItems", "YAML"]
+git-tree-sha1 = "2246611f8da01251b73665fe0d57ed9d0e3b880b"
+registries = "General"
+uuid = "f1be7e48-bf82-45af-a471-ae754a193061"
+version = "0.4.0"
+
+    [deps.Bibliography.extensions]
+    BibliographyCSLExt = "JSON3"
+    BibliographyXMLExt = "EzXML"
+
+    [deps.Bibliography.weakdeps]
+    EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
+    JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+
+[[deps.Bijections]]
+git-tree-sha1 = "a2d308fcd4c2fb90e943cf9cd2fbfa9c32b69733"
+registries = "General"
+uuid = "e2ed5e7c-b2de-5872-ae92-c73ca462fb04"
 version = "0.2.2"
 
 [[deps.BitBasis]]
@@ -385,6 +432,13 @@ git-tree-sha1 = "191e6bef0cf32cac3a3913cd4787d851715254c2"
 registries = "General"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.19.0"
+
+[[deps.DocumenterCitations]]
+deps = ["AbstractTrees", "Bibliography", "Bijections", "Dates", "Documenter", "Logging", "Markdown", "MarkdownAST", "OrderedCollections", "SHA", "Unicode"]
+git-tree-sha1 = "5699464c66535cb99ad6ab075513cb215217b9f2"
+registries = "General"
+uuid = "daee34ce-89f3-4625-b898-19384cb65244"
+version = "1.5.0"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -809,6 +863,19 @@ version = "1.8.0"
     [deps.JSON.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
+[[deps.JSONSchema]]
+deps = ["Downloads", "JSON", "URIs"]
+git-tree-sha1 = "d13f79c4242969874da7d00bda17d59bc7699aa7"
+registries = "General"
+uuid = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
+version = "1.5.0"
+
+    [deps.JSONSchema.extensions]
+    JSONSchemaJSON3Ext = "JSON3"
+
+    [deps.JSONSchema.weakdeps]
+    JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "037babc10853eeb8e585418922246cb97b8e5b74"
@@ -1176,7 +1243,7 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "PrecompileTools", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
 path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
@@ -1645,6 +1712,13 @@ registries = "General"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 version = "0.34.13"
 
+[[deps.StringEncodings]]
+deps = ["Libiconv_jll"]
+git-tree-sha1 = "b765e46ba27ecf6b44faf70df40c57aa3a547dcb"
+registries = "General"
+uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
+version = "0.3.7"
+
 [[deps.StringManipulation]]
 deps = ["PrecompileTools"]
 git-tree-sha1 = "773065c6e0e903924a9d838259be74338422aef2"
@@ -1753,6 +1827,12 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 version = "1.11.0"
 
+[[deps.TestItems]]
+git-tree-sha1 = "a6dd904babc04670c784f81b67957a3545271610"
+registries = "General"
+uuid = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
+version = "1.1.0"
+
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "PrettyTables", "Printf", "Tables"]
 git-tree-sha1 = "03271b02dd1c8f87281271575448b9cf6326a961"
@@ -1784,6 +1864,12 @@ git-tree-sha1 = "41e43b9dc950775eac654b9f845c839cd2f1821e"
 registries = "General"
 uuid = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 version = "1.6.0"
+
+[[deps.URIs]]
+git-tree-sha1 = "908fec9df6c5de98548ead82a468c95ccf6cd263"
+registries = "General"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.7.0"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -1918,6 +2004,13 @@ git-tree-sha1 = "a63799ff68005991f9d9491b6e95bd3478d783cb"
 registries = "General"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.6.0+0"
+
+[[deps.YAML]]
+deps = ["Base64", "Dates", "Printf", "StringEncodings"]
+git-tree-sha1 = "a1c0c7585346251353cddede21f180b96388c403"
+registries = "General"
+uuid = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+version = "0.4.16"
 
 [[deps.Yao]]
 deps = ["BitBasis", "LinearAlgebra", "LuxurySparse", "Reexport", "YaoAPI", "YaoArrayRegister", "YaoBlocks", "YaoPlots", "YaoSym", "YaoToEinsum"]
