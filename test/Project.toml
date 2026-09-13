@@ -20,5 +20,5 @@ Yao = "5872b779-8223-5990-8dd0-5abbb0748c8c"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
-DeepSpaceTelemetry = {rev = "b88c4fc87011d7fe6e4c541d8738167c72387faf", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
+DeepSpaceTelemetry = {rev = "1780e628f7064cffd27b417081147e25b9d65707", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
 MilliHertzQML = {path = ".."}

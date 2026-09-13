@@ -518,11 +518,11 @@ version = "1.11.0"
 
 [[deps.DeepSpaceTelemetry]]
 deps = ["AbstractFFTs", "CSV", "CairoMakie", "DataFrames", "Dates", "FFTW", "FileWatching", "HDF5", "JSON3", "LinearAlgebra", "Logging", "MathTeXEngine", "PrecompileTools", "ProgressMeter", "Random", "SHA", "TOML"]
-git-tree-sha1 = "b24654edf4de948bf8e15ebf42e34624db26305e"
-repo-rev = "b88c4fc87011d7fe6e4c541d8738167c72387faf"
+git-tree-sha1 = "05750b77484bb676064dcb7786e0d52b8ac1324a"
+repo-rev = "1780e628f7064cffd27b417081147e25b9d65707"
 repo-url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"
 uuid = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
-version = "1.0.0"
+version = "1.2.0"
 
 [[deps.DelaunayTriangulation]]
 deps = ["AdaptivePredicates", "EnumX", "ExactPredicates", "Random"]
@@ -1663,7 +1663,7 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MilliHertzQML]]
-deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
+deps = ["CSV", "DataFrames", "Dates", "Distributed", "DrWatson", "FFTW", "Flux", "Functors", "HDF5", "InteractiveUtils", "JLD2", "LinearAlgebra", "Logging", "PrecompileTools", "Random", "SHA", "Statistics", "TOML", "TimerOutputs", "UUIDs", "Yao", "Zygote"]
 path = ".."
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
 version = "0.1.0"
