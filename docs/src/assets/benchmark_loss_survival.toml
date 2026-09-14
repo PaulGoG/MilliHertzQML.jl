@@ -1,4 +1,4 @@
-written_at = "2026-09-14T04:55:21.110"
+written_at = "2026-09-14T05:39:08.273"
 
 [figure]
 files = ["loss_survival.pdf", "loss_survival.png"]
@@ -19,6 +19,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v0.1.0-43-g3927531-dirty"
-git_dirty = true
-package_version = "0.1.0"
+git_commit = "v0.1.0-45-g7a1d37c"
+git_dirty = false
+package_version = "1.0.0"
