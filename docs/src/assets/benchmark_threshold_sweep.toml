@@ -1,4 +1,4 @@
-written_at = "2026-09-12T16:11:47.653"
+written_at = "2026-09-14T02:53:23.809"
 
 [figure]
 files = ["threshold_sweep.pdf", "threshold_sweep.png"]
@@ -13,12 +13,12 @@ blas_threads = 11
 distributed_workers = 1
 machine_id = "10f031174590"
 kernel = "Linux"
-versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 22 default, 1 interactive, 22 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = auto\n"""
-julia_threads = 22
+versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 16 default, 1 interactive, 16 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 16\n"""
+julia_threads = 16
 cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v0.1.0-31-g0dd3ad4-dirty"
-git_dirty = true
+git_commit = "v0.1.0-41-ge307378"
+git_dirty = false
 package_version = "0.1.0"
