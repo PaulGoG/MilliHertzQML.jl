@@ -7,6 +7,16 @@ Notable changes to MilliHertzQML. The format follows
 ## [Unreleased]
 
 ### Added
+- Two animations, `animate_training_history` and `animate_mission_replay`,
+  with `scripts/animate.jl` as their dispatcher and `save_animation`
+  carrying the same provenance sidecar the static figures get. The first
+  reveals the training and validation loss and the validation accuracy
+  epoch by epoch, marking the checkpoint the run ships. The second sweeps
+  a year of telemetry replay across four panels — coverage, classifier
+  score against the threshold with the labelled spans, the cumulative
+  alarm episodes, and the ground latency — in the order the ground
+  received the windows, with a clock rule showing how far the delivery
+  lags the measurement.
 - A `PrecompileTools` workload over the inference path — circuit
   construction, feature scaling, the forward pass — which every script
   enters first. Time to first inference falls from 1.85 s to 0.024 s for

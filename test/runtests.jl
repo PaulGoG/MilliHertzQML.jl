@@ -1169,6 +1169,77 @@ end
     end
 end
 
+@testset "Animations (CairoMakie extension)" begin
+    history = (
+        epochs = collect(1:5),
+        train_loss = [1.0, 0.8, 0.7, 0.65, 0.62],
+        val_loss = [1.1, 0.9, 0.85, 0.88, 0.87],
+        val_acc = [0.5, 0.6, 0.68, 0.66, 0.7],
+    )
+    # Arrival out of mission order: two windows reach the ground swapped
+    n = 12
+    content_end = [DateTime(2035, 1, 1) + Dates.Minute(10 * k) for k in 1:n]
+    arrival = content_end .+ Dates.Hour(3)
+    arrival[3], arrival[4] = arrival[4], arrival[3]
+    windows = DataFrame(
+        window = 1:n,
+        content_end = content_end,
+        complete_at = arrival,
+        coverage = fill(1.0, n),
+        score = range(0.1, 0.9; length = n),
+        decision = [k > 9 ? 1 : 0 for k in 1:n],
+    )
+    theme = animation_theme()
+    @test all(isinteger, theme.size[])
+    mktempdir() do dir
+        path = animate_training_history(
+            history,
+            joinpath(dir, "training_history.gif");
+            framerate = 4,
+            hold_frames = 0,
+        )
+        @test isfile(path) && filesize(path) > 1000
+        stem = joinpath(dir, "mission_replay")
+        written = save_animation(stem; run_id = "unit") do target
+            animate_mission_replay(
+                windows,
+                0.8,
+                target;
+                n_frames = 3,
+                framerate = 4,
+                hold_frames = 0,
+                label_spans = [(content_end[2], content_end[5])],
+            )
+        end
+        @test written == "$stem.gif"
+        @test isfile(written) && filesize(written) > 1000
+        side = TOML.parsefile("$stem.toml")
+        @test side["animation"]["run_id"] == "unit" && haskey(side, "git")
+        # An animation ships as GIF, and a fractional raster scale renders
+        # frames the encoder does not reproduce
+        @test_throws ArgumentError animate_training_history(
+            history,
+            joinpath(dir, "training_history.mp4"),
+        )
+        @test_throws ArgumentError animate_mission_replay(
+            windows,
+            0.8,
+            joinpath(dir, "replay.gif");
+            px_per_unit = 2.5,
+        )
+        # Qualified: Yao and DataFrames both export `select`.
+        @test_throws ArgumentError animate_mission_replay(
+            DataFrames.select(windows, DataFrames.Not(:score)),
+            0.8,
+            joinpath(dir, "replay.gif"),
+        )
+        @test_throws ArgumentError animate_training_history(
+            (epochs = [1], train_loss = [1.0], val_loss = [1.0], val_acc = [0.5]),
+            joinpath(dir, "replay.gif"),
+        )
+    end
+end
+
 include("export_payload_tests.jl")
 include("telemetry_tests.jl")
 include("telemetry_integration_tests.jl")

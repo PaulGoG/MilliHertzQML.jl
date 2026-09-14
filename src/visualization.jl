@@ -52,6 +52,76 @@ paths. Requires CairoMakie to be loaded.
 function save_figure end
 
 """
+    animation_theme(; width_mm = 180.0, height_mm = 0.72 * width_mm, fontsize = 9)
+
+Screen counterpart of [`figure_theme`](@ref) for the animations: the same
+fonts, colors, and axis discipline on the wider canvas, with the larger
+type, margins, and strokes a GIF is read at. Requires CairoMakie to be
+loaded.
+"""
+function animation_theme end
+
+"""
+    save_animation(render, stem; run_id = "") -> String
+
+Write the animation `<stem>.gif` by calling `render(path)` with that path
+and write the provenance sidecar `<stem>.toml` (run identifier, git
+description, hardware fingerprint, time), as [`save_figure`](@ref) does for
+a static figure. An existing GIF is backed up first. Returns the written
+path. Requires CairoMakie to be loaded.
+
+# Example
+
+```julia
+save_animation(joinpath(plot_dir, "training_history"); run_id = run_id) do path
+    animate_training_history(history, path)
+end
+```
+"""
+function save_animation end
+
+"""
+    animate_training_history(history, path; framerate = 5, hold_frames = 10,
+                             width_mm = 180.0, px_per_unit = 2) -> String
+
+Animated counterpart of [`figure_training_history`](@ref): the two stacked
+panels sharing the epoch axis, revealed one epoch per frame at fixed axis
+limits, held for `hold_frames` frames at the end. The epoch of least
+validation loss — the checkpoint whose weights the run ships — is marked in
+both panels once the sweep reaches it. `history` holds the vectors
+`epochs`, `train_loss`, `val_loss`, and `val_acc`; `path` must name a GIF,
+the only file written. Returns `path`. Requires CairoMakie to be loaded.
+"""
+function animate_training_history end
+
+"""
+    animate_mission_replay(windows, threshold, path; epoch, label_spans = nothing,
+                           n_frames = 200, framerate = 20, hold_frames = 20,
+                           max_points = 6000, width_mm = 180.0,
+                           px_per_unit = 2) -> String
+
+Four stacked panels of a telemetry replay on a shared mission-time axis
+[days since `epoch`, by default the content end of the first window]:
+window coverage, classifier score with the decision `threshold` as a dashed
+rule, the alarmed windows marked, and the labeled spans (`label_spans`,
+pairs of `DateTime`) shaded, the count of alarm episodes accumulated along
+mission time, and the ground latency of every window (`complete_at −
+content_end` [h]).
+
+The windows are revealed in arrival order, sorted by `complete_at`, not in
+mission-time order: a pass delivers its backlog newest first and a window
+becomes evaluable only once the conditioning stretch around it has landed,
+so the trace fills in wherever the ground has learned something rather than
+from left to right. A dotted rule marks the ground clock, whose distance to
+the data edge is the delivery latency. The sweep takes about `n_frames`
+frames and the traces are decimated to about `max_points` windows, the
+alarmed ones always kept. `windows` is the table of `replay_run`, `path`
+must name a GIF, the only file written. Returns `path`. Requires CairoMakie
+to be loaded.
+"""
+function animate_mission_replay end
+
+"""
     figure_training_history(history) -> Figure
 
 Two stacked panels sharing the epoch axis: training and validation loss

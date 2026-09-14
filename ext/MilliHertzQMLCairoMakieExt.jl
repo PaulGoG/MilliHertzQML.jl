@@ -15,7 +15,8 @@ using CairoMakie.Makie: LaTeXStrings
 using MilliHertzQML
 using MilliHertzQML: FIGURE_WIDTH_MM, FIGURE_COLORS, backup_existing!, write_toml
 using MilliHertzQML: contiguous_runs
-using CairoMakie.Makie: scatter!
+using CairoMakie.Makie: scatter!, stairs!, Observable, @lift, Point2f, record
+using CairoMakie.Makie: rowsize!, Auto, LinearTicks
 using DataFrames: DataFrame, nrow
 using Dates: Dates, DateTime
 import MilliHertzQML:
@@ -28,7 +29,11 @@ import MilliHertzQML:
     figure_sensitivity,
     figure_score_distribution,
     figure_telemetry_trace,
-    figure_telemetry_alerts
+    figure_telemetry_alerts,
+    animation_theme,
+    save_animation,
+    animate_training_history,
+    animate_mission_replay
 
 """
     PT_PER_MM
@@ -763,6 +768,443 @@ function figure_telemetry_alerts(
         Legend(figure[0, 1], handles, labels; LEGEND_STYLE..., nbanks = 3)
         rowgap!(figure.layout, 4)
         figure
+    end
+end
+
+# Animations. A GIF is read on screen rather than printed in a column, so it
+# is laid out on a wider canvas with larger type; fonts, colors, boxed axes,
+# and the legend on top follow the figure standard. Axis limits are fixed over
+# the whole sweep, so nothing rescales between frames.
+
+"""
+    ANIMATION_WIDTH_MM
+
+Design width of an animation [mm]. Together with `ANIMATION_PX_PER_UNIT` it
+fixes the pixel width of the GIF,
+`ANIMATION_WIDTH_MM * PT_PER_MM * ANIMATION_PX_PER_UNIT`.
+"""
+const ANIMATION_WIDTH_MM = 180.0
+
+"""
+    ANIMATION_PX_PER_UNIT
+
+Raster scale of an animation, pixels per typographic point of the design
+size; a GIF of `ANIMATION_WIDTH_MM` comes out about 1000 px wide. Whole
+numbers only, see [`check_frame_scale`](@ref).
+"""
+const ANIMATION_PX_PER_UNIT = 2
+
+function animation_theme(;
+    width_mm::Real = ANIMATION_WIDTH_MM,
+    height_mm::Real = 0.72 * width_mm,
+    fontsize::Real = 9,
+)
+    theme = figure_theme(; width_mm = width_mm, height_mm = height_mm, fontsize = fontsize)
+    # Screen rather than column: wider margins, thicker strokes, longer ticks
+    theme.figure_padding = 10
+    theme.linewidth = 1.2
+    theme.Axis.spinewidth = 0.8
+    theme.Axis.xticksize = 4
+    theme.Axis.yticksize = 4
+    theme.Axis.xticklabelpad = 3
+    theme.Axis.yticklabelpad = 3
+    # The canvas is snapped to an even whole number of typographic points. A
+    # fractional design size renders to a surface whose extent differs from
+    # the frame size declared to the encoder, and the mismatch shows as a band
+    # of noise along the top of every frame; with an even size and a whole
+    # `px_per_unit` the rendered frame is exactly the declared one.
+    theme.size = map(x -> 2.0 * max(1, round(Int, x / 2)), theme.size[])
+    return theme
+end
+
+"""
+    check_frame_scale(px_per_unit)
+
+Throw unless `px_per_unit` is a whole number at least one. A fractional
+raster scale renders frames that do not match the size declared to the
+video encoder, which appears as a band of noise along their top edge.
+"""
+function check_frame_scale(px_per_unit::Real)
+    isinteger(px_per_unit) && px_per_unit >= 1 || throw(
+        ArgumentError("px_per_unit = $px_per_unit; expected a whole number of at least 1."),
+    )
+    return nothing
+end
+
+"""
+    check_gif_path(path)
+
+Throw unless `path` names a GIF; the animations of the project ship as GIF.
+"""
+function check_gif_path(path::AbstractString)
+    endswith(lowercase(path), ".gif") ||
+        throw(ArgumentError("path = $(repr(path)); an animation is written as .gif."))
+    return nothing
+end
+
+"""
+    frame_schedule(n, n_frames, hold_frames) -> Vector{Int}
+
+Sweep of about `n_frames` states out of `n`, always ending on `n`, followed
+by `hold_frames` repetitions of the last state. The sweep starts at two
+states, since a single one draws no line segment.
+"""
+function frame_schedule(n::Integer, n_frames::Integer, hold_frames::Integer)
+    n >= 2 || throw(ArgumentError("n must be at least 2."))
+    n_frames >= 2 || throw(ArgumentError("n_frames must be at least 2."))
+    hold_frames >= 0 || throw(ArgumentError("hold_frames must not be negative."))
+    sweep = unique(round.(Int, range(2, n; length = min(n_frames, n - 1))))
+    return vcat(sweep, fill(n, hold_frames))
+end
+
+function save_animation(render, stem::AbstractString; run_id::AbstractString = "")
+    mkpath(dirname(stem))
+    path = "$stem.gif"
+    backup_existing!(path)
+    render(path)
+    isfile(path) || error("the renderer wrote no file at $path.")
+    write_toml(
+        "$stem.toml",
+        Dict{String,Any}(
+            "animation" => Dict{String,Any}(
+                "run_id" => run_id,
+                "files" => [basename(path)],
+                "width_mm" => ANIMATION_WIDTH_MM,
+                "px_per_unit" => ANIMATION_PX_PER_UNIT,
+                "bytes" => filesize(path),
+            ),
+        ),
+    )
+    return path
+end
+
+function animate_training_history(
+    history::NamedTuple,
+    path::AbstractString;
+    framerate::Integer = 5,
+    hold_frames::Integer = 10,
+    width_mm::Real = ANIMATION_WIDTH_MM,
+    px_per_unit::Real = ANIMATION_PX_PER_UNIT,
+)
+    check_gif_path(path)
+    check_frame_scale(px_per_unit)
+    framerate >= 1 || throw(ArgumentError("framerate must be positive."))
+    epochs = Float64.(collect(history.epochs))
+    n = length(epochs)
+    n >= 2 || throw(ArgumentError("the training history holds fewer than two epochs."))
+    train = Float64.(collect(history.train_loss))
+    val = Float64.(collect(history.val_loss))
+    acc = Float64.(collect(history.val_acc))
+    length(train) == length(val) == length(acc) == n ||
+        throw(DimensionMismatch("the history columns differ in length."))
+    # The epoch of least validation loss is the checkpoint the run ships
+    checkpoint = argmin(val)
+    loss_lo, loss_hi = extrema(vcat(train, val))
+    loss_span = max(loss_hi - loss_lo, 1e-12)
+    acc_lo, acc_hi = extrema(acc)
+    acc_span = max(acc_hi - acc_lo, 1e-12)
+    x_pad = 0.02 * (n - 1)
+    # Ticks at a stride that keeps about eight labels, as in the static figure
+    stride = max(1, round(Int, n / 8))
+    on_right = epochs[checkpoint] > (epochs[1] + epochs[end]) / 2
+    return with_theme(
+        animation_theme(; width_mm = width_mm, height_mm = 0.68 * width_mm),
+    ) do
+        figure = Figure()
+        ax_loss = Axis(figure[1, 1]; ylabel = "Loss")
+        ax_acc = Axis(figure[2, 1]; xlabel = "Epoch", ylabel = "Validation accuracy")
+        linkxaxes!(ax_loss, ax_acc)
+        hidexdecorations!(ax_loss; grid = false, ticks = false)
+        xlims!(ax_acc, epochs[1] - x_pad, epochs[end] + x_pad)
+        # Headroom above the data for the annotations, which sit at the top
+        ylims!(ax_loss, loss_lo - 0.06 * loss_span, loss_hi + 0.24 * loss_span)
+        ylims!(ax_acc, acc_lo - 0.08 * acc_span, acc_hi + 0.26 * acc_span)
+        ax_acc.xticks = round(Int, epochs[1]):stride:round(Int, epochs[end])
+
+        k = Observable(1)
+        seen = @lift(1:($k))
+        lines!(
+            ax_loss,
+            @lift(epochs[$seen]),
+            @lift(train[$seen]);
+            color = FIGURE_COLORS.training,
+            label = "Training",
+        )
+        lines!(
+            ax_loss,
+            @lift(epochs[$seen]),
+            @lift(val[$seen]);
+            color = FIGURE_COLORS.validation,
+            linestyle = :dash,
+            label = "Validation",
+        )
+        lines!(
+            ax_acc,
+            @lift(epochs[$seen]),
+            @lift(acc[$seen]);
+            color = FIGURE_COLORS.validation,
+        )
+        # The checkpoint appears once the sweep reaches it, in both panels
+        mark = @lift($k >= checkpoint ? [epochs[checkpoint]] : Float64[])
+        for ax in (ax_loss, ax_acc)
+            vlines!(
+                ax,
+                mark;
+                color = FIGURE_COLORS.threshold,
+                linestyle = :dot,
+                linewidth = 0.9,
+            )
+        end
+        text!(
+            ax_loss,
+            epochs[checkpoint],
+            loss_hi + 0.24 * loss_span;
+            text = @lift(
+                $k >= checkpoint ?
+                "Checkpoint: epoch $(round(Int, epochs[checkpoint])), " *
+                "validation loss $(round(val[checkpoint]; digits = 4))" : ""
+            ),
+            align = (on_right ? :right : :left, :top),
+            offset = (on_right ? -5 : 5, -5),
+            fontsize = 8,
+            color = FIGURE_COLORS.threshold,
+        )
+        text!(
+            ax_acc,
+            0.99,
+            0.96;
+            text = @lift("Epoch $(round(Int, epochs[$k])) of $(round(Int, epochs[end]))"),
+            space = :relative,
+            align = (:right, :top),
+            fontsize = 8,
+            color = FIGURE_COLORS.threshold,
+        )
+        top_legend!(figure, ax_loss)
+        rowgap!(figure.layout, 8)
+        record(
+            figure,
+            path,
+            frame_schedule(n, n, hold_frames);
+            framerate = framerate,
+            px_per_unit = px_per_unit,
+        ) do i
+            k[] = i
+        end
+        path
+    end
+end
+
+function animate_mission_replay(
+    windows::DataFrame,
+    threshold::Real,
+    path::AbstractString;
+    epoch::DateTime = minimum(windows.content_end),
+    label_spans::Union{Nothing,AbstractVector{<:Tuple{DateTime,DateTime}}} = nothing,
+    n_frames::Integer = 200,
+    framerate::Integer = 20,
+    hold_frames::Integer = 20,
+    max_points::Integer = 6000,
+    width_mm::Real = ANIMATION_WIDTH_MM,
+    px_per_unit::Real = ANIMATION_PX_PER_UNIT,
+)
+    check_gif_path(path)
+    check_frame_scale(px_per_unit)
+    framerate >= 1 || throw(ArgumentError("framerate must be positive."))
+    max_points >= 2 || throw(ArgumentError("max_points must be at least 2."))
+    n = nrow(windows)
+    n >= 2 || throw(ArgumentError("the replay holds fewer than two windows."))
+    for column in ("content_end", "complete_at", "coverage", "score", "decision")
+        column in names(windows) ||
+            throw(ArgumentError("the windows table lacks the column $column."))
+    end
+    # Mission order is the axis of every panel; permuting once makes window
+    # adjacency, which defines an alarm episode, index adjacency.
+    days = [days_since(epoch, t) for t in windows.content_end]
+    perm = sortperm(days)
+    content_day = days[perm]
+    arrival_day = [days_since(epoch, windows.complete_at[i]) for i in perm]
+    latency_h = 24 .* (arrival_day .- content_day)
+    coverage = Float64.(windows.coverage[perm])
+    score = Float64.(windows.score[perm])
+    alarm = Int.(windows.decision[perm]) .== 1
+    alarm_idx = findall(alarm)
+    # Reveal order: the order in which the ground learned the windows. A pass
+    # delivers its backlog newest first and a window becomes evaluable only
+    # once the conditioning stretch around it has landed, so an arrival prefix
+    # need not be a prefix in mission time.
+    arrival_order = sortperm(arrival_day)
+    reveal_rank = Vector{Int}(undef, n)
+    reveal_rank[arrival_order] = 1:n
+    # The traces are decimated, the alarmed windows always kept
+    show_idx = sort(unique(vcat(collect(decimation(n, max_points)), n, alarm_idx)))
+    show_day = content_day[show_idx]
+    alarm_day = content_day[alarm_idx]
+    n_episodes = max(count(alarm .& .!vcat(false, alarm[1:(end-1)])), 1)
+    t_lo, t_hi = extrema(content_day)
+    t_pad = 0.01 * max(t_hi - t_lo, 1e-6)
+    lat_lo, lat_hi = extrema(latency_h)
+    lat_pad = 0.08 * max(lat_hi - lat_lo, 1e-3)
+    full_coverage = all(>=(1.0), coverage)
+    return with_theme(
+        animation_theme(; width_mm = width_mm, height_mm = 0.82 * width_mm),
+    ) do
+        figure = Figure()
+        ax_cov = Axis(figure[1, 1]; ylabel = "Coverage", yticks = [0.0, 0.5, 1.0])
+        ax_score = Axis(figure[2, 1]; ylabel = "MBHB probability")
+        ax_episode = Axis(figure[3, 1]; ylabel = "Alarm episodes")
+        ax_lat = Axis(
+            figure[4, 1];
+            xlabel = "Mission time [days]",
+            ylabel = "Ground latency [h]",
+            xticks = LinearTicks(7),
+        )
+        panels = (ax_cov, ax_score, ax_episode, ax_lat)
+        linkxaxes!(panels...)
+        for ax in panels[1:3]
+            hidexdecorations!(ax; grid = false, ticks = false)
+        end
+        xlims!(ax_lat, t_lo - t_pad, t_hi + t_pad)
+        ylims!(ax_cov, -0.12, 1.22)
+        ylims!(ax_score, 0, 1)
+        ylims!(ax_episode, -0.04 * n_episodes, 1.12 * n_episodes)
+        ylims!(ax_lat, lat_lo - lat_pad, lat_hi + lat_pad)
+
+        cov_y = Observable(fill(NaN, length(show_idx)))
+        score_y = Observable(fill(NaN, length(show_idx)))
+        lat_y = Observable(fill(NaN, length(show_idx)))
+        alarm_y = Observable(fill(NaN, length(alarm_idx)))
+        episode_points = Observable([Point2f(t_lo, 0), Point2f(t_lo, 0)])
+        clock_x = Observable([t_lo])
+        progress = Observable("")
+        reveal! =
+            k -> begin
+                received = reveal_rank .<= k
+                cov_y[] = [received[i] ? coverage[i] : NaN for i in show_idx]
+                score_y[] = [received[i] ? score[i] : NaN for i in show_idx]
+                lat_y[] = [received[i] ? latency_h[i] : NaN for i in show_idx]
+                alarm_y[] = [received[i] ? score[i] : NaN for i in alarm_idx]
+                # Episodes among the windows received so far: a run of alarmed
+                # windows adjacent in mission index counts once, and an arrival
+                # that fills the hole between two runs merges them.
+                raised = received .& alarm
+                starts = findall(raised .& .!vcat(false, raised[1:(end-1)]))
+                edge_lo, edge_hi = extrema(content_day[received])
+                points = Vector{Point2f}(undef, length(starts) + 2)
+                points[1] = Point2f(edge_lo, 0)
+                for (j, i) in enumerate(starts)
+                    points[j+1] = Point2f(content_day[i], j)
+                end
+                points[end] = Point2f(edge_hi, length(starts))
+                episode_points[] = points
+                # The ground clock is the arrival time of the newest window
+                # received; its distance to the data edge is the latency.
+                clock = arrival_day[arrival_order[k]]
+                clock_x[] = [clock]
+                progress[] =
+                    "Ground clock: day $(compact(clock; digits = 1))\n" *
+                    "Windows received: $k of $n"
+                return nothing
+            end
+        reveal!(1)
+
+        span_handle = nothing
+        if label_spans !== nothing
+            for (a, b) in label_spans
+                p = vspan!(
+                    ax_score,
+                    days_since(epoch, a),
+                    days_since(epoch, b);
+                    color = (FIGURE_COLORS.label, 0.25),
+                )
+                span_handle === nothing && (span_handle = p)
+            end
+        end
+        clock_handle = nothing
+        for ax in panels
+            p = vlines!(
+                ax,
+                clock_x;
+                color = FIGURE_COLORS.threshold,
+                linestyle = :dot,
+                linewidth = 0.9,
+            )
+            clock_handle === nothing && (clock_handle = p)
+        end
+        lines!(ax_cov, show_day, cov_y; color = FIGURE_COLORS.data, linewidth = 0.8)
+        full_coverage && text!(
+            ax_cov,
+            0.012,
+            0.06;
+            text = "Every window fully covered",
+            space = :relative,
+            align = (:left, :bottom),
+            fontsize = 8,
+            color = FIGURE_COLORS.data,
+        )
+        score_handle =
+            lines!(ax_score, show_day, score_y; color = FIGURE_COLORS.data, linewidth = 0.7)
+        alarm_handle = scatter!(
+            ax_score,
+            alarm_day,
+            alarm_y;
+            color = FIGURE_COLORS.signal,
+            markersize = 5,
+        )
+        threshold_handle = hlines!(
+            ax_score,
+            [threshold];
+            color = FIGURE_COLORS.threshold,
+            linestyle = :dash,
+        )
+        stairs!(
+            ax_episode,
+            episode_points;
+            step = :post,
+            color = FIGURE_COLORS.signal,
+            linewidth = 1.0,
+        )
+        text!(
+            ax_episode,
+            0.012,
+            0.96;
+            text = progress,
+            space = :relative,
+            align = (:left, :top),
+            fontsize = 8,
+            color = FIGURE_COLORS.threshold,
+        )
+        # A year of daily passes packs the latency sawtooth into a few pixels
+        # per period, so the trace is drawn light enough to read as a band
+        lines!(ax_lat, show_day, lat_y; color = (FIGURE_COLORS.fit, 0.85), linewidth = 0.6)
+
+        handles = Any[]
+        labels = String[]
+        for (h, l) in (
+            (span_handle, "Labeled span"),
+            (score_handle, "Classifier output"),
+            (alarm_handle, "Alarm"),
+            (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
+            (clock_handle, "Ground clock"),
+        )
+            h === nothing && continue
+            push!(handles, h)
+            push!(labels, l)
+        end
+        Legend(figure[0, 1], handles, labels; LEGEND_STYLE..., nbanks = 1)
+        rowgap!(figure.layout, 6)
+        # Row 1 is the legend; the coverage panel carries one flat trace and
+        # needs less height than the three panels below it.
+        rowsize!(figure.layout, 2, Auto(0.5))
+        record(
+            figure,
+            path,
+            frame_schedule(n, n_frames, hold_frames);
+            framerate = framerate,
+            px_per_unit = px_per_unit,
+        ) do k
+            reveal!(k)
+        end
+        path
     end
 end
 
