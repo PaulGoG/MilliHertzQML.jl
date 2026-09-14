@@ -232,14 +232,13 @@ a tag, so this release is marked by a git tag alone.
   raw-window feature set).
 
 ### Changed
-- Continuous integration runs on the default branch, pull requests into
-  it, and version tags, rather than on manual dispatch alone: the
-  producer it pins is now a public repository, which is what had made an
-  automatic run impossible. A leg off the resolution version discards the
-  committed manifests and resolves its own environment, so that it
-  verifies the compat bounds rather than failing on standard-library
-  membership that moved between Julia versions. The documentation job
-  builds without deploying.
+- Continuous integration stays on manual dispatch. The producer it pins is
+  now public, which removes one obstacle, but automatic triggers were
+  tried and every job was refused before starting: Actions on a private
+  repository draw on the account's paid allowance. A leg off the version
+  the manifests were resolved on now discards them and resolves its own
+  environment, so that it verifies the compat bounds rather than failing
+  on standard-library membership that moved between Julia releases.
 - The script and test environments consume DeepSpaceTelemetry v1.2.0
   (previously v1.0.0). `[compat]` and `[telemetry] producer_compat` stay
   at `"1.0"`: both are lower bounds, and raising them would reject the

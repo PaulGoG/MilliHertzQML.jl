@@ -1,17 +1,15 @@
-# The repository is private, so the workflow runs against the free-tier
-# Actions allowance: the triggers are the default branch, pull requests
-# into it, version tags, and manual dispatch. The documentation job builds
-# but does not deploy — Pages for a private repository needs a paid plan —
-# and the coverage upload is a no-op until CODECOV_TOKEN is set, which it
-# tolerates. The package is not registered in General, so there is no
+# Manual dispatch only. Automatic triggers were tried on 2026-09-14 and
+# every job was refused before it started: Actions on a private repository
+# draw on the account's paid allowance, and that allowance is unavailable.
+# The workflow itself is exercised and was last green on 2026-09-07.
+# Restore the push, tag, and pull-request triggers below once the
+# repository is public or the allowance is restored, and add the
+# documentation deployment then — Pages for a private repository needs a
+# paid plan as well. The coverage upload tolerates a missing
+# CODECOV_TOKEN. The package is not registered in General, so there is no
 # TagBot and no registration workflow: release tags are created by hand.
 name: CI
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
