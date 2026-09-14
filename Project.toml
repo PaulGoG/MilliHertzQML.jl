@@ -1,6 +1,6 @@
 name = "MilliHertzQML"
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Paul-Adrian Gogîță <gogitapaul@yahoo.ro>"]
 
 [deps]
