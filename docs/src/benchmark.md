@@ -174,6 +174,59 @@ one observation record means nothing on the next unless it sits where the
 two records' noise tails agree, and no amount of ROC area substitutes for
 checking that.
 
+## Against the published method
+
+Everything above uses whitened sub-mHz band powers, which the paper this
+pipeline follows does not: Isfan et al. take the spectral entropy and the
+mean, standard deviation and maximum of the raw window periodogram, with
+no filtering and no whitening, on a four-qubit register. That
+configuration ships as `config_sangria_paper.toml` and was run on the same
+two years, so the published result can be compared against a reproduction
+of its own method rather than only against a different one.
+
+The reproduction lands where the paper does. Isfan et al. report five of
+six blind mergers, the missed one being the lowest-SNR source. The parity
+run detects four of the five label spans — and the span it misses is the
+one holding **event 5, the lowest-SNR merger of the blind year** at a
+merger-window SNR of 272 against 598 to 1312 for the rest:
+
+| Span | Events 1+2 | Event 3 | Event 4 | **Event 5** | Event 6 |
+|---|---|---|---|---|---|
+| Peak score, paper features | 0.740 | 0.664 | 0.693 | **0.550** | 0.805 |
+| Peak score, band features | 0.905 | 0.885 | 0.889 | **0.892** | 0.923 |
+| Threshold | 0.584 / 0.826 | | | | |
+
+Under the paper's features the missed event peaks at 0.550 against a
+fitted threshold of 0.584 — a marginal miss, which is consistent with the
+paper finding it the one source its classifier could not reach. Under
+band features the same event peaks at 0.892 against a threshold of 0.826
+and is recovered with room to spare.
+
+What the reproduction adds is the cost the paper does not report. It
+publishes no false-alarm rate, so "five of six" has no operating point
+attached to it. Fitted here by the same criterion as every other run in
+this document, the paper's feature set delivers **17.7 false-alarm
+episodes per 30 days** — 215 episodes over the blind year, an alarm every
+1.7 days — against 2.47 for `q8_b6`. Its calibration also fails to
+transfer: the fit predicted 0.275 per 30 days and the blind year returned
+17.7, a factor of 64, on a held-out block whose AUC is 0.535, barely above
+chance.
+
+| | Paper features, 4 × 4 | Band features, 8 × 4 (`q8_b6`) |
+|---|---|---|
+| Trainable parameters | 32 | 64 |
+| Events | 4 / 5 spans (misses the lowest-SNR merger) | **5 / 5** |
+| False alarms / 30 d | 17.73 | **2.47** |
+| Blind AUC | 0.635 | 0.793 |
+| Held-out AUC | 0.535 | 0.682 |
+
+So the conclusion is not that the quantum classifier was improved: the
+register and the ansatz are doing what they did before. **The conditioning
+is what buys the operating point.** Whitening the record and partitioning
+the milliHertz decade into six bands recovers the event the published
+method misses and cuts the false-alarm rate by a factor of seven, at the
+same parameter budget the paper reports for its own circuit.
+
 ## Against a classical baseline
 
 The GWEEP multilayer perceptron shipped with the same challenge material

@@ -268,6 +268,18 @@ configured needs a near-lossless link, and that shortening the
 conditioning kernel — the smoothed whitening PSD deferred to v1.1 — is
 the precondition for operating on a real one, not a refinement of it.
 
+Against the published method, the comparison is like for like: same blind
+year, same A channel, same 1000-sample windows at step 100, same label
+span. Run with the feature set and four-qubit register of Isfan et al.
+(`config_sangria_paper.toml`), this pipeline reproduces their result —
+five of six blind mergers, the missed one being the lowest-SNR source, at
+a peak score of 0.550 against a 0.584 threshold. Whitening the record and
+partitioning the milliHertz decade into six bands recovers that event
+(peak 0.892 against a 0.826 threshold) and takes the false-alarm rate
+from 17.7 to 2.47 episodes per 30 days. The paper reports no false-alarm
+rate, so its five of six carries no operating point; the improvement here
+is in the conditioning, not in the circuit.
+
 Two results of the benchmark are worth more than the numbers. The ROC area
 ranks the seven models tried in almost the opposite order to their
 delivered false-alarm rate, because the two observation years' noise

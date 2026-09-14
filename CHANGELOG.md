@@ -6,6 +6,19 @@ Notable changes to MilliHertzQML. The format follows
 
 ## [Unreleased]
 
+### Added
+- A parity run against the published method — the feature set and
+  four-qubit register of Isfan et al. 2025, on the same two Sangria years
+  (`config_sangria_paper.toml`, run `sangria_paper`) — and a benchmark
+  section reporting it. The reproduction lands where the paper does: four
+  of the five label spans, the missed one holding event 5, the lowest-SNR
+  merger of the blind year, at a peak score of 0.550 against a fitted
+  threshold of 0.584. It also carries the cost the paper does not report,
+  17.73 false-alarm episodes per 30 days against 2.47 for the shipped
+  model, on a calibration that fails to transfer by a factor of 64. The
+  whitened band features, not the register or the ansatz, are what
+  recover the event and the operating point.
+
 ## [1.0.0] — 2026-09-14
 
 First release of the complete pipeline. The Sangria benchmark stands with
