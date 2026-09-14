@@ -6,6 +6,21 @@ Notable changes to MilliHertzQML. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The classical baseline was described as a 14.6 k-parameter perceptron
+  detecting 5 of 5 blind events, with a scaler that "may have been"
+  refitted on the blind data. Read off the shipped artifacts: the model is
+  `Flatten → Dense(128) → Dense(128) → Dropout → Dense(1)` over a 10 × 10
+  input, **29,569 parameters**; it alarms on 698 of 6,307,190 samples and
+  takes all six coalescences with no false-alarm episode; and
+  `gweep_preds.py` does refit the scaler on the blind set. That refit is
+  not cosmetic — the two years' per-column means differ by 0.27 to 0.65
+  training standard deviations and their standard deviations by up to
+  12 % — and it absorbs precisely the year-to-year shift that the
+  threshold-transfer result identifies as the hard part of the problem.
+  The page now also states that the baseline is quoted rather than
+  reproduced, and why reproducing it is out of proportion.
+
 ### Added
 - A parity run against the published method — the feature set and
   four-qubit register of Isfan et al. 2025, on the same two Sangria years

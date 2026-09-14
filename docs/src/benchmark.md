@@ -230,17 +230,54 @@ same parameter budget the paper reports for its own circuit.
 ## Against a classical baseline
 
 The GWEEP multilayer perceptron shipped with the same challenge material
-(14.6 k parameters, 10 features) detects **5 / 5 blind events with no
-false-alarm episode at all** on its per-sample predictions at a threshold
-of 0.5. It is a stronger result than this classifier achieves, and it
-should be stated that way. One caveat is recorded rather than used as an
-excuse: the shipped predictions may have been produced with a feature
-scaler refitted on the blind data, which would flatter them.
+detects **all five blind label spans — all six coalescences — with no
+false-alarm episode at all**, alarming on 698 of 6,307,190 samples
+(0.011 %) at a threshold of 0.5. It is a stronger result than this
+classifier achieves, and it should be stated that way.
 
-The VQC carries 8 qubits and 4 re-uploading layers, a parameter vector of
-a few dozen entries against the MLP's 14.6 thousand. That is the
-interesting comparison — not that the quantum model wins, which it does
-not.
+**It is quoted, not reproduced.** The numbers above come from scoring the
+predictions shipped with the material through this project's event
+protocol; the model was never retrained here. Reproducing it is out of
+proportion to what it would settle: the preprocessing is a rolling Welch
+spectral entropy at unit stride (`gweep_preproc.py`, window 1000), which
+is 6.3 million transforms per channel-year and ten of them, and the
+spectral-entropy series for X, Y and Z are not among the shipped files.
+
+What the shipped artifacts do establish, by inspection:
+
+- **The model.** `Flatten → Dense(128, relu) → Dense(128, relu) →
+  Dropout(0.2) → Dense(1, sigmoid)` over a 10 × 10 input — ten timesteps
+  of ten features — is **29,569 parameters**, against a few dozen for the
+  variational circuit. That is the interesting comparison, not that the
+  quantum model wins, which it does not.
+- **The inputs.** Ten features: the raw projections X, Y, Z, A, E and the
+  spectral entropy of each. Since `A = (Z − X)/√2` and
+  `E = (X − 2Y + Z)/√6` are computed from X, Y and Z in that same script,
+  the five projections span a three-dimensional space: the input is
+  redundant by construction rather than wrong. The null channel
+  `T = (X + Y + Z)/√3`, the standard instrumental-artifact monitor, is
+  written as a comment and never used.
+- **The scaling is not blind.** `gweep_preds.py` fits a fresh
+  `StandardScaler` on the blind set rather than reusing the one fitted in
+  training. It touches no labels and acts on the five raw projections
+  only, but it is not cosmetic: between the two years the per-column means
+  differ by 0.27 to 0.65 training standard deviations and the standard
+  deviations themselves by up to 12 %.
+
+That last point is the one to weigh, because of what it removes. The
+operating-point result above says the two observation years differ enough
+that a threshold carried between them lands in a shoulder where their
+noise distributions disagree threefold — that year-to-year shift is the
+hard part of this problem. Refitting the scaler on the blind year
+silently absorbs exactly that shift, so the baseline is evaluated on a
+record renormalized to look like the one it trained on, while the
+variational classifier is not. How much of the zero false-alarm rate that
+buys cannot be settled from the shipped files; it is a reason to read the
+comparison as indicative rather than decided.
+
+The VQC carries 8 qubits and 4 re-uploading layers, 64 parameters against
+the perceptron's 29,569 — a ratio of 460 — on one projection against five
+and four features against ten.
 
 ![Window-level receiver operating characteristic](assets/benchmark_roc_curve.png)
 

@@ -289,7 +289,10 @@ the conditioning is not causal: the whitening is zero-phase, so a window
 scored the moment its samples arrive finds two of five events, and an
 alert carries an irreducible look-ahead of 1.16 days. Both are set out,
 with the evidence, in the [benchmark page](docs/src/benchmark.md), which
-also states where a 14.6 k-parameter classical baseline does better.
+also states where a 29.6 k-parameter classical baseline does better — and
+what that comparison rests on, since the baseline is quoted from the
+predictions shipped with the challenge material rather than reproduced,
+and those were scaled with statistics taken from the blind year.
 
 ## Limitations
 
