@@ -269,22 +269,98 @@ thirty-two. The same kernel produces the record-edge transients that force
 charged false alarm at the operating point. Smoothing the PSD would
 shorten it and is the natural next step.
 
+## The spread under re-initialisation
+
+The shipped configuration was retrained at three further seeds, each
+refitting its own threshold on the pooled held-out block and applying it
+to the blind year without adjustment:
+
+| Seed | Fitted threshold | Fit predicted | Delivered FA / 30 d | Events | AUC |
+|---|---|---|---|---|---|
+| 1009 | 0.7941 | 2.750 | 2.969 | 5 of 5 | 0.7981 |
+| 2027 | 0.8430 | 1.650 | 2.309 | 5 of 5 | 0.7949 |
+| 3041 | 0.8134 | 1.375 | 1.484 | 5 of 5 | 0.7960 |
+| 9999 (shipped) | 0.8256 | 2.200 | 2.474 | 5 of 5 | 0.7933 |
+
+![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](assets/benchmark_seed_spread.png)
+
+**Every realisation recovers all five events, and every one lands under
+the three per 30 days the criterion asked for.** What moves is the
+false-alarm rate, by a factor of two across 1.48 to 2.97, while the ROC
+area barely moves at all — 0.7933 to 0.7981, a spread of half a per cent.
+That is the same lesson the model grid taught, now measured within one
+configuration rather than across several: the area under the curve is
+nearly blind to what the operating point delivers, because the threshold
+sits in the tail and the area is dominated by the bulk.
+
+So the headline should be read as an event recall that is stable and a
+false-alarm rate that carries a factor-of-two uncertainty from
+initialisation alone — on top of the Poisson uncertainty of the episodes
+themselves. Four realisations do not measure a distribution either; they
+bound the scatter well enough to say the result is not an artefact of one
+lucky initialisation.
+
+## What a lossy link costs
+
+The mission above delivered everything, so the hole handling was never
+put under load. Five 30-day missions answer what it costs when the link
+does not: the same payload window — days 65 to 95 of the blind year,
+which carries coalescences 1 and 2 — and the same pass schedule, with a
+channel that drops a fraction of transfers for good rather than
+retransmitting them.
+
+| Permanent batch loss | Batches lost | Windows scored | Alarm episodes | Events |
+|---|---|---|---|---|
+| none | 0 of 5155 | 4946 | 38 | 2 of 2 |
+| 0.14 % | 7 | 2653 | 10 | 2 of 2 |
+| 0.45 % | 23 | 563 | 2 | 0 of 2 |
+| 1.01 % | 52 | 0 | 0 | 0 of 2 |
+| 2.99 % | 154 | 0 | 0 | 0 of 2 |
+
+![Windows a replay can score, and the events it still detects, against the permanent batch loss of the link](assets/benchmark_loss_survival.png)
+
+The collapse is not proportional to the loss, and it is not a defect of
+the hole handling. A window is scored only once its **entire conditioning
+stretch** has reached the ground: `context_windows = 20` window lengths
+on each side of a 1000-sample window, and one batch carries one window
+step of 100 samples, so 410 consecutive batches must survive. Under an
+independent per-batch loss `p` a given window therefore survives with
+probability `(1 - p)^410`, drawn as the dashed curve.
+
+The measured survival tracks that estimate while losses are sparse and
+falls below it as they are not, because the expectation stops being the
+right summary: surviving windows exist only inside a clean run of 410
+batches, the mean spacing of losses is `1/p` batches, and once `p`
+exceeds `1/410 ≈ 0.24 %` such a run is a rare event rather than a typical
+one. The whole of the sweep is that one number. A link losing half a per
+cent of its batches permanently delivers a detector that sees nothing,
+while the same link losing them *temporarily* — retransmitted, as in the
+year-long mission, where 648 retries cost nothing — is harmless.
+
+Two consequences worth stating plainly. The operating requirement is on
+**permanent** loss, and it is strict: about 0.2 %. And the smoothed
+whitening PSD deferred to v1.1, which would shorten the conditioning
+kernel, is not a refinement of this result but the precondition for
+running on a link that loses anything at all; every reduction of the
+stretch raises the tolerable loss rate in proportion.
+
 ## Caveats
 
 - **One blind realisation of five events.** The event recall is 5 of 5 and
   the false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Treat the recall as a result, not a rate.
-- **One initialisation.** Every configuration in the grid runs at
-  `seed = 9999`. The differences between models are therefore differences
-  between single training runs, and the spread of the operating point
-  under re-initialisation is not measured.
+- **One initialisation per model.** Every configuration in the grid runs
+  at `seed = 9999`, so the differences between models are differences
+  between single training runs. The shipped configuration has since been
+  repeated at three further seeds (below); the grid has not.
 - **Single channel.** Only A is used; E and T carry independent
   information and would also permit a null-channel veto.
-- **No gaps.** The Sangria products are gapless, and the mission replayed
-  above delivered all 63,043 batches: nothing was lost or pruned, so the
-  hole handling of the coupling — discard a window that crosses a hole,
-  never wait on it — is exercised by the unit tests only, not by this
-  result. The classifier has never been trained on data with gaps.
+- **No gaps in the headline.** The Sangria products are gapless, and the
+  mission replayed above delivered all 63,043 batches: nothing was lost or
+  pruned, so every number in the table before it describes a lossless
+  link. What a lossy one costs is measured separately, above, on 30-day
+  missions; the classifier itself has never been trained on data with
+  gaps.
 - **The threshold is fitted on the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here is over one year, in one direction.

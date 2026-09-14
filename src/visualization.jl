@@ -198,6 +198,37 @@ table of `alert_latency_table`) annotated. Requires CairoMakie.
 function figure_telemetry_alerts end
 
 """
+    figure_loss_survival(p_loss, scored_fraction, events_detected, n_events;
+                         stretch_batches, model = true) -> Figure
+
+Two stacked panels against the permanent per-batch loss probability of a
+delivery channel [%], on a logarithmic axis: the windows a replay could
+score as a fraction of the lossless mission, and the coalescences it still
+detected of `n_events`.
+
+A window is scored only when its whole conditioning stretch has been
+delivered, so survival requires `stretch_batches` consecutive batches to
+arrive. `model` adds the independent-batch estimate
+`(1 - p)^stretch_batches` and marks `1 / stretch_batches`, the loss rate
+at which the mean spacing of losses equals the stretch. Requires
+CairoMakie.
+"""
+function figure_loss_survival end
+
+"""
+    figure_seed_spread(seeds, thresholds, far_per_30d, events_detected, n_events;
+                       baseline_seed = nothing, target_far = nothing) -> Figure
+
+Two stacked panels over the initialization seeds of repeated training
+runs: the decision threshold each run fitted, and the false-alarm rate it
+then delivered on the blind record, annotated with the events each run
+recovered of `n_events`. `baseline_seed` marks the run the package ships
+and `target_far` the rate the threshold criterion asked for. Requires
+CairoMakie.
+"""
+function figure_seed_spread end
+
+"""
     figure_telemetry_trace(t_days, strain, labels; max_points = 5000, whitened = nothing) -> Figure
 
 Simulated strain record against mission time with the labeled spans as

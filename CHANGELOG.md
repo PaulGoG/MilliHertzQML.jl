@@ -6,7 +6,26 @@ Notable changes to MilliHertzQML. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-14
+
+First release of the complete pipeline. The Sangria benchmark stands with
+its provenance regenerated from a committed tree, and the two caveats that
+had been stated without measurement — initialisation variance and
+behaviour on a lossy link — are now measured and reported. The package is
+not registered in the General registry and is not intended to be:
+distribution is by clone, `Pkg.develop`, or a `[sources]` entry pinned to
+a tag, so this release is marked by a git tag alone.
+
 ### Added
+- `figure_loss_survival` and `figure_seed_spread`, and the two studies
+  they draw. A sweep of five 30-day missions over one payload window
+  measures what a permanently lossy link costs: the tolerance is about
+  0.2 % of lost batches, set by the length of the conditioning stretch
+  rather than by the loss rate, because a window is scored only once 410
+  consecutive batches have arrived. Repeats of the shipped configuration
+  at further seeds measure the spread of the operating point under
+  re-initialisation. Both are reported on the benchmark page, which had
+  carried "no gaps" and "one initialisation" as unmeasured caveats.
 - Two animations, `animate_training_history` and `animate_mission_replay`,
   with `scripts/animate.jl` as their dispatcher and `save_animation`
   carrying the same provenance sidecar the static figures get. The first

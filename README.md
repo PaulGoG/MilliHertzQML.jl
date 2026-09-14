@@ -2,6 +2,26 @@
 
 Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
+```mermaid
+flowchart LR
+  H["LDC Sangria TDI<br/>(HDF5)"] --> L[label_ldc.jl]
+  H --> P[preprocess_ldc.jl]
+  L --> P
+  P -->|"features, labels, PSD"| T[train.jl]
+  T -->|"weights + threshold"| I[infer.jl]
+  T -->|"weights + threshold"| S[infer_telemetry.jl]
+  P --> X[export_telemetry_payload.jl]
+  X -->|"payload + scenario"| M(["DeepSpaceTelemetry<br/>mission"])
+  M -->|"run directory"| S
+  I --> R["Blind-year metrics"]
+  S --> A["Alert latencies"]
+```
+
+The batch path trains and evaluates on a record held whole; the streaming
+path replays the same model against a telemetry mission, scoring each
+window as its conditioning stretch reaches the ground. The threshold is
+fitted once, in the batch path, and carried unchanged into both.
+
 ## File Structure
 
 ```text
@@ -39,7 +59,8 @@ MilliHertzQML/
 │   ├── train.jl            # Dispatcher of train_classifier plus the terminal dashboard, file logger, and training figure
 │   ├── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
 │   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
-│   └── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
+│   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
+│   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
 ├── test/
 │   ├── Project.toml        # Test environment (package and producer consumed by path/git); Manifest committed
 │   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
@@ -126,6 +147,12 @@ julia scripts/train.jl config.toml --run-id <RUN_ID>
 julia scripts/infer.jl config.toml --run-id <RUN_ID> --block test
 ```
 
+Training converges in a few dozen epochs and stops on the validation
+block; `scripts/animate.jl` renders the history and the streaming replay
+as GIFs beside the static figures.
+
+![Training and validation loss and the validation accuracy, epoch by epoch, with the checkpoint the run ships](docs/src/assets/training_history.gif)
+
 `--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialization-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
 Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
@@ -193,6 +220,54 @@ coupling excludes delivery holes from scoring rather than handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
+The replay animates: four panels sweep the year in the order the ground
+received the windows, the dotted rule marking how far the delivery lags
+the measurement.
+
+![A year of telemetry replay: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
+
+### The spread under re-initialisation
+
+Retrained at three further seeds, each refitting its own threshold: all
+four realisations recover 5 of 5 events and all four stay under the
+requested three per 30 days, but the delivered rate spans 1.48 to 2.97
+while the ROC area moves from 0.7933 to 0.7981. The recall is stable; the
+false-alarm rate carries a factor-of-two uncertainty from initialisation
+alone.
+
+![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](docs/src/assets/benchmark_seed_spread.png)
+
+### What a lossy link costs
+
+The replayed mission delivered every batch, so a second study asked what
+happens when it does not. Five 30-day missions over the same payload
+window — days 65 to 95 of the blind year, carrying two coalescences — and
+the same pass schedule differ only in the channel, which drops a fraction
+of transfers for good:
+
+| Permanent batch loss | 0 | 0.14 % | 0.45 % | 1.01 % | 2.99 % |
+|---|---|---|---|---|---|
+| Windows scored | 4946 | 2653 | 563 | 0 | 0 |
+| Events detected | 2 of 2 | 2 of 2 | 0 of 2 | 0 of 2 | 0 of 2 |
+
+**Half a per cent of permanent loss costs both events, and one per cent
+leaves nothing to score at all.** The cause is not the loss rate but the
+conditioning: a window is scored only once its whole conditioning stretch
+has arrived — twenty window lengths on each side, 410 consecutive batches
+— so the tolerable loss rate is of order one loss per stretch, 1/410 ≈
+0.24 %, and the collapse sets in there. Above it a clean stretch is a
+rare event rather than a typical one, which is why the measured survival
+falls below the independent-batch estimate exactly where that estimate
+stops being the right summary.
+
+![Windows a replay can score, and events it still detects, against the permanent batch loss of the link](docs/src/assets/benchmark_loss_survival.png)
+
+This is the first statement this repository can make about gaps, and it
+is a limit rather than a result: it says the streaming detector as
+configured needs a near-lossless link, and that shortening the
+conditioning kernel — the smoothed whitening PSD deferred to v1.1 — is
+the precondition for operating on a real one, not a refinement of it.
+
 Two results of the benchmark are worth more than the numbers. The ROC area
 ranks the seven models tried in almost the opposite order to their
 delivered false-alarm rate, because the two observation years' noise
@@ -209,15 +284,23 @@ also states where a 14.6 k-parameter classical baseline does better.
 - **One blind realisation of five events.** The recall is 5 of 5 and the
   false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Read the recall as a result, not a rate.
-- **One initialisation.** Every experiment runs at `seed = 9999`; the
-  spread of the operating point under re-initialisation has not been
-  measured.
+- **Four initialisations, not a distribution.** The shipped configuration
+  was retrained at three further seeds: all four recover 5 of 5 events and
+  all four land under the requested rate, but the delivered false-alarm
+  rate spans 1.48 to 2.97 per 30 days while the ROC area moves by half a
+  per cent. Read the recall as stable and the false-alarm rate as carrying
+  a factor-of-two uncertainty from initialisation alone. The rest of the
+  model grid remains single-run at `seed = 9999`.
 - **Single channel.** Only A is used. E and T carry independent
   information and would allow a null-channel veto.
-- **No gaps.** The Sangria products are gapless and the mission replayed
-  here lost no data. The coupling discards windows that cross a delivery
-  hole instead of scoring them, and the classifier has never been trained
-  on gapped data; gap-tolerant features are planned, not implemented.
+- **The link must be near-lossless.** The Sangria products are gapless and
+  the year-long mission lost no data. The coupling discards windows that
+  cross a delivery hole instead of scoring them, and because a window
+  needs its whole conditioning stretch, the measured tolerance is about
+  0.2 % of permanently lost batches; at 0.45 % both events of the 30-day
+  study are missed and at 1 % nothing is scorable. The classifier has also
+  never been trained on gapped data. Gap-tolerant conditioning is planned,
+  not implemented.
 - **The threshold comes from the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here spans one year, in one direction.

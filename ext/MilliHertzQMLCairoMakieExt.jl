@@ -33,7 +33,9 @@ import MilliHertzQML:
     animation_theme,
     save_animation,
     animate_training_history,
-    animate_mission_replay
+    animate_mission_replay,
+    figure_loss_survival,
+    figure_seed_spread
 
 """
     PT_PER_MM
@@ -1205,6 +1207,217 @@ function animate_mission_replay(
             reveal!(k)
         end
         path
+    end
+end
+
+"""
+    log_decimal_ticks(lo, hi) -> (values, labels)
+
+Decade and 3× intermediate ticks of the closed interval `[lo, hi]`,
+labeled as plain decimals. A logarithmic axis of a few decades reads as
+decimals rather than as powers, and never as a fractional exponent.
+"""
+function log_decimal_ticks(lo::Real, hi::Real)
+    values = Float64[]
+    for d in floor(Int, log10(lo)):ceil(Int, log10(hi)), m in (1.0, 3.0)
+        v = m * 10.0^d
+        lo <= v <= hi && push!(values, v)
+    end
+    labels = map(values) do v
+        v >= 1 ? string(round(Int, v)) : rstrip(rstrip(string(round(v; digits = 4)), '0'), '.')
+    end
+    return (values, labels)
+end
+
+function figure_loss_survival(
+    p_loss::AbstractVector{<:Real},
+    scored_fraction::AbstractVector{<:Real},
+    events_detected::AbstractVector{<:Integer},
+    n_events::Integer;
+    stretch_batches::Integer,
+    model::Bool = true,
+)
+    n = length(p_loss)
+    n == length(scored_fraction) == length(events_detected) || throw(
+        DimensionMismatch("the loss, survival and detection vectors differ in length."),
+    )
+    n >= 1 || throw(ArgumentError("the sweep is empty."))
+    all(>(0), p_loss) || throw(
+        ArgumentError("a logarithmic loss axis admits no zero; omit the lossless run."),
+    )
+    stretch_batches >= 1 || throw(ArgumentError("the stretch must be at least one batch."))
+
+    percent = 100 .* p_loss
+    knee = 100 / stretch_batches      # losses spaced one stretch apart
+    lo, hi = extrema(percent)
+    grid = exp10.(range(log10(0.6 * min(lo, knee)), log10(1.6 * hi); length = 200))
+    return with_theme(figure_theme(; height_mm = 0.80 * FIGURE_WIDTH_MM)) do
+        figure = Figure()
+        ticks = log_decimal_ticks(first(grid), last(grid))
+        ax_survival = Axis(
+            figure[1, 1];
+            ylabel = "Windows scored, of lossless",
+            xscale = log10,
+            xticks = ticks,
+            yticks = 0:0.25:1,
+        )
+        ax_events = Axis(
+            figure[2, 1];
+            xlabel = "Permanent batch loss [%]",
+            ylabel = "Events detected",
+            xscale = log10,
+            xticks = ticks,
+            yticks = 0:1:n_events,
+        )
+        linkxaxes!(ax_survival, ax_events)
+        hidexdecorations!(ax_survival; grid = false, ticks = false)
+        xlims!(ax_events, first(grid), last(grid))
+        ylims!(ax_survival, -0.05, 1.1)
+        ylims!(ax_events, -0.3, n_events + 0.4)
+
+        if model
+            lines!(
+                ax_survival,
+                grid,
+                (1 .- grid ./ 100) .^ stretch_batches;
+                color = FIGURE_COLORS.fit,
+                linestyle = :dash,
+                label = "Independent-batch estimate",
+            )
+        end
+        # The rate at which the mean spacing of losses equals the stretch:
+        # above it a clean stretch is a rare event, not a typical one.
+        vlines!(
+            ax_survival,
+            [knee];
+            color = FIGURE_COLORS.threshold,
+            linestyle = :dot,
+            linewidth = 0.8,
+        )
+        text!(
+            ax_survival,
+            knee,
+            1.06;
+            text = "1 / stretch",
+            align = (:center, :top),
+            fontsize = 7,
+        )
+        scatterlines!(
+            ax_survival,
+            percent,
+            scored_fraction;
+            color = FIGURE_COLORS.data,
+            markersize = 5,
+            label = "Measured",
+        )
+        scatterlines!(
+            ax_events,
+            percent,
+            Float64.(events_detected);
+            color = FIGURE_COLORS.signal,
+            markersize = 5,
+        )
+        top_legend!(figure, ax_survival)
+        rowgap!(figure.layout, 4)
+        figure
+    end
+end
+
+function figure_seed_spread(
+    seeds::AbstractVector{<:Integer},
+    thresholds::AbstractVector{<:Real},
+    far_per_30d::AbstractVector{<:Real},
+    events_detected::AbstractVector{<:Integer},
+    n_events::Integer;
+    baseline_seed::Union{Nothing,Integer} = nothing,
+    target_far::Union{Nothing,Real} = nothing,
+)
+    n = length(seeds)
+    n == length(thresholds) == length(far_per_30d) == length(events_detected) ||
+        throw(DimensionMismatch("the seed, threshold, rate and detection vectors differ."))
+    n >= 2 || throw(ArgumentError("a spread needs at least two runs."))
+
+    x = collect(1:n)
+    shipped = baseline_seed === nothing ? Int[] : findall(==(baseline_seed), seeds)
+    return with_theme(figure_theme(; height_mm = 0.80 * FIGURE_WIDTH_MM)) do
+        figure = Figure()
+        ax_thr = Axis(figure[1, 1]; ylabel = "Fitted threshold")
+        ax_far = Axis(
+            figure[2, 1];
+            xlabel = "Initialization seed",
+            ylabel = "False alarms / 30 d",
+        )
+        linkxaxes!(ax_thr, ax_far)
+        hidexdecorations!(ax_thr; grid = false, ticks = false)
+        ax_far.xticks = (x, string.(seeds))
+        xlims!(ax_far, 0.5, n + 0.5)
+        # Headroom above whichever is higher, the requested rate or the
+        # worst run, so that neither the rule nor the count meets the frame.
+        far_top =
+            target_far === nothing ? maximum(far_per_30d) :
+            max(target_far, maximum(far_per_30d))
+        far_low = minimum(far_per_30d)
+        ylims!(
+            ax_far,
+            far_low - 0.12 * (far_top - far_low),
+            far_top + 0.22 * (far_top - far_low),
+        )
+
+        if target_far !== nothing
+            hlines!(
+                ax_far,
+                [target_far];
+                color = FIGURE_COLORS.threshold,
+                linestyle = :dash,
+                linewidth = 0.8,
+                label = "Requested rate",
+            )
+        end
+        scatter!(ax_thr, x, thresholds; color = FIGURE_COLORS.data, markersize = 6)
+        scatter!(
+            ax_far,
+            x,
+            far_per_30d;
+            color = FIGURE_COLORS.data,
+            markersize = 6,
+            label = "Delivered rate",
+        )
+        if !isempty(shipped)
+            scatter!(
+                ax_thr,
+                x[shipped],
+                thresholds[shipped];
+                color = FIGURE_COLORS.signal,
+                markersize = 9,
+                marker = :diamond,
+            )
+            scatter!(
+                ax_far,
+                x[shipped],
+                far_per_30d[shipped];
+                color = FIGURE_COLORS.signal,
+                markersize = 9,
+                marker = :diamond,
+                label = "Shipped run",
+            )
+        end
+        # Every run recovered the same events, so the count is stated once
+        # rather than repeated over each marker.
+        recovered =
+            all(==(n_events), events_detected) ? "$n_events of $n_events events" :
+            "$(minimum(events_detected))–$(maximum(events_detected)) of $n_events events"
+        text!(
+            ax_far,
+            0.5 + 0.05 * n,
+            far_low;
+            text = recovered,
+            align = (:left, :bottom),
+            fontsize = 7,
+            color = FIGURE_COLORS.signal,
+        )
+        top_legend!(figure, ax_far)
+        rowgap!(figure.layout, 4)
+        figure
     end
 end
 
