@@ -223,6 +223,7 @@ function evaluate_classifier(
                 ),
             ),
         )
+        snapshot_manifest(results_dir)
 
         metrics = nothing
         roc = nothing

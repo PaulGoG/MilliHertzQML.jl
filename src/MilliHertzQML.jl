@@ -60,7 +60,15 @@ export cfgget, override, section
 export analysis_band, pipeline_paths, feature_geometry
 export generation_settings, preprocessing_settings, model_settings, training_settings
 export inference_settings, ldc_settings, resource_settings, telemetry_settings
-export TIMER, report_timing, new_run_id, hardware_fingerprint, git_provenance, provenance
+export TIMER,
+    report_timing,
+    new_run_id,
+    hardware_fingerprint,
+    git_provenance,
+    provenance,
+    active_manifest_path,
+    manifest_sha256,
+    snapshot_manifest
 export backup_existing!, write_toml, write_csv
 export training_memory_estimate_gib, record_memory_estimate_gib, check_memory
 export generate_telemetry, preprocess_record, label_truth_stream

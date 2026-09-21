@@ -1080,6 +1080,26 @@ end
         @test !haskey(TOML.parsefile(plain), "git")
     end
     @test occursin("Time", sprint(report_timing))
+
+    # Resolved environment: manifests are not tracked, so the digest in every
+    # tagged record and the copy in the run directory carry it instead.
+    manifest = active_manifest_path()
+    @test manifest !== nothing && isfile(manifest)
+    @test dirname(manifest) == dirname(Base.active_project())
+    digest = manifest_sha256()
+    @test occursin(r"^[0-9a-f]{64}$", digest)
+    env = provenance()["environment"]
+    @test Set(keys(provenance())) == Set(["hardware", "git", "environment", "written_at"])
+    @test env["manifest_sha256"] == digest
+    @test !isabspath(env["active_project"])
+    mktempdir() do dir
+        target = snapshot_manifest(joinpath(dir, "run"))
+        @test target == joinpath(dir, "run", "manifest_snapshot.toml")
+        @test read(target) == read(manifest)
+        snapshot_manifest(joinpath(dir, "run"))
+        @test isfile(joinpath(dir, "run", "manifest_snapshot_#1.toml"))
+        @test read(target) == read(manifest)
+    end
 end
 
 @testset "Figures (CairoMakie extension)" begin
@@ -1433,6 +1453,7 @@ end
         model_path = joinpath(run_dir, "gw_model.jld2")
         @test isfile(model_path)
         @test isfile(joinpath(run_dir, "config.toml"))
+        @test isfile(joinpath(run_dir, "manifest_snapshot.toml"))
         # Chronological blocks with a one-window buffer
         blocks = TOML.parsefile(joinpath(run_dir, "split.toml"))["split"]
         buffer = cld(cfg["preprocessing"]["window_size"], cfg["preprocessing"]["step_size"])

@@ -172,7 +172,8 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    thresholds;
 2. run directory `<models>/run_<run_id>` with the configuration snapshot
    `config.toml` (sections `model`, `training`, `features`, plus
-   provenance);
+   provenance) and a copy of the resolved Manifest
+   (`manifest_snapshot.toml`, [`snapshot_manifest`](@ref));
 3. feature and label tables of `[training]`, capped to
    `test_mode_samples` windows and `test_mode_epochs` epochs under
    `test_mode`;
@@ -264,6 +265,7 @@ function train_classifier(
             ),
         )
         write_toml(joinpath(run_dir, "config.toml"), snapshot)
+        snapshot_manifest(run_dir)
         @info "training run" run_id = run_id run_dir = run_dir test_mode = test_mode
 
         X_raw, y_raw, _ = load_data(trn.train_features, trn.train_labels)

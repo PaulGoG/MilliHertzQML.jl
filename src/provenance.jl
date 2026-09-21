@@ -116,15 +116,84 @@ function git_provenance()
 end
 
 """
+    active_manifest_path() -> Union{Nothing, String}
+
+Path of the Manifest resolved for the active project, or `nothing` when the
+active project has none on disk. Candidates are searched in the directory
+of `Base.active_project()` in the order Julia itself applies: the
+version-specific `Manifest-v<major>.<minor>.toml`, `JuliaManifest.toml`,
+`Manifest.toml`.
+"""
+function active_manifest_path()
+    project = Base.active_project()
+    project === nothing && return nothing
+    dir = dirname(project)
+    candidates = (
+        "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+        "JuliaManifest.toml",
+        "Manifest.toml",
+    )
+    for name in candidates
+        path = joinpath(dir, name)
+        isfile(path) && return path
+    end
+    return nothing
+end
+
+"""
+    manifest_sha256() -> String
+
+SHA-256 digest (hexadecimal) of the active Manifest
+([`active_manifest_path`](@ref)), or `"unknown"` when there is none. The
+digest identifies the resolved dependency state of a run without carrying
+the file into every record.
+"""
+function manifest_sha256()
+    path = active_manifest_path()
+    path === nothing && return "unknown"
+    return bytes2hex(open(sha256, path))
+end
+
+"""
+    snapshot_manifest(dir) -> Union{Nothing, String}
+
+Copy the active Manifest ([`active_manifest_path`](@ref)) to
+`<dir>/manifest_snapshot.toml`, backing up an existing snapshot first
+([`backup_existing!`](@ref)), and return the path written; `nothing`, with
+a warning, when the active project has no Manifest. Manifests are not
+tracked in the repository, so this copy is what pins the resolved
+environment of a run.
+"""
+function snapshot_manifest(dir::AbstractString)
+    source = active_manifest_path()
+    if source === nothing
+        @warn "no Manifest found for the active project; the resolved environment of this run is not recorded." active_project =
+            Base.active_project()
+        return nothing
+    end
+    target = joinpath(dir, "manifest_snapshot.toml")
+    mkpath(dir)
+    backup_existing!(target)
+    cp(source, target)
+    return String(target)
+end
+
+"""
     provenance() -> Dict{String, Any}
 
-`hardware` and `git` sections of a provenance snapshot, plus the wall-clock
-time of writing.
+`hardware`, `git`, and `environment` sections of a provenance snapshot, plus
+the wall-clock time of writing. `environment` names the active project and
+the digest of its Manifest ([`manifest_sha256`](@ref)).
 """
 function provenance()
     return Dict{String,Any}(
         "hardware" => hardware_fingerprint(),
         "git" => git_provenance(),
+        "environment" => Dict{String,Any}(
+            "active_project" =>
+                provenance_path(something(Base.active_project(), "unknown")),
+            "manifest_sha256" => manifest_sha256(),
+        ),
         "written_at" => string(Dates.now()),
     )
 end
