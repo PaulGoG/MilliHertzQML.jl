@@ -2,8 +2,6 @@
 # package consumed by path). Configuration access, path resolution, and
 # provenance live in the package (src/config.jl, src/provenance.jl).
 
-using Pkg
-Pkg.activate(@__DIR__; io = devnull)
-Pkg.instantiate(; io = devnull)
+include(joinpath(@__DIR__, "activate.jl"))
 
 using MilliHertzQML

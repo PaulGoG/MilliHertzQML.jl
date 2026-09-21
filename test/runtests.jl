@@ -2,9 +2,7 @@
 # consumed by path through [sources]) and loads MilliHertzQML as a real
 # package, so static QA resolves the package identity and `Pkg.test` agrees
 # with a direct `julia test/runtests.jl` invocation.
-using Pkg
-Pkg.activate(@__DIR__; io = devnull)
-Pkg.instantiate(; io = devnull)
+include(joinpath(@__DIR__, "activate.jl"))
 
 using Test
 using Statistics, Random, TOML, Dates

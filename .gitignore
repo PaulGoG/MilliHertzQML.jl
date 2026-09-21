@@ -3,6 +3,7 @@
 *.jl.*.cov
 *.jl.mem
 *.ji
+Manifest*.toml
 
 # Generated documentation
 docs/build/
