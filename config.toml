@@ -51,7 +51,7 @@ high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
 band_edges_hz = [0.001, 0.005, 0.1]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
 highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
 highpass_order = 8             # Butterworth order of the record high-pass; >= 1
-edge_margin = 0.0              # windows dropped at each record end, in window lengths (conditioning transients); >= 0
+edge_margin = 0.0              # windows dropped at each record end, in window lengths; >= 0
 output_prefix = "telemetry_complex"   # prefix of the output feature/label CSVs
 
 [model]
@@ -101,7 +101,7 @@ label_window_size = 1000        # window of the labeling SNR scan [samples]; >= 
 label_step = 10                 # stride of the labeling SNR scan [samples]; >= 1
 peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
 merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
-precursor_ratio = 0.1           # a peak within label_before_sec before a larger one and below this fraction of it is an inspiral fluctuation; in [0, 1]
+precursor_ratio = 0.1           # amplitude ratio below which an earlier SNR peak is merged into the later one; in [0, 1]
 output_prefix = "ldc"           # prefix of the label, event, and span CSVs
 
 [resources]
@@ -110,7 +110,7 @@ warn_memory_gib = 8.0    # a stage whose estimate exceeds this warns [GiB]; <= m
 
 [telemetry]
 segment_duration_sec = 50.0     # producer segment length [s] of the exported scenario; > 0
-batch_size = 10                 # producer segments per batch; >= 1 (50 s × 10 at 0.2 Hz = one window step)
+batch_size = 10                 # producer segments per batch; >= 1
 start_sim_time = "2035-01-01T00:00:00"   # mission epoch of the exported payload; ISO-8601
 output_prefix = "telemetry"     # prefix of the payload CSV and scenario fragment
 run_dir = ""                    # DeepSpaceTelemetry run directory; "" requires --run-dir

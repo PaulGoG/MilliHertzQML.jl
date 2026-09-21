@@ -19,9 +19,9 @@ jobs:
     name: Tests — Julia ${{ matrix.version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # "1" is the blocking job on the current stable release (1.13, the
-    # version the committed Manifests are resolved on) and "1.12" on the
-    # compat floor. Coverage runs once: it disables package images and
-    # roughly doubles the precompile time.
+    # version the environments are resolved on) and "1.12" on the compat
+    # floor. Coverage runs once: it disables package images and roughly
+    # doubles the precompile time.
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
@@ -41,11 +41,11 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
-      # The committed manifests are resolved on the current release. A leg
-      # on another version discards them and resolves its own environment,
-      # because standard-library membership moves between versions; that
-      # leg verifies the compat bounds, the blocking leg the manifests as
-      # committed.
+      # Manifests left in the tree are resolved on the current release. A
+      # leg on another version discards them and resolves its own
+      # environment, because standard-library membership moves between
+      # versions; that leg verifies the compat bounds, the blocking leg the
+      # resolution on the current release.
       - name: Discard the committed manifests off the resolution version
         if: matrix.version != '1'
         run: rm -f Manifest.toml test/Manifest.toml docs/Manifest.toml

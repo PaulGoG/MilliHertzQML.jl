@@ -2,6 +2,99 @@
 
 Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
+## File structure
+
+```
+MilliHertzQML.jl/
+├── activate.jl          # activates and instantiates the root environment
+├── config.toml          # default configuration (synthetic pipeline)
+├── config_sangria*.toml # LDC Sangria configurations
+├── configs/experiments/ # capacity experiments of the benchmark
+├── src/                 # package: physics, model, stages, telemetry coupling
+├── ext/                 # CairoMakie and DeepSpaceTelemetry extensions
+├── scripts/             # entry points, own environment
+├── test/                # suite with static QA, own environment
+├── bench/               # benchmarks, own environment
+├── docs/                # Documenter manual, own environment
+├── data/                # inputs and outputs (not tracked)
+└── models/              # per-run model directories (not tracked)
+```
+
+The full tree is at the end of this page.
+
+## Environment
+
+Julia 1.13 is the development release. `Manifest.toml` files are not
+tracked; the environments resolve from `Project.toml` and its `[compat]`
+bounds. The `[compat]` floor is 1.12, where the suite last passed on
+2026-09-10; the floor is retained until continuous integration exercises
+it again. With [juliaup](https://github.com/JuliaLang/juliaup), `juliaup
+update` keeps the `release` channel current.
+
+The package is not registered in the General registry and is not intended
+to be: it is used from a clone, and a downstream environment consumes it by
+path or by git source — `Pkg.develop(path = ...)`, or a `[sources]` entry
+pinning the URL and a revision — with released states marked by git tags.
+From a clone of this repository:
+
+```bash
+git clone git@github.com:PaulGoG/MilliHertzQML.jl.git
+cd MilliHertzQML.jl
+julia activate.jl
+```
+
+Every environment carries an `activate.jl` that activates and instantiates
+it; `julia -i activate.jl` opens a session in the root environment, and
+`julia -i test/activate.jl` (likewise `scripts/`, `docs/`, `bench/`) in an
+auxiliary one.
+
+The scripts, tests, benchmarks, and documentation each carry their own
+environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
+package by path and activates itself, so the step above is optional for
+them; the first invocation of each environment resolves and precompiles
+it. The script and test environments also pin the telemetry producer
+[DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl),
+unregistered likewise, as a git source at a release commit; its
+[manual](https://PaulGoG.github.io/DeepSpaceTelemetry.jl/stable/)
+documents the run directory this package reads. On a machine whose git
+configuration rewrites GitHub URLs to SSH, instantiate them with
+`JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses the
+command-line git client and its agent.
+
+## Entry points
+
+```bash
+julia activate.jl                                   # instantiate the root environment
+julia scripts/generate_data.jl config.toml --run-id sim01
+julia scripts/preprocess_ldc.jl config.toml \
+    --h5-file data/inputs/simulated_telemetry_complex.h5 \
+    --label-file data/inputs/simulated_telemetry_complex_labels.csv \
+    --output-prefix telemetry_sim
+julia scripts/train.jl config.toml --run-id <RUN_ID>
+julia scripts/infer.jl config.toml --run-id <RUN_ID> --block test
+julia test/runtests.jl                              # static QA, unit tests, pipeline smoke test
+julia bench/benchmarks.jl                           # performance measurements
+julia docs/make.jl                                  # manual, written to docs/build/
+```
+
+## Component status
+
+| Component | State |
+|---|---|
+| Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
+| Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
+| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
+| Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
+| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
+| Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block, or validation and test pooled by default so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
+| Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
+| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector, replay and live modes, alert-latency table and figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
+| Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; remediation of the remaining defects is planned |
+
+The remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md`.
+
+## Overview
+
 ```mermaid
 flowchart LR
   H["LDC Sangria TDI<br/>(HDF5)"] --> L[label_ldc.jl]
@@ -21,107 +114,6 @@ The batch path trains and evaluates on a record held whole; the streaming
 path replays the same model against a telemetry mission, scoring each
 window as its conditioning stretch reaches the ground. The threshold is
 fitted once, in the batch path, and carried unchanged into both.
-
-## File Structure
-
-```text
-MilliHertzQML/
-├── src/
-│   ├── MilliHertzQML.jl    # Module definition and exports
-│   ├── config.jl           # TOML loading, validated key access, typed settings of every section, path resolution
-│   ├── provenance.jl       # Run identifiers, hardware and git provenance, overwrite-safe writing, memory guard, stage timer
-│   ├── stages/             # One typed stage function per pipeline step
-│   │   ├── generation.jl   #   generate_telemetry: simulated continuous telemetry, labels, event catalog
-│   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
-│   │   ├── export_payload.jl #  export_telemetry_payload: A-channel payload and scenario fragment for the telemetry producer
-│   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
-│   │   ├── training.jl     #   train_classifier: chronological blocks, training, threshold fitted on the calibration block
-│   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
-│   ├── model.jl            # VQC struct, ansatz and feature-map construction
-│   ├── training.jl         # Forward pass, class-weighted BCE loss, gradient step
-│   ├── evaluation.jl       # Chronological block split, ROC, calibration-block threshold, event-level metrics
-│   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
-│   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
-│   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
-│   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
-│   ├── visualization.jl    # Figure interface (theme, export with provenance, one function per figure)
-│   ├── telemetry.jl        # Telemetry coupling: run interface, coverage, window scheduler, streaming detector, replay, alert latency
-│   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
-├── ext/
-│   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures (loads with CairoMakie)
-│   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API (loads with DeepSpaceTelemetry)
-├── scripts/
-│   ├── Project.toml        # Script environment (package consumed by path); Manifest committed
-│   ├── common.jl           # Activation of the script environment
-│   ├── generate_data.jl    # Dispatcher of generate_telemetry plus the trace figure
-│   ├── label_ldc.jl        # Dispatcher of label_truth_stream
-│   ├── preprocess_ldc.jl   # Dispatcher of preprocess_record
-│   ├── train.jl            # Dispatcher of train_classifier plus the terminal dashboard, file logger, and training figure
-│   ├── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
-│   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
-│   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
-│   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
-├── test/
-│   ├── Project.toml        # Test environment (package and producer consumed by path/git); Manifest committed
-│   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
-│   ├── telemetry_tests.jl  # Coupling core on an in-memory run
-│   ├── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed through the extension
-│   └── export_payload_tests.jl         # Payload export stage
-├── bench/
-│   ├── Project.toml        # Benchmark environment (package consumed by path); Manifest committed
-│   └── benchmarks.jl       # BenchmarkTools performance measurements
-├── docs/
-│   ├── Project.toml        # Documentation environment (package consumed by path)
-│   ├── make.jl             # Documenter.jl build script
-│   └── src/                # Manual pages incl. the Sangria benchmark and its figures (build/ is generated, not tracked)
-├── data/
-│   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
-│   └── outputs/            # Per-run plots and results (not tracked)
-├── models/                 # Per-run model checkpoints (not tracked)
-├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build (manual dispatch until the repository is public)
-├── .JuliaFormatter.toml    # Committed formatter configuration
-├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
-├── CITATION.cff            # Citation metadata
-├── config.toml             # Pipeline defaults (simulator); overridden by CLI flags
-├── config_sangria.toml     # Sangria benchmark: Welch-whitened features, truth-stream labels
-├── config_sangria_paper.toml # Sangria paper-parity run: raw-window feature set of Isfan et al. (2025)
-├── configs/experiments/    # Sangria capacity experiments: one configuration per model width, depth, and band partition
-├── Project.toml            # Package metadata: only the dependencies of src/
-└── Manifest.toml           # Pinned dependency versions (tracked)
-```
-
-## Installation
-
-Julia 1.13 is the development release: the committed `Manifest.toml` files
-are resolved on it. The `[compat]` floor is 1.12, where the suite last
-passed on 2026-09-10; the floor is retained until continuous integration
-exercises it again. With [juliaup](https://github.com/JuliaLang/juliaup),
-`juliaup update` keeps the `release` channel current.
-
-The package is not registered in the General registry and is not intended
-to be: it is used from a clone, and a downstream environment consumes it by
-path or by git source — `Pkg.develop(path = ...)`, or a `[sources]` entry
-pinning the URL and a revision — with released states marked by git tags.
-From a clone of this repository:
-
-```bash
-git clone git@github.com:PaulGoG/MilliHertzQML.jl.git
-cd MilliHertzQML.jl
-julia --project -e 'using Pkg; Pkg.instantiate()'
-```
-
-The scripts, tests, benchmarks, and documentation each carry their own
-environment (`scripts/`, `test/`, `bench/`, `docs/`) that consumes the
-package by path and activates itself, so the step above is optional for
-them; the first invocation of each environment resolves and precompiles
-it. The script and test environments also pin the telemetry producer
-[DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl),
-unregistered likewise, as a git source at a release commit; its
-[manual](https://PaulGoG.github.io/DeepSpaceTelemetry.jl/stable/)
-documents the run directory this package reads. On a machine whose git
-configuration rewrites GitHub URLs to SSH, instantiate them with
-`JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses the
-command-line git client and its agent.
 
 ## Usage
 
@@ -325,35 +317,96 @@ noise-model scope, the single evaluation record — are listed in
 [`docs/src/physics.md`](docs/src/physics.md) and
 [`docs/src/architecture.md`](docs/src/architecture.md).
 
-## Testing and Benchmarks
+## Full file tree
 
-```bash
-julia --project -e 'using Pkg; Pkg.test()'   # static QA, unit tests, pipeline smoke test (equivalently: julia test/runtests.jl)
-julia bench/benchmarks.jl                    # performance measurements
+<details>
+<summary>Full file tree</summary>
+
+```text
+MilliHertzQML/
+├── activate.jl             # Activates and instantiates the root environment
+├── src/
+│   ├── MilliHertzQML.jl    # Module definition and exports
+│   ├── config.jl           # TOML loading, validated key access, typed settings of every section, path resolution
+│   ├── provenance.jl       # Run identifiers, hardware and git provenance, overwrite-safe writing, memory guard, stage timer
+│   ├── stages/             # One typed stage function per pipeline step
+│   │   ├── generation.jl   #   generate_telemetry: simulated continuous telemetry, labels, event catalog
+│   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
+│   │   ├── export_payload.jl #  export_telemetry_payload: A-channel payload and scenario fragment for the telemetry producer
+│   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
+│   │   ├── training.jl     #   train_classifier: chronological blocks, training, threshold fitted on the calibration block
+│   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
+│   ├── model.jl            # VQC struct, ansatz and feature-map construction
+│   ├── training.jl         # Forward pass, class-weighted BCE loss, gradient step
+│   ├── evaluation.jl       # Chronological block split, ROC, calibration-block threshold, event-level metrics
+│   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
+│   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
+│   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
+│   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
+│   ├── visualization.jl    # Figure interface (theme, export with provenance, one function per figure)
+│   ├── telemetry.jl        # Telemetry coupling: run interface, coverage, window scheduler, streaming detector, replay, alert latency
+│   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
+├── ext/
+│   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures (loads with CairoMakie)
+│   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API (loads with DeepSpaceTelemetry)
+├── scripts/
+│   ├── Project.toml        # Script environment (package consumed by path)
+│   ├── activate.jl         # Activates and instantiates this environment
+│   ├── common.jl           # Activation of the script environment
+│   ├── generate_data.jl    # Dispatcher of generate_telemetry plus the trace figure
+│   ├── label_ldc.jl        # Dispatcher of label_truth_stream
+│   ├── preprocess_ldc.jl   # Dispatcher of preprocess_record
+│   ├── train.jl            # Dispatcher of train_classifier plus the terminal dashboard, file logger, and training figure
+│   ├── infer.jl            # Dispatcher of evaluate_classifier plus the diagnostic figures
+│   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
+│   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
+│   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
+├── test/
+│   ├── Project.toml        # Test environment (package and producer consumed by path/git)
+│   ├── activate.jl         # Activates and instantiates this environment
+│   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
+│   ├── telemetry_tests.jl  # Coupling core on an in-memory run
+│   ├── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed through the extension
+│   └── export_payload_tests.jl         # Payload export stage
+├── bench/
+│   ├── Project.toml        # Benchmark environment (package consumed by path)
+│   ├── activate.jl         # Activates and instantiates this environment
+│   └── benchmarks.jl       # BenchmarkTools performance measurements
+├── docs/
+│   ├── Project.toml        # Documentation environment (package consumed by path)
+│   ├── activate.jl         # Activates and instantiates this environment
+│   ├── make.jl             # Documenter.jl build script
+│   └── src/                # Manual pages incl. the Sangria benchmark and its figures (build/ is generated, not tracked)
+├── data/
+│   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
+│   └── outputs/            # Per-run plots and results (not tracked)
+├── models/                 # Per-run model checkpoints (not tracked)
+├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build (manual dispatch until the repository is public)
+├── .JuliaFormatter.toml    # Committed formatter configuration
+├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
+├── CITATION.cff            # Citation metadata
+├── config.toml             # Pipeline defaults (simulator); overridden by CLI flags
+├── config_sangria.toml     # Sangria benchmark: Welch-whitened features, truth-stream labels
+├── config_sangria_paper.toml # Sangria paper-parity run: raw-window feature set of Isfan et al. (2025)
+├── configs/experiments/    # Sangria capacity experiments: one configuration per model width, depth, and band partition
+└── Project.toml            # Package metadata: only the dependencies of src/
 ```
 
-Documentation builds with Documenter.jl (`docs/make.jl` activates its own environment):
+</details>
 
-```bash
-julia docs/make.jl
-# open docs/build/index.html
+## How to cite
+
+Cite the software through `CITATION.cff`, or with:
+
+```bibtex
+@software{Gogita_MilliHertzQML,
+  author  = {Gogîță, Paul-Adrian},
+  title   = {MilliHertzQML.jl},
+  version = {1.0.0},
+  year    = {2026},
+  url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
+}
 ```
-
-## Component Status
-
-| Component | State |
-|---|---|
-| Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
-| Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
-| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
-| Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model |
-| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
-| Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block, or validation and test pooled by default so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
-| Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
-| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector, replay and live modes, alert-latency table and figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
-| Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; remediation of the remaining defects is planned |
-
-Version 0.1.x is a pre-release: the remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md` and scheduled for remediation before any science use.
 
 ## License
 

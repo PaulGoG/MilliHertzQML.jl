@@ -1,4 +1,4 @@
-# Sangria capacity experiment `q8_b6_l6` (R3). Derived from config_sangria.toml; six bands from 0.3 mHz, eight qubits, six layers. Sections absent here
+# Sangria experiment `q8_b6_l6`; keys as in config_sangria.toml. Sections absent here
 # fall back to the defaults of the scripts; the HDF5 products are passed on
 # the command line. Paths are resolved relative to the project root.
 
@@ -21,7 +21,7 @@ high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
 band_edges_hz = [0.0003, 0.0006, 0.001, 0.002, 0.004, 0.01, 0.04]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
 highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
 highpass_order = 8             # Butterworth order of the record high-pass; >= 1
-edge_margin = 10.0              # windows dropped at each record end, in window lengths (conditioning transients); >= 0
+edge_margin = 10.0              # windows dropped at each record end, in window lengths; >= 0
 output_prefix = "sangria_b6_train"   # prefix of the output feature/label CSVs
 
 [model]
@@ -68,7 +68,7 @@ label_window_size = 1000        # window of the labeling SNR scan [samples]; >= 
 label_step = 10                 # stride of the labeling SNR scan [samples]; >= 1
 peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
 merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
-precursor_ratio = 0.1           # a peak within label_before_sec before a larger one and below this fraction of it is an inspiral fluctuation; in [0, 1]
+precursor_ratio = 0.1           # amplitude ratio below which an earlier SNR peak is merged into the later one; in [0, 1]
 output_prefix = "sangria"       # prefix of the label, event, and span CSVs
 
 [resources]
