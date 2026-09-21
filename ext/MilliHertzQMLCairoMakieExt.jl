@@ -288,11 +288,15 @@ function figure_roc(fpr::AbstractVector{<:Real}, tpr::AbstractVector{<:Real}, au
 end
 
 """
-    decade_label(k) -> String
+    decade_label(k, m = 1) -> String
 
-Plain-decimal tick label of ``10^k``: `1`, `10`, `100`, `0.1`, `0.01`.
+Plain-decimal tick label of ``m \\times 10^k`` for a single-digit mantissa
+`m`: `1`, `10`, `100`, `0.1`, `0.01`; `20`, `0.2`, `0.05`.
 """
-decade_label(k::Integer) = k >= 0 ? string(10^k) : "0." * repeat("0", -k - 1) * "1"
+function decade_label(k::Integer, m::Integer = 1)
+    1 <= m <= 9 || throw(ArgumentError("m = $m; the mantissa must be a single digit."))
+    return k >= 0 ? string(m * 10^k) : "0." * repeat("0", -k - 1) * string(m)
+end
 
 """
     compact(x; digits = 2) -> String
@@ -325,7 +329,7 @@ function log_ticks(lo::Real, hi::Real)
         v = m * 10.0^k
         lo <= v <= hi || continue
         push!(values, v)
-        push!(labels, m == 1 ? decade_label(k) : string(m) * decade_label(k)[2:end])
+        push!(labels, decade_label(k, m))
     end
     return values, labels
 end

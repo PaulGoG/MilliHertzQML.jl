@@ -1083,6 +1083,20 @@ end
 end
 
 @testset "Figures (CairoMakie extension)" begin
+    # Plain-decimal labels of a sparse logarithmic axis: below unity the
+    # mantissa follows the leading zeros (0.2, not "2.1").
+    ext = Base.get_extension(MilliHertzQML, :MilliHertzQMLCairoMakieExt)
+    @test ext.decade_label.([-2, -1, 0, 1, 2]) == ["0.01", "0.1", "1", "10", "100"]
+    @test ext.decade_label(-1, 2) == "0.2"
+    @test ext.decade_label(-2, 5) == "0.05"
+    @test ext.decade_label(1, 2) == "20"
+    @test_throws ArgumentError ext.decade_label(0, 10)
+    values, ticklabels = ext.log_ticks(0.15, 3.0)
+    @test values == [0.2, 0.5, 1.0, 2.0]
+    @test ticklabels == ["0.2", "0.5", "1", "2"]
+    values, ticklabels = ext.log_ticks(0.01, 100.0)
+    @test ticklabels == ["0.01", "0.1", "1", "10", "100"]
+
     rng = StableRNG(21)
     history = (
         epochs = collect(1:14),
