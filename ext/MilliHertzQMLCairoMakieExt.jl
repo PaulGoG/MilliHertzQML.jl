@@ -1,6 +1,7 @@
 # ext/MilliHertzQMLCairoMakieExt.jl — publication figures of the pipeline,
-# loaded together with CairoMakie. Every figure is designed at the printed
-# single-column width, shares the project theme (Computer Modern, boxed
+# loaded together with CairoMakie. Every figure is built on the base layout
+# (900 × 600 pt single panel; each further stacked panel adds 350 pt, each
+# auxiliary strip 180 pt), shares the project theme (Computer Modern, boxed
 # axes, no titles, legend on top), encodes series families by color and
 # roles by line style, and is exported as vector PDF plus a 4× raster with
 # a provenance sidecar.
@@ -13,10 +14,20 @@ using CairoMakie.Makie: linkxaxes!, hidexdecorations!, rowgap!, xlims!, ylims!, 
 using CairoMakie.Makie.MathTeXEngine: texfont
 using CairoMakie.Makie: LaTeXStrings
 using MilliHertzQML
-using MilliHertzQML: FIGURE_WIDTH_MM, FIGURE_COLORS, backup_existing!, write_toml
+using MilliHertzQML:
+    FIGURE_SIZE,
+    FIGURE_STROKES,
+    FIGURE_FONTSIZE,
+    TICK_FONTSIZE,
+    ANNOTATION_FONTSIZE,
+    figure_size,
+    FIGURE_COLORS,
+    backup_existing!,
+    write_toml
 using MilliHertzQML: contiguous_runs
 using CairoMakie.Makie: scatter!, stairs!, Observable, @lift, Point2f, record
 using CairoMakie.Makie: rowsize!, Auto, LinearTicks
+using CairoMakie.Makie: widths
 using DataFrames: DataFrame, nrow
 using Dates: Dates, DateTime
 import MilliHertzQML:
@@ -38,15 +49,6 @@ import MilliHertzQML:
     figure_seed_spread
 
 """
-    PT_PER_MM
-
-Typographic points per millimetre; Makie's PDF export uses points as its
-unit, so a figure of `FIGURE_WIDTH_MM * PT_PER_MM` points prints at the
-declared width.
-"""
-const PT_PER_MM = 72 / 25.4
-
-"""
     LEGEND_STYLE
 
 Keyword arguments of the horizontal legend placed above the axes.
@@ -57,30 +59,31 @@ const LEGEND_STYLE = (
     tellwidth = false,
     framevisible = false,
     padding = (0, 0, 0, 0),
-    rowgap = 0,
-    colgap = 8,
-    patchsize = (12, 5),
+    rowgap = 4,
+    colgap = 16,
+    patchsize = (40, 14),
     merge = true,
+    titlefont = :bold,
 )
 
-function figure_theme(;
-    width_mm::Real = FIGURE_WIDTH_MM,
-    height_mm::Real = 0.68 * width_mm,
-    fontsize::Real = 8,
-)
-    width_mm > 0 && height_mm > 0 ||
+function figure_theme(; size = FIGURE_SIZE, fontsize::Real = FIGURE_FONTSIZE)
+    size[1] > 0 && size[2] > 0 && fontsize > 0 ||
         throw(ArgumentError("figure dimensions must be positive."))
     return Theme(
-        size = (width_mm * PT_PER_MM, height_mm * PT_PER_MM),
+        size = size,
         fonts = (;
             regular = texfont(:text),
             bold = texfont(:bold),
             italic = texfont(:italic),
         ),
         fontsize = fontsize,
-        figure_padding = (2, 5, 2, 2),
-        linewidth = 1.0,
+        figure_padding = (10, 26, 10, 10),   # room for a tick label centred on the right spine
+        linewidth = 3,
+        markersize = 14,
         Axis = (
+            spinewidth = 1.5,
+            xticklabelsize = TICK_FONTSIZE,
+            yticklabelsize = TICK_FONTSIZE,
             xgridstyle = :dash,
             ygridstyle = :dash,
             xgridcolor = (:grey, 0.12),
@@ -89,14 +92,15 @@ function figure_theme(;
             yminorticksvisible = false,
             xtickalign = 1,
             ytickalign = 1,
-            xticksize = 3,
-            yticksize = 3,
-            spinewidth = 0.6,
-            xticklabelpad = 2,
-            yticklabelpad = 2,
-            xlabelpadding = 2,
-            ylabelpadding = 3,
+            xticksize = 6,
+            yticksize = 6,
+            xticklabelpad = 8,
+            yticklabelpad = 8,
+            xlabelpadding = 8,
+            ylabelpadding = 8,
         ),
+        Scatter = (strokewidth = 1.5,),
+        Legend = (framevisible = false, orientation = :horizontal, titlefont = :bold),
     )
 end
 
@@ -122,13 +126,14 @@ function save_figure(
         end
         push!(written, path)
     end
+    w, h = round.(Int, widths(figure.scene.viewport[]))
     write_toml(
         "$stem.toml",
         Dict{String,Any}(
             "figure" => Dict{String,Any}(
                 "run_id" => run_id,
                 "files" => basename.(written),
-                "width_mm" => FIGURE_WIDTH_MM,
+                "size_pt" => [w, h],
                 "px_per_unit" => px_per_unit,
             ),
         ),
@@ -151,7 +156,7 @@ first row of the figure layout, in `nbanks` rows.
 """
 function top_legend!(figure::Figure, axis::Axis; nbanks::Integer = 1)
     Legend(figure[0, 1], axis; LEGEND_STYLE..., nbanks = nbanks)
-    rowgap!(figure.layout, 3)
+    rowgap!(figure.layout, 10)
     return nothing
 end
 
@@ -183,7 +188,7 @@ end
 function figure_training_history(history::NamedTuple)
     epochs = collect(history.epochs)
     isempty(epochs) && throw(ArgumentError("the training history is empty."))
-    return with_theme(figure_theme(; height_mm = 0.85 * FIGURE_WIDTH_MM)) do
+    return with_theme(figure_theme(; size = figure_size(2))) do
         figure = Figure()
         ax_loss = Axis(figure[1, 1]; ylabel = "Loss")
         lines!(
@@ -211,7 +216,7 @@ function figure_training_history(history::NamedTuple)
         stride = max(1, round(Int, (last(epochs) - first(epochs) + 1) / 8))
         ax_acc.xticks = first(epochs):stride:last(epochs)
         top_legend!(figure, ax_loss)
-        rowgap!(figure.layout, 4)
+        rowgap!(figure.layout, 10)
         figure
     end
 end
@@ -228,7 +233,7 @@ function figure_mission_trace(
         throw(DimensionMismatch("$(length(days)) times for $n probabilities."))
     n >= 1 || throw(ArgumentError("the trace is empty."))
     idx = decimation(n, max_points)
-    return with_theme(figure_theme()) do
+    return with_theme(figure_theme(; size = figure_size(1))) do
         figure = Figure()
         axis =
             Axis(figure[1, 1]; xlabel = "Mission time [days]", ylabel = "MBHB probability")
@@ -238,7 +243,7 @@ function figure_mission_trace(
             days[idx],
             probabilities[idx];
             color = FIGURE_COLORS.data,
-            linewidth = 0.7,
+            linewidth = 2,
             label = "Classifier output",
         )
         hlines!(
@@ -246,6 +251,7 @@ function figure_mission_trace(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
+            linewidth = 1.5,
             label = "Threshold $(round(threshold; digits = 3))",
         )
         xlims!(axis, days[1], days[end] == days[1] ? days[1] + 1 : days[end])
@@ -257,7 +263,9 @@ end
 
 function figure_roc(fpr::AbstractVector{<:Real}, tpr::AbstractVector{<:Real}, auc::Real)
     length(fpr) == length(tpr) || throw(DimensionMismatch("fpr and tpr differ in length."))
-    return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
+    # Both rates are commensurate, so the axis is square: the canvas keeps
+    # the base height and takes only the width the square axis needs.
+    return with_theme(figure_theme(; size = (FIGURE_SIZE[2] + 20, FIGURE_SIZE[2]))) do
         figure = Figure()
         axis = Axis(
             figure[1, 1];
@@ -269,8 +277,9 @@ function figure_roc(fpr::AbstractVector{<:Real}, tpr::AbstractVector{<:Real}, au
             axis,
             [0.0, 1.0],
             [0.0, 1.0];
-            color = FIGURE_COLORS.threshold,
+            color = FIGURE_COLORS.noise,
             linestyle = :dot,
+            linewidth = 1.5,
             label = "Chance",
         )
         lines!(
@@ -390,7 +399,7 @@ function figure_threshold_sweep(
         "$(operating_point.n_detected)/$(operating_point.n_events) events, " *
         "$(compact(operating_point.false_alarms_per_30d)) per 30 d"
     end
-    return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
+    return with_theme(figure_theme(; size = figure_size(2))) do
         figure = Figure()
         ax_recall = Axis(figure[1, 1]; ylabel = "Recall")
         lines!(ax_recall, θ, event_recall; color = FIGURE_COLORS.data, label = "Events")
@@ -407,6 +416,7 @@ function figure_threshold_sweep(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
+            linewidth = 1.5,
             label = operating,
         )
         ylims!(ax_recall, -0.03, 1.03)
@@ -424,7 +434,7 @@ function figure_threshold_sweep(
                 yscale = log10,
                 yticks = log_ticks(f_lo, f_hi),
             )
-            lines!(axis, θ, far_log; color = FIGURE_COLORS.signal)
+            lines!(axis, θ, far_log; color = FIGURE_COLORS.false_alarm)
             ylims!(axis, f_lo, f_hi)
             axis
         else
@@ -440,8 +450,8 @@ function figure_threshold_sweep(
                 text = "No false-alarm episode at any threshold",
                 space = :relative,
                 align = (:center, :center),
-                fontsize = 7,
-                color = FIGURE_COLORS.signal,
+                fontsize = ANNOTATION_FONTSIZE,
+                color = FIGURE_COLORS.false_alarm,
             )
             ylims!(
                 axis,
@@ -454,8 +464,9 @@ function figure_threshold_sweep(
             hlines!(
                 ax_far,
                 [target_far_per_30d];
-                color = FIGURE_COLORS.threshold,
-                linestyle = :dot,
+                color = FIGURE_COLORS.target,
+                linestyle = :dash,
+                linewidth = 1.5,
             )
             # Left of centre, where the false-alarm curve runs far above the
             # target: the right end is where the fitted threshold's vertical
@@ -466,19 +477,24 @@ function figure_threshold_sweep(
                 Float64(target_far_per_30d);
                 text = "Target $(compact(target_far_per_30d)) per 30 d",
                 align = (:left, :bottom),
-                offset = (0, 2),
-                fontsize = 7,
-                color = FIGURE_COLORS.threshold,
+                offset = (0, 6),
+                fontsize = ANNOTATION_FONTSIZE,
+                color = FIGURE_COLORS.target,
             )
         end
-        isfinite(threshold) &&
-            vlines!(ax_far, [threshold]; color = FIGURE_COLORS.threshold, linestyle = :dash)
+        isfinite(threshold) && vlines!(
+            ax_far,
+            [threshold];
+            color = FIGURE_COLORS.threshold,
+            linestyle = :dash,
+            linewidth = 1.5,
+        )
         linkxaxes!(ax_recall, ax_far)
         hidexdecorations!(ax_recall; grid = false, ticks = false)
         xlims!(ax_far, lo - pad, hi + pad)
         # One legend row per entry: the operating-point statement is long
         top_legend!(figure, ax_recall; nbanks = isfinite(threshold) ? 3 : 2)
-        rowgap!(figure.layout, 4)
+        rowgap!(figure.layout, 10)
         figure
     end
 end
@@ -507,18 +523,25 @@ function figure_sensitivity(
         push!(rates, count(decisions[mask] .== 1) / count(mask))
         push!(counts, count(mask))
     end
-    return with_theme(figure_theme()) do
+    return with_theme(figure_theme(; size = figure_size(1))) do
         figure = Figure()
         axis =
             Axis(figure[1, 1]; xlabel = "Matched-filter SNR", ylabel = "Detected fraction")
-        scatterlines!(axis, centers, rates; color = FIGURE_COLORS.data, markersize = 6)
+        scatterlines!(
+            axis,
+            centers,
+            rates;
+            color = FIGURE_COLORS.data,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.data,
+        )
         text!(
             axis,
             centers,
             rates .+ 0.05;
             text = string.(counts),
             align = (:center, :bottom),
-            fontsize = 7,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.data,
         )
         text!(
@@ -528,7 +551,7 @@ function figure_sensitivity(
             text = "Numbers: labeled windows per SNR bin",
             space = :relative,
             align = (:left, :top),
-            fontsize = 7,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.data,
         )
         ylims!(axis, 0, 1.18)
@@ -550,7 +573,7 @@ function figure_score_distribution(
         throw(DimensionMismatch("labels and probabilities differ in length."))
     n_bins >= 1 || throw(ArgumentError("n_bins must be positive."))
     bins = collect(range(0.0, 1.0; length = n_bins + 1))
-    return with_theme(figure_theme()) do
+    return with_theme(figure_theme(; size = figure_size(1))) do
         figure = Figure()
         axis = Axis(figure[1, 1]; xlabel = "Classifier score", ylabel = "Windows")
         if labels === nothing
@@ -559,8 +582,8 @@ function figure_score_distribution(
                 probabilities;
                 bins = bins,
                 color = (FIGURE_COLORS.noise, 0.6),
-                strokecolor = FIGURE_COLORS.noise,
-                strokewidth = 0.4,
+                strokecolor = FIGURE_STROKES.noise,
+                strokewidth = 1.5,
                 label = "All windows",
             )
         else
@@ -569,8 +592,8 @@ function figure_score_distribution(
                 probabilities[labels .== 0];
                 bins = bins,
                 color = (FIGURE_COLORS.noise, 0.6),
-                strokecolor = FIGURE_COLORS.noise,
-                strokewidth = 0.4,
+                strokecolor = FIGURE_STROKES.noise,
+                strokewidth = 1.5,
                 label = "Noise windows",
             )
             hist!(
@@ -578,8 +601,8 @@ function figure_score_distribution(
                 probabilities[labels .== 1];
                 bins = bins,
                 color = (FIGURE_COLORS.signal, 0.5),
-                strokecolor = FIGURE_COLORS.signal,
-                strokewidth = 0.4,
+                strokecolor = FIGURE_STROKES.signal,
+                strokewidth = 1.5,
                 label = "Labeled windows",
             )
         end
@@ -588,6 +611,7 @@ function figure_score_distribution(
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
+            linewidth = 1.5,
             label = "Threshold $(round(threshold; digits = 3))",
         )
         xlims!(axis, 0, 1)
@@ -613,17 +637,17 @@ function figure_telemetry_trace(
     idx = decimation(n, max_points)
     amplitude = maximum(abs, strain)
     exponent = amplitude > 0 ? floor(Int, log10(amplitude)) : 0
+    exponent in (0, 1) && (exponent = 0)  # 10⁰ and 10¹ multipliers fold into the tick values
     scale = 10.0^exponent
     two_panels = whitened !== nothing
     return with_theme(
-        figure_theme(;
-            height_mm = two_panels ? 0.95 * FIGURE_WIDTH_MM : 0.68 * FIGURE_WIDTH_MM,
-        ),
+        figure_theme(; size = two_panels ? figure_size(2) : figure_size(1)),
     ) do
         figure = Figure()
         ax_strain = Axis(
             figure[1, 1];
-            ylabel = LaTeXStrings.latexstring("\\mathrm{Strain}\\ [10^{$exponent}]"),
+            ylabel = exponent == 0 ? "Strain" :
+                     LaTeXStrings.latexstring("\\mathrm{Strain}\\ [10^{$exponent}]"),
         )
         label_bands!(ax_strain, t_days, labels)
         lines!(
@@ -631,7 +655,7 @@ function figure_telemetry_trace(
             t_days[idx],
             strain[idx] ./ scale;
             color = FIGURE_COLORS.data,
-            linewidth = 0.5,
+            linewidth = 2,
             label = "Simulated record",
         )
         xlims!(ax_strain, t_days[1], t_days[end])
@@ -644,11 +668,11 @@ function figure_telemetry_trace(
                 t_days[idx],
                 whitened[idx];
                 color = FIGURE_COLORS.data,
-                linewidth = 0.5,
+                linewidth = 2,
             )
             linkxaxes!(ax_strain, ax_white)
             hidexdecorations!(ax_strain; grid = false, ticks = false)
-            rowgap!(figure.layout, 4)
+            rowgap!(figure.layout, 10)
         else
             ax_strain.xlabel = "Mission time [days]"
         end
@@ -684,7 +708,7 @@ function figure_telemetry_alerts(
     scores = scores[order]
     latency_h = latency_h[order]
     alarmed = findall(==(1), Int.(windows.decision)[order])
-    return with_theme(figure_theme(; height_mm = 0.95 * FIGURE_WIDTH_MM)) do
+    return with_theme(figure_theme(; size = figure_size(2))) do
         figure = Figure()
         ax_score = Axis(figure[1, 1]; ylabel = "MBHB probability")
         span_handle = nothing
@@ -700,7 +724,7 @@ function figure_telemetry_alerts(
             end
         end
         score_handle =
-            lines!(ax_score, t_days, scores; color = FIGURE_COLORS.data, linewidth = 0.7)
+            lines!(ax_score, t_days, scores; color = FIGURE_COLORS.data, linewidth = 2)
         alarm_handle =
             isempty(alarmed) ? nothing :
             scatter!(
@@ -708,13 +732,16 @@ function figure_telemetry_alerts(
                 t_days[alarmed],
                 scores[alarmed];
                 color = FIGURE_COLORS.signal,
-                markersize = 4,
+                markersize = 8,   # hundreds of alarmed windows; the base marker would merge them
+                strokewidth = 1,
+                strokecolor = FIGURE_STROKES.signal,
             )
         threshold_handle = hlines!(
             ax_score,
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
+            linewidth = 1.5,
         )
         ylims!(ax_score, 0, 1)
         # The lower panel carries two different latencies against the same
@@ -723,9 +750,14 @@ function figure_telemetry_alerts(
         # the inspiral is alarmed before the merger.
         ax_lat = Axis(figure[2, 1]; xlabel = "Mission time [days]", ylabel = "Latency [h]")
         delivery_handle =
-            lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 0.7)
-        merger_handle =
-            hlines!(ax_lat, [0.0]; color = :black, linestyle = :dot, linewidth = 0.8)
+            lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 2)
+        merger_handle = hlines!(
+            ax_lat,
+            [0.0];
+            color = FIGURE_COLORS.noise,
+            linestyle = :dot,
+            linewidth = 1.5,
+        )
         alert_handle = nothing
         alert_y = Float64[]
         if latencies !== nothing
@@ -733,7 +765,16 @@ function figure_telemetry_alerts(
                 row.detected || continue
                 x = days_since(epoch, row.t_alarm)
                 y = Dates.value(row.t_alarm - row.t_merger) / 3.6e6
-                p = scatter!(ax_lat, [x], [y]; color = FIGURE_COLORS.signal, markersize = 5)
+                p = scatter!(
+                    ax_lat,
+                    [x],
+                    [y];
+                    color = FIGURE_COLORS.signal,
+                    marker = :diamond,
+                    markersize = 18,
+                    strokewidth = 1.5,
+                    strokecolor = FIGURE_STROKES.signal,
+                )
                 alert_handle === nothing && (alert_handle = p)
                 push!(alert_y, y)
                 text!(
@@ -742,8 +783,8 @@ function figure_telemetry_alerts(
                     y;
                     text = "$(round(row.latency_total_h; digits = 1)) h",
                     align = (:left, :bottom),
-                    offset = (3, 2),
-                    fontsize = 7,
+                    offset = (9, 6),
+                    fontsize = ANNOTATION_FONTSIZE,
                     color = FIGURE_COLORS.signal,
                 )
             end
@@ -772,48 +813,27 @@ function figure_telemetry_alerts(
             push!(labels, l)
         end
         Legend(figure[0, 1], handles, labels; LEGEND_STYLE..., nbanks = 3)
-        rowgap!(figure.layout, 4)
+        rowgap!(figure.layout, 10)
         figure
     end
 end
 
-# Animations. A GIF is read on screen rather than printed in a column, so it
-# is laid out on a wider canvas with larger type; fonts, colors, boxed axes,
-# and the legend on top follow the figure standard. Axis limits are fixed over
-# the whole sweep, so nothing rescales between frames.
-
-"""
-    ANIMATION_WIDTH_MM
-
-Design width of an animation [mm]. Together with `ANIMATION_PX_PER_UNIT` it
-fixes the pixel width of the GIF,
-`ANIMATION_WIDTH_MM * PT_PER_MM * ANIMATION_PX_PER_UNIT`.
-"""
-const ANIMATION_WIDTH_MM = 180.0
+# Animations. A GIF shares the base layout and theme of the figures: fonts,
+# colors, boxed axes, and the legend on top. Axis limits are fixed over the
+# whole sweep, so nothing rescales between frames.
 
 """
     ANIMATION_PX_PER_UNIT
 
-Raster scale of an animation, pixels per typographic point of the design
-size; a GIF of `ANIMATION_WIDTH_MM` comes out about 1000 px wide. Whole
-numbers only, see [`check_frame_scale`](@ref).
+Raster scale of an animation in pixels per typographic point. A GIF is read
+on screen, so two pixels per point on the 900 pt canvas (1800 px wide) is
+its resolution, against four for the printed figures. Whole numbers only,
+see [`check_frame_scale`](@ref).
 """
 const ANIMATION_PX_PER_UNIT = 2
 
-function animation_theme(;
-    width_mm::Real = ANIMATION_WIDTH_MM,
-    height_mm::Real = 0.72 * width_mm,
-    fontsize::Real = 9,
-)
-    theme = figure_theme(; width_mm = width_mm, height_mm = height_mm, fontsize = fontsize)
-    # Screen rather than column: wider margins, thicker strokes, longer ticks
-    theme.figure_padding = 10
-    theme.linewidth = 1.2
-    theme.Axis.spinewidth = 0.8
-    theme.Axis.xticksize = 4
-    theme.Axis.yticksize = 4
-    theme.Axis.xticklabelpad = 3
-    theme.Axis.yticklabelpad = 3
+function animation_theme(; size = FIGURE_SIZE, fontsize::Real = FIGURE_FONTSIZE)
+    theme = figure_theme(; size = size, fontsize = fontsize)
     # The canvas is snapped to an even whole number of typographic points. A
     # fractional design size renders to a surface whose extent differs from
     # the frame size declared to the encoder, and the mismatch shows as a band
@@ -869,13 +889,19 @@ function save_animation(render, stem::AbstractString; run_id::AbstractString = "
     backup_existing!(path)
     render(path)
     isfile(path) || error("the renderer wrote no file at $path.")
+    # Logical screen size of the GIF: little-endian 16-bit width and height
+    # at byte offsets 6 and 8
+    w, h = open(path) do io
+        seek(io, 6)
+        (Int(read(io, UInt16)), Int(read(io, UInt16)))
+    end
     write_toml(
         "$stem.toml",
         Dict{String,Any}(
             "animation" => Dict{String,Any}(
                 "run_id" => run_id,
                 "files" => [basename(path)],
-                "width_mm" => ANIMATION_WIDTH_MM,
+                "frame_px" => [w, h],
                 "px_per_unit" => ANIMATION_PX_PER_UNIT,
                 "bytes" => filesize(path),
             ),
@@ -889,7 +915,7 @@ function animate_training_history(
     path::AbstractString;
     framerate::Integer = 5,
     hold_frames::Integer = 10,
-    width_mm::Real = ANIMATION_WIDTH_MM,
+    size = figure_size(2),
     px_per_unit::Real = ANIMATION_PX_PER_UNIT,
 )
     check_gif_path(path)
@@ -913,9 +939,7 @@ function animate_training_history(
     # Ticks at a stride that keeps about eight labels, as in the static figure
     stride = max(1, round(Int, n / 8))
     on_right = epochs[checkpoint] > (epochs[1] + epochs[end]) / 2
-    return with_theme(
-        animation_theme(; width_mm = width_mm, height_mm = 0.68 * width_mm),
-    ) do
+    return with_theme(animation_theme(; size = size)) do
         figure = Figure()
         ax_loss = Axis(figure[1, 1]; ylabel = "Loss")
         ax_acc = Axis(figure[2, 1]; xlabel = "Epoch", ylabel = "Validation accuracy")
@@ -958,7 +982,7 @@ function animate_training_history(
                 mark;
                 color = FIGURE_COLORS.threshold,
                 linestyle = :dot,
-                linewidth = 0.9,
+                linewidth = 1.5,
             )
         end
         text!(
@@ -971,8 +995,8 @@ function animate_training_history(
                 "validation loss $(round(val[checkpoint]; digits = 4))" : ""
             ),
             align = (on_right ? :right : :left, :top),
-            offset = (on_right ? -5 : 5, -5),
-            fontsize = 8,
+            offset = (on_right ? -15 : 15, -15),
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.threshold,
         )
         text!(
@@ -982,7 +1006,7 @@ function animate_training_history(
             text = @lift("Epoch $(round(Int, epochs[$k])) of $(round(Int, epochs[end]))"),
             space = :relative,
             align = (:right, :top),
-            fontsize = 8,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.threshold,
         )
         top_legend!(figure, ax_loss)
@@ -1010,7 +1034,7 @@ function animate_mission_replay(
     framerate::Integer = 20,
     hold_frames::Integer = 20,
     max_points::Integer = 6000,
-    width_mm::Real = ANIMATION_WIDTH_MM,
+    size = figure_size(2, 2),
     px_per_unit::Real = ANIMATION_PX_PER_UNIT,
 )
     check_gif_path(path)
@@ -1051,9 +1075,7 @@ function animate_mission_replay(
     lat_lo, lat_hi = extrema(latency_h)
     lat_pad = 0.08 * max(lat_hi - lat_lo, 1e-3)
     full_coverage = all(>=(1.0), coverage)
-    return with_theme(
-        animation_theme(; width_mm = width_mm, height_mm = 0.82 * width_mm),
-    ) do
+    return with_theme(animation_theme(; size = size)) do
         figure = Figure()
         ax_cov = Axis(figure[1, 1]; ylabel = "Coverage", yticks = [0.0, 0.5, 1.0])
         ax_score = Axis(figure[2, 1]; ylabel = "MBHB probability")
@@ -1132,11 +1154,11 @@ function animate_mission_replay(
                 clock_x;
                 color = FIGURE_COLORS.threshold,
                 linestyle = :dot,
-                linewidth = 0.9,
+                linewidth = 1.5,
             )
             clock_handle === nothing && (clock_handle = p)
         end
-        lines!(ax_cov, show_day, cov_y; color = FIGURE_COLORS.data, linewidth = 0.8)
+        lines!(ax_cov, show_day, cov_y; color = FIGURE_COLORS.data, linewidth = 2)
         full_coverage && text!(
             ax_cov,
             0.012,
@@ -1144,31 +1166,27 @@ function animate_mission_replay(
             text = "Every window fully covered",
             space = :relative,
             align = (:left, :bottom),
-            fontsize = 8,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.data,
         )
         score_handle =
-            lines!(ax_score, show_day, score_y; color = FIGURE_COLORS.data, linewidth = 0.7)
+            lines!(ax_score, show_day, score_y; color = FIGURE_COLORS.data, linewidth = 2)
         alarm_handle = scatter!(
             ax_score,
             alarm_day,
             alarm_y;
             color = FIGURE_COLORS.signal,
-            markersize = 5,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.signal,
         )
         threshold_handle = hlines!(
             ax_score,
             [threshold];
             color = FIGURE_COLORS.threshold,
             linestyle = :dash,
+            linewidth = 1.5,
         )
-        stairs!(
-            ax_episode,
-            episode_points;
-            step = :post,
-            color = FIGURE_COLORS.signal,
-            linewidth = 1.0,
-        )
+        stairs!(ax_episode, episode_points; step = :post, color = FIGURE_COLORS.signal)
         text!(
             ax_episode,
             0.012,
@@ -1176,12 +1194,12 @@ function animate_mission_replay(
             text = progress,
             space = :relative,
             align = (:left, :top),
-            fontsize = 8,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.threshold,
         )
         # A year of daily passes packs the latency sawtooth into a few pixels
         # per period, so the trace is drawn light enough to read as a band
-        lines!(ax_lat, show_day, lat_y; color = (FIGURE_COLORS.fit, 0.85), linewidth = 0.6)
+        lines!(ax_lat, show_day, lat_y; color = (FIGURE_COLORS.fit, 0.85), linewidth = 2)
 
         handles = Any[]
         labels = String[]
@@ -1255,7 +1273,7 @@ function figure_loss_survival(
     knee = 100 / stretch_batches      # losses spaced one stretch apart
     lo, hi = extrema(percent)
     grid = exp10.(range(log10(0.6 * min(lo, knee)), log10(1.6 * hi); length = 200))
-    return with_theme(figure_theme(; height_mm = 0.80 * FIGURE_WIDTH_MM)) do
+    return with_theme(figure_theme(; size = figure_size(1, 1))) do
         figure = Figure()
         ticks = log_decimal_ticks(first(grid), last(grid))
         ax_survival = Axis(
@@ -1294,24 +1312,27 @@ function figure_loss_survival(
         vlines!(
             ax_survival,
             [knee];
-            color = FIGURE_COLORS.threshold,
+            color = FIGURE_COLORS.target,
             linestyle = :dot,
-            linewidth = 0.8,
+            linewidth = 1.5,
         )
         text!(
             ax_survival,
             knee,
             1.06;
             text = "1 / stretch",
-            align = (:center, :top),
-            fontsize = 7,
+            align = (:left, :top),
+            offset = (6, 0),
+            fontsize = ANNOTATION_FONTSIZE,
+            color = FIGURE_COLORS.target,
         )
         scatterlines!(
             ax_survival,
             percent,
             scored_fraction;
             color = FIGURE_COLORS.data,
-            markersize = 5,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.data,
             label = "Measured",
         )
         scatterlines!(
@@ -1319,10 +1340,11 @@ function figure_loss_survival(
             percent,
             Float64.(events_detected);
             color = FIGURE_COLORS.signal,
-            markersize = 5,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.signal,
         )
         top_legend!(figure, ax_survival)
-        rowgap!(figure.layout, 4)
+        rowgap!(figure.layout, 10)
         figure
     end
 end
@@ -1343,7 +1365,7 @@ function figure_seed_spread(
 
     x = collect(1:n)
     shipped = baseline_seed === nothing ? Int[] : findall(==(baseline_seed), seeds)
-    return with_theme(figure_theme(; height_mm = 0.80 * FIGURE_WIDTH_MM)) do
+    return with_theme(figure_theme(; size = figure_size(2))) do
         figure = Figure()
         ax_thr = Axis(figure[1, 1]; ylabel = "Fitted threshold")
         ax_far = Axis(
@@ -1371,19 +1393,27 @@ function figure_seed_spread(
             hlines!(
                 ax_far,
                 [target_far];
-                color = FIGURE_COLORS.threshold,
+                color = FIGURE_COLORS.target,
                 linestyle = :dash,
-                linewidth = 0.8,
+                linewidth = 1.5,
                 label = "Requested rate",
             )
         end
-        scatter!(ax_thr, x, thresholds; color = FIGURE_COLORS.data, markersize = 6)
+        scatter!(
+            ax_thr,
+            x,
+            thresholds;
+            color = FIGURE_COLORS.data,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.data,
+        )
         scatter!(
             ax_far,
             x,
             far_per_30d;
-            color = FIGURE_COLORS.data,
-            markersize = 6,
+            color = FIGURE_COLORS.false_alarm,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.false_alarm,
             label = "Delivered rate",
         )
         if !isempty(shipped)
@@ -1392,16 +1422,20 @@ function figure_seed_spread(
                 x[shipped],
                 thresholds[shipped];
                 color = FIGURE_COLORS.signal,
-                markersize = 9,
+                markersize = 20,
                 marker = :diamond,
+                strokewidth = 1.5,
+                strokecolor = FIGURE_STROKES.signal,
             )
             scatter!(
                 ax_far,
                 x[shipped],
                 far_per_30d[shipped];
                 color = FIGURE_COLORS.signal,
-                markersize = 9,
+                markersize = 20,
                 marker = :diamond,
+                strokewidth = 1.5,
+                strokecolor = FIGURE_STROKES.signal,
                 label = "Shipped run",
             )
         end
@@ -1416,11 +1450,11 @@ function figure_seed_spread(
             far_low;
             text = recovered,
             align = (:left, :bottom),
-            fontsize = 7,
+            fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.signal,
         )
         top_legend!(figure, ax_far)
-        rowgap!(figure.layout, 4)
+        rowgap!(figure.layout, 10)
         figure
     end
 end

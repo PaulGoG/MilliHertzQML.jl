@@ -1278,9 +1278,18 @@ end
         val_loss = Float32[],
         val_acc = Float32[],
     ))
-    @test_throws ArgumentError figure_theme(; width_mm = 0)
+    # The base layout: a 900 × 600 pt single panel, 350 pt per further main
+    # panel, 180 pt per auxiliary strip
+    @test_throws ArgumentError figure_theme(; size = (0, 600))
+    @test_throws ArgumentError figure_theme(; fontsize = 0)
     theme = figure_theme()
-    @test isapprox(theme.size[][1], 86 * 72 / 25.4; rtol = 1e-12)
+    @test theme.size[] == (900, 600) && theme.fontsize[] == 26
+    @test figure_size() == (900, 600)
+    @test figure_size(2) == (900, 950) && figure_size(1, 1) == (900, 780)
+    @test figure_size(2, 2) == (900, 1310)
+    @test_throws ArgumentError figure_size(0)
+    @test_throws ArgumentError figure_size(1, -1)
+    @test keys(FIGURE_STROKES) == keys(FIGURE_COLORS)
     mktempdir() do dir
         stem = joinpath(dir, "roc_curve")
         written = save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
@@ -1288,6 +1297,17 @@ end
         @test all(isfile, written) && filesize("$stem.pdf") > 1000
         side = TOML.parsefile("$stem.toml")
         @test side["figure"]["run_id"] == "unit" && haskey(side, "git")
+        # The sidecar records the canvas actually exported
+        # (the ROC axis is square, on a canvas of the base height)
+        @test side["figure"]["size_pt"][2] == 600 && !haskey(side["figure"], "width_mm")
+        save_figure(figure_mission_trace(days, probs, 0.55), joinpath(dir, "single"))
+        @test TOML.parsefile(joinpath(dir, "single.toml"))["figure"]["size_pt"] ==
+              [900, 600]
+        save_figure(
+            figure_seed_spread([1, 2], [0.5, 0.6], [1.0, 2.0], [2, 2], 2),
+            joinpath(dir, "wide"),
+        )
+        @test TOML.parsefile(joinpath(dir, "wide.toml"))["figure"]["size_pt"] == [900, 950]
         save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
         @test isfile(joinpath(dir, "roc_curve_#1.pdf"))
         @test_throws ArgumentError save_figure(
@@ -1344,6 +1364,10 @@ end
         @test isfile(written) && filesize(written) > 1000
         side = TOML.parsefile("$stem.toml")
         @test side["animation"]["run_id"] == "unit" && haskey(side, "git")
+        # The sidecar records the frame size of the written GIF: the canvas
+        # at the raster scale
+        @test side["animation"]["frame_px"] == 2 .* collect(figure_size(2, 2))
+        @test side["animation"]["px_per_unit"] == 2
         # An animation ships as GIF, and a fractional raster scale renders
         # frames the encoder does not reproduce
         @test_throws ArgumentError animate_training_history(

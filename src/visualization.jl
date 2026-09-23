@@ -4,19 +4,77 @@
 # plotting dependency.
 
 """
-    FIGURE_WIDTH_MM
+    FIGURE_SIZE
 
-Printed width of a single-column figure [mm]; figures are designed at this
-size and enter a manuscript without rescaling.
+Canvas of a single-panel figure in typographic points, `(width, height)`:
+the base layout every figure scales from. Each further stacked main panel
+adds [`PANEL_HEIGHT`](@ref), each auxiliary strip (a counter or residual
+panel) [`STRIP_HEIGHT`](@ref); see [`figure_size`](@ref).
 """
-const FIGURE_WIDTH_MM = 86.0
+const FIGURE_SIZE = (900, 600)
+
+"""
+    PANEL_HEIGHT
+
+Height [pt] added to [`FIGURE_SIZE`](@ref) by each stacked main panel beyond
+the first.
+"""
+const PANEL_HEIGHT = 350
+
+"""
+    STRIP_HEIGHT
+
+Height [pt] added to [`FIGURE_SIZE`](@ref) by each auxiliary strip, a
+counter or residual panel beneath the main panels.
+"""
+const STRIP_HEIGHT = 180
+
+"""
+    FIGURE_FONTSIZE
+
+Type size [pt] of axis labels and legends.
+"""
+const FIGURE_FONTSIZE = 26
+
+"""
+    TICK_FONTSIZE
+
+Type size [pt] of tick labels.
+"""
+const TICK_FONTSIZE = 22
+
+"""
+    ANNOTATION_FONTSIZE
+
+Type size [pt] of in-axis annotations.
+"""
+const ANNOTATION_FONTSIZE = 21
+
+"""
+    figure_size(main_panels = 1, strips = 0) -> Tuple{Int,Int}
+
+Canvas [pt] of a figure with `main_panels` stacked main panels and `strips` auxiliary strips: `FIGURE_SIZE` heightened by `PANEL_HEIGHT` per panel beyond the first and `STRIP_HEIGHT` per strip.
+"""
+function figure_size(main_panels::Integer = 1, strips::Integer = 0)
+    main_panels >= 1 || throw(ArgumentError("a figure has at least one main panel."))
+    strips >= 0 || throw(ArgumentError("strips must be non-negative."))
+    return (
+        FIGURE_SIZE[1],
+        FIGURE_SIZE[2] + (main_panels - 1) * PANEL_HEIGHT + strips * STRIP_HEIGHT,
+    )
+end
 
 """
     FIGURE_COLORS
 
-Semantic colors shared by every figure of the project (Okabe–Ito palette):
-`data` (classifier output, time series), `label` (labeled spans), `threshold`,
-`training`, `validation`, `noise` and `signal` (score distributions), `fit`.
+Semantic colors shared by every figure of the project (Okabe–Ito palette),
+each with a single use: `data` (classifier output, time series, measured
+points), `label` (labeled spans), `threshold` (the decision threshold,
+black, dashed in every figure), `training` and `validation` (the two
+blocks), `noise` and `signal` (score distributions, and the detected-event
+markers), `fit` (fitted or model curves), `false_alarm` (the false-alarm
+rate wherever it is drawn), `target` (a requested or reference rate: the
+`far` target, the `1 / stretch` rule).
 """
 const FIGURE_COLORS = (
     data = "#0072B2",
@@ -27,16 +85,37 @@ const FIGURE_COLORS = (
     noise = "#999999",
     signal = "#D55E00",
     fit = "#009E73",
+    false_alarm = "#CC79A7",
+    target = "#56B4E9",
 )
 
 """
-    figure_theme(; width_mm = FIGURE_WIDTH_MM, height_mm = 0.68 * width_mm, fontsize = 8)
+    FIGURE_STROKES
 
-Makie theme of the project's publication figures: Computer Modern fonts,
-boxed axes with inward ticks, dashed low-opacity grid, no minor ticks, and
-a figure size of `width_mm` × `height_mm` in typographic points (1 mm =
-72/25.4 pt), so that a PDF export enters a manuscript at its native
-width. Requires CairoMakie to be loaded.
+Darker same-hue counterparts of [`FIGURE_COLORS`](@ref), under the same
+keys, for marker outlines and histogram bar edges.
+"""
+const FIGURE_STROKES = (
+    data = "#004B78",
+    label = "#9A6A00",
+    threshold = "#000000",
+    training = "#004B78",
+    validation = "#8E3F00",
+    noise = "#666666",
+    signal = "#8E3F00",
+    fit = "#006A4E",
+    false_alarm = "#8A5070",
+    target = "#2F7DA0",
+)
+
+"""
+    figure_theme(; size = FIGURE_SIZE, fontsize = FIGURE_FONTSIZE)
+
+Makie theme of the base layout: Computer Modern fonts, boxed axes with
+inward ticks, dashed low-opacity grid, no minor ticks, 3 pt data lines,
+14 pt markers with a 1.5 pt stroke, and the canvas `size` in typographic
+points, so that a PDF export enters a document at native size. Taller
+canvases come from [`figure_size`](@ref). Requires CairoMakie to be loaded.
 """
 function figure_theme end
 
@@ -45,19 +124,20 @@ function figure_theme end
 
 Export `figure` as `<stem>.pdf` (vector) and `<stem>.png` (raster at
 `px_per_unit` times the design size) and write the provenance sidecar
-`<stem>.toml` (run identifier, git description, hardware fingerprint,
-time). Existing files are backed up first. Returns the vector of written
-paths. Requires CairoMakie to be loaded.
+`<stem>.toml` (run identifier, the canvas actually exported `size_pt`
+[pt], `px_per_unit`, git description, hardware fingerprint, time).
+Existing files are backed up first. Returns the vector of written paths.
+Requires CairoMakie to be loaded.
 """
 function save_figure end
 
 """
-    animation_theme(; width_mm = 180.0, height_mm = 0.72 * width_mm, fontsize = 9)
+    animation_theme(; size = FIGURE_SIZE, fontsize = FIGURE_FONTSIZE)
 
-Screen counterpart of [`figure_theme`](@ref) for the animations: the same
-fonts, colors, and axis discipline on the wider canvas, with the larger
-type, margins, and strokes a GIF is read at. Requires CairoMakie to be
-loaded.
+Theme of the animations: [`figure_theme`](@ref) unchanged, on a canvas
+snapped to an even whole number of typographic points so that every frame
+renders at exactly the size declared to the encoder. Requires CairoMakie
+to be loaded.
 """
 function animation_theme end
 
@@ -65,7 +145,8 @@ function animation_theme end
     save_animation(render, stem; run_id = "") -> String
 
 Write the animation `<stem>.gif` by calling `render(path)` with that path
-and write the provenance sidecar `<stem>.toml` (run identifier, git
+and write the provenance sidecar `<stem>.toml` (run identifier, `frame_px`,
+the pixel size of the written GIF, `px_per_unit`, file size, git
 description, hardware fingerprint, time), as [`save_figure`](@ref) does for
 a static figure. An existing GIF is backed up first. Returns the written
 path. Requires CairoMakie to be loaded.
@@ -82,11 +163,12 @@ function save_animation end
 
 """
     animate_training_history(history, path; framerate = 5, hold_frames = 10,
-                             width_mm = 180.0, px_per_unit = 2) -> String
+                             size = figure_size(2), px_per_unit = 2) -> String
 
 Animated counterpart of [`figure_training_history`](@ref): the two stacked
-panels sharing the epoch axis, revealed one epoch per frame at fixed axis
-limits, held for `hold_frames` frames at the end. The epoch of least
+panels sharing the epoch axis on a canvas of `size` [pt], revealed one
+epoch per frame at fixed axis limits, held for `hold_frames` frames at the
+end. The epoch of least
 validation loss — the checkpoint whose weights the run ships — is marked in
 both panels once the sweep reaches it. `history` holds the vectors
 `epochs`, `train_loss`, `val_loss`, and `val_acc`; `path` must name a GIF,
@@ -97,10 +179,11 @@ function animate_training_history end
 """
     animate_mission_replay(windows, threshold, path; epoch, label_spans = nothing,
                            n_frames = 200, framerate = 20, hold_frames = 20,
-                           max_points = 6000, width_mm = 180.0,
+                           max_points = 6000, size = figure_size(2, 2),
                            px_per_unit = 2) -> String
 
-Four stacked panels of a telemetry replay on a shared mission-time axis
+Four stacked panels of a telemetry replay, two main panels and two strips
+on a canvas of `size` [pt], on a shared mission-time axis
 [days since `epoch`, by default the content end of the first window]:
 window coverage, classifier score with the decision `threshold` as a dashed
 rule, the alarmed windows marked, and the labeled spans (`label_spans`,

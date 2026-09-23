@@ -74,7 +74,8 @@ export training_memory_estimate_gib, record_memory_estimate_gib, check_memory
 export generate_telemetry, preprocess_record, label_truth_stream
 export whitening_psd, window_features, window_labels
 export train_classifier, evaluate_classifier
-export FIGURE_WIDTH_MM, FIGURE_COLORS, figure_theme, save_figure
+export FIGURE_SIZE, PANEL_HEIGHT, STRIP_HEIGHT, figure_size, FIGURE_COLORS, FIGURE_STROKES
+export figure_theme, save_figure
 export figure_training_history, figure_mission_trace, figure_roc, figure_sensitivity
 export figure_threshold_sweep
 export figure_score_distribution, figure_telemetry_trace, figure_telemetry_alerts
