@@ -1,24 +1,28 @@
-written_at = "2026-09-14T05:39:08.273"
+written_at = "2026-09-23T13:06:32.020"
+
+[environment]
+manifest_sha256 = "634e38b8e28c65157be476e07b2c0e8a9fe66ed52b024524084c94c2b736f6bf"
+active_project = "test/Project.toml"
 
 [figure]
 files = ["loss_survival.pdf", "loss_survival.png"]
 run_id = "loss_sweep"
-width_mm = 86.0
+size_pt = [900, 780]
 px_per_unit = 4
 
 [hardware]
 total_memory_gib = 30.76
 cpu_model = "Intel(R) Core(TM) Ultra 7 155H"
-blas_threads = 11
+blas_threads = 6
 distributed_workers = 1
 machine_id = "10f031174590"
 kernel = "Linux"
-versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 22 default, 1 interactive, 22 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = auto\n"""
-julia_threads = 22
+versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
+julia_threads = 12
 cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v0.1.0-45-g7a1d37c"
-git_dirty = false
+git_commit = "v1.0.0-8-gd38ac42-dirty"
+git_dirty = true
 package_version = "1.0.0"
