@@ -22,9 +22,10 @@ classifier is blind at the merger itself and fires on the inspiral — is
 measured in the section on the encoding below. And the blind year is
 whitened by its own Welch estimate, a label-free statistic of the record
 under evaluation, which every streaming latency below inherits as a
-year-long look-ahead. The package now encodes on ``[0, \pi]`` and offers
-a ground-causal whitening; the runs that will replace these numbers have
-not been made, and the page reports what was measured.
+year-long look-ahead. The package now encodes on ``[0, \pi]``, and the
+year replay is reported under ground-causal whitening as well; the
+retraining that will replace these numbers has not been made, and the
+page reports what was measured.
 
 ## Data and labels
 
@@ -386,10 +387,12 @@ streamed mission that PSD is an oracle: the year-median estimate that
 whitens the window at the first event, on day 78, contains nine months
 of data that have not reached the ground. The replay below was made with
 it, so its latencies hold for a detector that knows the year's noise in
-advance, not for a causal one. A ground-causal alternative is
-implemented — `psd_mode = "trailing"`, each window whitened by the Welch
-median of the delivered record behind its conditioning stretch, refreshed
-daily — and has not yet been replayed over the year.
+advance, not for a causal one. The same mission was therefore replayed a
+second time under ground-causal whitening (`psd_mode = "trailing"`): each
+window is whitened by the Welch median of the last 30 days of delivered
+record behind its conditioning stretch, redone once a day, and by the
+training year's PSD until one 65,536-sample segment is on the ground (the
+first 446 windows). That replay is reported beside the first below.
 
 With both settled, a full year of the blind record was replayed through a
 simulated mission: 63,043 batches of 500 s, a 12-hour daily pass, 1 %
@@ -415,15 +418,15 @@ arrival that completes `alert_persistence` consecutive alarmed windows
 (three, the shipped value), and shorter runs are neither alerts nor
 charged as false alarms. Both readings of the same replay:
 
-| Event | Merger (mission time) | Alert − merger [h], first alarmed window | Alert − merger [h], three consecutive | Alert of its own |
-|---|---|---|---|---|
-| 1 | 2035-03-19T16:27 | −46.3 | **+2.2** | yes |
-| 2 | 2035-03-20T21:59 | −55.2 | −27.3 | no: event 1's |
-| 3 | 2035-08-12T15:40 | −0.3 | −0.3 | yes |
-| 4 | 2035-09-17T07:48 | −64.4 | +7.5 | yes |
-| 5 | 2035-09-21T21:39 | −51.3 | +17.9 | yes |
-| 6 | 2035-11-10T00:11 | +15.1 | +15.1 | yes |
-| False alarms / 30 d | | 2.56 | 0.74 | |
+| Event | Merger (mission time) | Alert − merger [h], first alarmed window | Alert − merger [h], three consecutive | Three consecutive, causal PSD | Alert of its own |
+|---|---|---|---|---|---|
+| 1 | 2035-03-19T16:27 | −46.3 | **+2.2** | +22.4 | yes |
+| 2 | 2035-03-20T21:59 | −55.2 | −27.3 | −7.1 | no: event 1's |
+| 3 | 2035-08-12T15:40 | −0.3 | −0.3 | −0.3 | yes |
+| 4 | 2035-09-17T07:48 | −64.4 | +7.5 | +7.5 | yes |
+| 5 | 2035-09-21T21:39 | −51.3 | +17.9 | +41.7 | yes |
+| 6 | 2035-11-10T00:11 | +15.1 | +15.1 | +15.1 | yes |
+| False alarms / 30 d | | 2.56 | 0.74 | 1.16 | |
 
 The data latencies exclude the one-hour processing budget, which
 `latency_total_h` of the table adds. Under the persistence criterion no
@@ -437,6 +440,18 @@ episodes, and no window within 43 hours of its merger reaches the
 threshold. The replay therefore detects five coalescences, not six, and
 the batch metric's "5 of 5 label spans" is unaffected only because the
 two spans merge into one.
+
+Under ground-causal whitening the same protocol alarms 214 windows
+instead of 169, raises an alert of its own for the same five
+coalescences, and charges 1.16 false-alarm episodes per 30 days. Events
+3, 4 and 6 are alerted at the same hour as before; events 1 and 5 later,
+22 and 42 hours after the merger. The window scores of the two replays
+correlate at only 0.57, so the operating point survives the loss of the
+year-long look-ahead while the scores themselves do not reproduce it;
+the causal replay is the one a mission could run, and its numbers are
+the ones to quote for latency.
+
+![Replay of the blind year under ground-causal whitening](assets/benchmark_telemetry_alerts_causal.png)
 
 Why the classifier fires on the inspiral rather than on the coalescence
 is the encoding section above: at every merger the band powers exceed the
@@ -562,11 +577,11 @@ stretch raises the tolerable loss rate in proportion.
   headline rate carries a selection effect of the order of the seed
   spread. The next round selects on the validation block and scores the
   blind year once per model.
-- **The streaming latencies use an oracle PSD.** The year-median Welch
-  estimate of the blind year whitens every window of the replay,
-  including at the first event the nine months not yet delivered; the
-  ground-causal `psd_mode = "trailing"` has not been replayed over the
-  year.
+- **The headline replay uses an oracle PSD.** The year-median Welch
+  estimate of the blind year whitens every window of the first replay,
+  including at the first event the nine months not yet delivered. The
+  ground-causal replay beside it detects the same five coalescences at
+  1.16 false alarms per 30 days, two of them later.
 - **Five coalescences are detected on their own, not six.** Event 2 is
   only ever alarmed by event 1's windows.
 

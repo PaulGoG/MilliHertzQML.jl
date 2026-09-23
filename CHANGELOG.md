@@ -58,7 +58,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   enters the estimate; the scored-window table records the last row
   behind each estimate (`psd_row`). The year-median sidecar PSD of the
   published replay contains, at the first event, nine months of
-  undelivered data, and the benchmark page says so.
+  undelivered data; the benchmark page says so and reports the causal
+  replay beside it, which alerts the same five coalescences at 1.16
+  false-alarm episodes per 30 days against 0.74 with the oracle.
 - `threshold.toml` files written before the fitting block became
   configurable are read through `migrate_threshold_info!`, which renames
   their `validation_*` rates to `fit_*`.

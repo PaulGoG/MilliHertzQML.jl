@@ -218,9 +218,12 @@ at 0.74 false-alarm episodes per 30 days, between twenty minutes before
 and eighteen hours after the merger in data time. Read on isolated
 alarms instead, the same replay alarms all six spans at 2.56 per 30 days
 with four alerts 1.9 to 2.7 days early, each a single window
-indistinguishable from the false-alarm population. That mission lost no
-data, and the coupling excludes delivery holes from scoring rather than
-handling them.
+indistinguishable from the false-alarm population. Under ground-causal
+whitening — the PSD estimated from the delivered record behind each
+window, redone daily — the same protocol keeps the five alerts at 1.16
+per 30 days, two of them later (22 and 42 hours after the merger). That
+mission lost no data, and the coupling excludes delivery holes from
+scoring rather than handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
@@ -331,7 +334,8 @@ blind year's own whitening PSD.
   feature from the noise floor; the default is now ``[0, π]`` and the
   retraining is pending.
 - **The headline is the best of seven blind evaluations,** and the
-  streaming latencies rest on a whitening PSD of the whole blind year.
+  latencies of the headline replay rest on a whitening PSD of the whole
+  blind year; the ground-causal replay is reported beside it.
 
 The physical and methodological deficiencies behind these — waveform and
 noise-model scope, the single evaluation record — are listed in
