@@ -13,7 +13,7 @@ using CairoMakie: CairoMakie
     parse_commandline() -> Dict{String, Any}
 
 Command line of the generation stage: an optional positional `config`
-(default `config.toml` at the package root), `--run-id`, and `--output`.
+(default `configs/default.toml`), `--run-id`, and `--output`.
 """
 function parse_commandline()
     s = ArgParseSettings(;
@@ -23,7 +23,7 @@ function parse_commandline()
         "config"
         help = "TOML configuration file"
         required = false
-        default = joinpath(project_root(), "config.toml")
+        default = joinpath(project_root(), "configs", "default.toml")
         "--run-id"
         help = "run identifier of the products and figures (default: a fresh identifier)"
         default = nothing

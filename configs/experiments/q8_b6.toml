@@ -1,4 +1,4 @@
-# Sangria experiment `q8_b6`; keys as in config_sangria.toml. Sections absent here
+# Sangria experiment `q8_b6`; keys as in configs/sangria.toml. Sections absent here
 # fall back to the defaults of the scripts; the HDF5 products are passed on
 # the command line. Paths are resolved relative to the project root.
 

@@ -19,7 +19,7 @@ function parse_commandline()
         "config"
         help = "Path to the configuration file"
         required = false
-        default = joinpath(project_root(), "config.toml")
+        default = joinpath(project_root(), "configs", "default.toml")
         "--run-dir"
         help = "DeepSpaceTelemetry run directory (overrides [telemetry] run_dir)"
         default = nothing

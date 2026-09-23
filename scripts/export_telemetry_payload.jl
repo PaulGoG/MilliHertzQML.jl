@@ -12,7 +12,7 @@ using ArgParse: ArgParseSettings, @add_arg_table!, parse_args
     parse_commandline() -> Dict{String, Any}
 
 Command line of the payload-export stage: an optional positional `config`
-(default `config.toml` at the package root), `--h5-file`, `--tdi-group`,
+(default `configs/default.toml`), `--h5-file`, `--tdi-group`,
 `--catalog`, and `--output-prefix`.
 """
 function parse_commandline()
@@ -23,7 +23,7 @@ function parse_commandline()
         "config"
         help = "TOML configuration file"
         required = false
-        default = joinpath(project_root(), "config.toml")
+        default = joinpath(project_root(), "configs", "default.toml")
         "--h5-file"
         help = "HDF5 TDI product (simulator output or LDC file); default from [preprocessing] h5_file"
         default = nothing

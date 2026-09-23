@@ -18,7 +18,7 @@ function parse_commandline()
         "config"
         help = "Path to the configuration file"
         required = false
-        default = joinpath(project_root(), "config.toml")
+        default = joinpath(project_root(), "configs", "default.toml")
         "--run-id"
         help = "Run identifier: the training run <models>/run_<id> and the telemetry results <results>/run_<id> are animated when they exist"
         default = ""

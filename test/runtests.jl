@@ -1483,7 +1483,7 @@ end
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     scripts = joinpath(PROJECT_ROOT, "scripts")
     mktempdir() do dir
-        cfg = TOML.parsefile(joinpath(PROJECT_ROOT, "config.toml"))
+        cfg = TOML.parsefile(joinpath(PROJECT_ROOT, "configs", "default.toml"))
         inputs = joinpath(dir, "inputs")
         cfg["paths"] = Dict(
             "inputs" => inputs,
