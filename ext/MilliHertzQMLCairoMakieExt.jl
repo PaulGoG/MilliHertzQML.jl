@@ -1077,11 +1077,12 @@ function animate_mission_replay(
     full_coverage = all(>=(1.0), coverage)
     return with_theme(animation_theme(; size = size)) do
         figure = Figure()
-        ax_cov = Axis(figure[1, 1]; ylabel = "Coverage", yticks = [0.0, 0.5, 1.0])
-        ax_score = Axis(figure[2, 1]; ylabel = "MBHB probability")
-        ax_episode = Axis(figure[3, 1]; ylabel = "Alarm episodes")
+        # Row 1 is the legend; explicit rows keep the panel sizes unambiguous
+        ax_cov = Axis(figure[2, 1]; ylabel = "Coverage", yticks = [0.0, 0.5, 1.0])
+        ax_score = Axis(figure[3, 1]; ylabel = "MBHB probability")
+        ax_episode = Axis(figure[4, 1]; ylabel = "Alarm episodes")
         ax_lat = Axis(
-            figure[4, 1];
+            figure[5, 1];
             xlabel = "Mission time [days]",
             ylabel = "Ground latency [h]",
             xticks = LinearTicks(7),
@@ -1214,11 +1215,12 @@ function animate_mission_replay(
             push!(handles, h)
             push!(labels, l)
         end
-        Legend(figure[0, 1], handles, labels; LEGEND_STYLE..., nbanks = 1)
-        rowgap!(figure.layout, 6)
-        # Row 1 is the legend; the coverage panel carries one flat trace and
-        # needs less height than the three panels below it.
+        Legend(figure[1, 1], handles, labels; LEGEND_STYLE..., nbanks = 2)
+        rowgap!(figure.layout, 10)
+        # The coverage and episode panels are strips: one flat trace and one
+        # counter, at half the height of the score and latency panels.
         rowsize!(figure.layout, 2, Auto(0.5))
+        rowsize!(figure.layout, 4, Auto(0.5))
         record(
             figure,
             path,
