@@ -30,8 +30,10 @@ end
 Callable one-sided PSD whitening the record `A` sampled at `fs` [Hz] for
 the mode `settings.psd` of the `[preprocessing]` section
 ([`preprocessing_settings`](@ref)): `"model"` (Robson–Cornish–Liu strain
-sensitivity with the confusion fit of `observation_years`, for simulator
-products), `"ldc"` (analytic A-channel TDI PSD of the `ldc` package in
+sensitivity with the confusion fit of `observation_years`, for
+sky-averaged simulator products), `"channel"` (that sensitivity times the
+sky-averaged response ``R(f)``, the Michelson-channel PSD of the
+simulator's constellation-response products), `"ldc"` (analytic A-channel TDI PSD of the `ldc` package in
 fractional-frequency units — `ldc_model`, `ldc_tdi2`,
 `ldc_observation_years` — for LDC products), `"welch"` (median-averaged
 estimate from the record itself over segments of `welch_segment_length`
@@ -47,6 +49,15 @@ function whitening_psd(settings::NamedTuple, A::AbstractVector{<:Real}, fs::Real
         psd_model = f -> lisa_noise_psd(f; observation_years = model_years)
         return psd_model,
         "Robson–Cornish–Liu 2019 strain sensitivity, confusion fit $model_years yr",
+        nothing
+    elseif mode == "channel"
+        model_years = settings.observation_years
+        psd_channel =
+            f ->
+                sky_averaged_response(f) *
+                lisa_noise_psd(f; observation_years = model_years)
+        return psd_channel,
+        "Robson–Cornish–Liu 2019 Michelson-channel PSD (sensitivity times the sky-averaged response), confusion fit $model_years yr",
         nothing
     elseif mode == "ldc"
         model = settings.ldc_model
@@ -78,7 +89,9 @@ function whitening_psd(settings::NamedTuple, A::AbstractVector{<:Real}, fs::Real
     elseif mode == "none"
         return nothing, "none", nothing
     end
-    throw(ArgumentError("psd = $(repr(mode)); expected model, ldc, welch, or none."))
+    throw(
+        ArgumentError("psd = $(repr(mode)); expected model, channel, ldc, welch, or none."),
+    )
 end
 
 """
@@ -223,7 +236,7 @@ function preprocessing_parameters(
         "edge_margin" => settings.edge_margin,
         "feature_set" => String(settings.feature_set),
     )
-    if settings.psd == "model"
+    if settings.psd == "model" || settings.psd == "channel"
         parameters["observation_years"] = settings.observation_years
     elseif settings.psd == "ldc"
         parameters["ldc_model"] = settings.ldc_model

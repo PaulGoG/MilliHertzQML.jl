@@ -33,13 +33,19 @@ mbhb_total_mass_min = 1e5   # detector-frame total mass, lower bound [M_sun]; >=
 mbhb_total_mass_max = 1e7   # detector-frame total mass, upper bound [M_sun]; >= mbhb_total_mass_min
 mbhb_mass_ratio_max = 10.0  # mass ratio q = m1/m2 upper bound; >= 1
 nyquist_taper = 0.9         # waveform spectrum tapered to zero at this fraction of the Nyquist frequency; in [0.3, 1]
+response = "sky_averaged"   # detector response of the record; one of: "sky_averaged" (one strain referred to the sensitivity) | "lisa" (A and E channels on the constellation orbits; needs CurvatureDistinguishability)
+mbhb_distance_min_gpc = 1.0 # MBHB luminosity distance, lower bound [Gpc]; > 0; "lisa" response only
+mbhb_distance_max_gpc = 50.0  # MBHB luminosity distance, upper bound [Gpc]; >= mbhb_distance_min_gpc; "lisa" response only
+label_channel = "A"         # channel of the label span and the catalog SNR under "lisa"; one of: "A" | "E" | "network"
+orbit_phase = 0.0           # orbital phase of the constellation at the record start [rad]; "lisa" response only
+constellation_phase = 0.0   # cartwheel phase of the constellation at the record start [rad]; "lisa" response only
 
 [preprocessing]
 tdi_group = "obs/tdi"   # HDF5 group or compound dataset holding t, X, Y, Z
 window_size = 1000   # sliding-window length [samples]; >= 2
 step_size = 100      # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2    # expected sampling frequency [Hz]; must agree with the file
-psd = "model"        # whitening PSD; one of: "model" (RCL19 strain) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
+psd = "model"        # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
 observation_years = 1.0        # confusion fit of the "model" PSD; one of: 0.5 | 1.0 | 2.0 | 4.0
 ldc_model = "sangria"          # noise levels of the "ldc" PSD; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
 ldc_tdi2 = false               # second-generation TDI factor of the "ldc" PSD

@@ -54,6 +54,23 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `configs/experiments/`); the scripts default to `configs/default.toml`.
 
 ### Added
+- A constellation response for the simulator (`[generation] response =
+  "lisa"`), as a package extension on CurvatureDistinguishability.jl: the
+  record holds the A and E channels, each with independent noise at the
+  Michelson-channel level (`R(f) S_n(f)`), the MBHB injections at physical
+  amplitude for a luminosity distance drawn from
+  `[mbhb_distance_min_gpc, mbhb_distance_max_gpc]` with isotropic sky
+  position, inclination and polarization, projected frequency by frequency
+  at the arrival time of each frequency on the antenna patterns, Doppler
+  phase and transfer roll-off of the orbits; the background sources are
+  projected in the time domain and scaled to a network SNR. Labels and the
+  catalog SNR follow `label_channel` (A, E or network); the catalog records
+  the extrinsic parameters and both channel SNRs; the HDF5 record carries
+  `X`, `Y`, `Z` recombining to A, E and a vanishing T. The pre-processor
+  whitens such records with `psd = "channel"`. `phenoma_spectrum`,
+  `phenoma_series`, `phenoma_physical_amplitude` and
+  `phenoma_arrival_delay` expose the pieces of the waveform; the
+  sky-averaged generator is unchanged bit for bit.
 - Ground-causal whitening for the replay (`[telemetry] psd_mode =
   "trailing"`, `TrailingWelch`): each window is whitened by the median
   Welch estimate of the delivered record behind its conditioning stretch,

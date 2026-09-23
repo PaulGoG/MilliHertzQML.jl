@@ -368,3 +368,59 @@ function detectable_span(
     last_positive == 0 && return nothing
     return first_positive:last_positive
 end
+
+"""
+    detectable_span(channels::Tuple, covered, fs, window_size, threshold;
+                    step = 10, psd = lisa_noise_psd)
+
+The detectable span of a source recorded in several channels, each a
+record-length series of the tuple `channels` occupying `covered`: a window
+qualifies when the quadrature sum of its per-channel matched-filter SNRs
+against the channel PSD `psd` reaches `threshold`. With one channel this
+is the single-series method.
+"""
+function detectable_span(
+    channels::Tuple{Vararg{AbstractVector{<:Real}}},
+    covered::AbstractUnitRange{<:Integer},
+    fs::Real,
+    window_size::Integer,
+    threshold::Real;
+    step::Integer = 10,
+    psd = lisa_noise_psd,
+)
+    isempty(channels) && throw(ArgumentError("at least one channel is required."))
+    length(channels) == 1 && return detectable_span(
+        channels[1],
+        covered,
+        fs,
+        window_size,
+        threshold;
+        step = step,
+        psd = psd,
+    )
+    window_size >= 2 ||
+        throw(ArgumentError("window_size = $window_size; must be at least 2."))
+    step >= 1 || throw(ArgumentError("step = $step; must be at least 1."))
+    threshold > 0 || throw(ArgumentError("threshold = $threshold; must be positive."))
+    n = length(channels[1])
+    all(length(c) == n for c in channels) ||
+        throw(DimensionMismatch("the channels must have equal length."))
+    isempty(covered) && return nothing
+    lo = max(1, first(covered) - window_size + 1)
+    hi = min(n - window_size + 1, last(covered))
+    lo <= hi || return nothing
+    first_positive = typemax(Int)
+    last_positive = 0
+    for s in lo:step:hi
+        ρ² = 0.0
+        for c in channels
+            ρ² += matched_filter_snr(view(c, s:(s+window_size-1)), fs; psd = psd)^2
+        end
+        if ρ² >= threshold^2
+            first_positive = min(first_positive, s)
+            last_positive = max(last_positive, s + window_size - 1)
+        end
+    end
+    last_positive == 0 && return nothing
+    return first_positive:last_positive
+end

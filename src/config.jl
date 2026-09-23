@@ -175,6 +175,7 @@ function generation_settings(config::AbstractDict)
     gb_snr_min = cfgget(g, "gb_snr_min", 1.0; type = Float64, min = 1e-3)
     emri_snr_min = cfgget(g, "emri_snr_min", 2.0; type = Float64, min = 1e-3)
     mass_min = cfgget(g, "mbhb_total_mass_min", 1e5; type = Float64, min = 1.0)
+    distance_min = cfgget(g, "mbhb_distance_min_gpc", 1.0; type = Float64, min = 1e-6)
     return (
         days = cfgget(g, "days", 30.0; type = Float64, min = 1e-6),
         fs = cfgget(g, "fs", 0.2; type = Float64, min = 1e-6),
@@ -253,6 +254,30 @@ function generation_settings(config::AbstractDict)
         ),
         label_window_size = cfgget(g, "label_window_size", 1000; type = Int, min = 2),
         label_step = cfgget(g, "label_step", 10; type = Int, min = 1),
+        response = cfgget(
+            g,
+            "response",
+            "sky_averaged";
+            type = String,
+            choices = ("sky_averaged", "lisa"),
+        ),
+        mbhb_distance_min_gpc = distance_min,
+        mbhb_distance_max_gpc = cfgget(
+            g,
+            "mbhb_distance_max_gpc",
+            50.0;
+            type = Float64,
+            min = distance_min,
+        ),
+        label_channel = cfgget(
+            g,
+            "label_channel",
+            "A";
+            type = String,
+            choices = ("A", "E", "network"),
+        ),
+        orbit_phase = cfgget(g, "orbit_phase", 0.0; type = Float64),
+        constellation_phase = cfgget(g, "constellation_phase", 0.0; type = Float64),
     )
 end
 
@@ -282,7 +307,7 @@ function preprocessing_settings(config::AbstractDict)
             "psd",
             "model";
             type = String,
-            choices = ("model", "ldc", "welch", "none"),
+            choices = ("model", "channel", "ldc", "welch", "none"),
         ),
         observation_years = cfgget(
             p,

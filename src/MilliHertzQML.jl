@@ -51,7 +51,12 @@ export lisa_noise_psd, instrument_psd, confusion_psd, synthesize_noise
 export matched_filter_snr, scale_to_snr, highpass_record, whiten_record
 export tapered_periodogram, place_signal!, detectable_span
 export phenoma_parameters, phenoma_amplitude, phenoma_phase, phenoma_group_delay
-export phenoma_start_frequency, phenoma_waveform
+export phenoma_start_frequency,
+    phenoma_waveform, phenoma_spectrum, phenoma_series, inverse_segment
+export phenoma_physical_amplitude, phenoma_arrival_delay
+export AbstractDetectorResponse, SkyAveragedResponse, channel_count, GIGAPARSEC_SEC
+export sky_averaged_response, channel_noise_psd, draw_extrinsic, lisa_response
+export source_frame, project_spectrum, project_series, detector_response
 export ldc_tdi_psd, ldc_confusion_psd, tdi_to_aet, read_tdi, read_catalog
 export welch_psd, interpolated_psd, windowed_snr, snr_peaks
 export detectable_spans, fixed_spans, span_labels
@@ -71,7 +76,7 @@ export TIMER,
     snapshot_manifest
 export backup_existing!, write_toml, write_csv
 export training_memory_estimate_gib, record_memory_estimate_gib, check_memory
-export generate_telemetry, preprocess_record, label_truth_stream
+export generate_telemetry, preprocess_record, label_truth_stream, channel_catalog
 export whitening_psd, window_features, window_labels
 export train_classifier, evaluate_classifier
 export FIGURE_SIZE, PANEL_HEIGHT, STRIP_HEIGHT, figure_size, FIGURE_COLORS, FIGURE_STROKES
@@ -97,6 +102,7 @@ export export_telemetry_payload, samples_per_batch, catalog_events
 include("config.jl")
 include("provenance.jl")
 include("simulation.jl")
+include("response.jl")
 include("waveforms.jl")
 include("model.jl")
 include("training.jl")

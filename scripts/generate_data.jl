@@ -2,12 +2,14 @@
 # generation stage (`generate_telemetry`). The TOML configuration is the
 # single source of every physical and numerical parameter; the command line
 # adds only the run identifier and an output-path override. The trace figure
-# comes from the CairoMakie extension.
+# comes from the CairoMakie extension; the constellation response of
+# `[generation] response = "lisa"` from the CurvatureDistinguishability one.
 
 include(joinpath(@__DIR__, "common.jl"))
 
 using ArgParse: ArgParseSettings, @add_arg_table!, parse_args
 using CairoMakie: CairoMakie
+using CurvatureDistinguishability: CurvatureDistinguishability
 
 """
     parse_commandline() -> Dict{String, Any}
@@ -37,9 +39,9 @@ end
 """
     trace_figure(stem, config, result)
 
-Trace of the simulated strain against mission time with the labeled spans
-and, in a second panel, the record high-passed and whitened by the model
-sensitivity as the pre-processor sees it; exported at `stem` as PDF and
+Trace of the simulated `A` channel against mission time with the labeled
+spans and, in a second panel, the record high-passed and whitened by the
+noise PSD of that channel as the pre-processor sees it; exported at `stem` as PDF and
 PNG with a provenance sidecar.
 """
 function trace_figure(stem::AbstractString, config::AbstractDict, result::NamedTuple)
@@ -55,7 +57,10 @@ function trace_figure(stem::AbstractString, config::AbstractDict, result::NamedT
             order = pre.highpass_order,
         ),
         fs;
-        psd = f -> lisa_noise_psd(f; observation_years = gen.observation_years),
+        psd = channel_noise_psd(
+            detector_response(gen),
+            f -> lisa_noise_psd(f; observation_years = gen.observation_years),
+        ),
     )
     figure = figure_telemetry_trace(
         t_days,

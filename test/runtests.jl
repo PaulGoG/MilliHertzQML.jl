@@ -14,6 +14,7 @@ using MilliHertzQML
 using Yao, Flux, Zygote
 using CairoMakie: CairoMakie
 using DeepSpaceTelemetry: DeepSpaceTelemetry
+using CurvatureDistinguishability: CurvatureDistinguishability
 
 const PROJECT_ROOT = dirname(@__DIR__)
 
@@ -1474,6 +1475,8 @@ if isfile(SANGRIA_FILE)
 else
     @info "Sangria anchors skipped: set MILLIHERTZQML_LDC_DIR to the directory holding LDC2_sangria_training_v2.h5"
 end
+
+include("response_tests.jl")
 
 @testset "Pipeline smoke test" begin
     # The four scripts run as child processes on a three-day configuration

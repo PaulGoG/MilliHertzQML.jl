@@ -9,7 +9,7 @@ MilliHertzQML.jl/
 ├── activate.jl          # activates and instantiates the root environment
 ├── configs/             # default, Sangria, and experiment configurations
 ├── src/                 # package: physics, model, stages, telemetry coupling
-├── ext/                 # CairoMakie and DeepSpaceTelemetry extensions
+├── ext/                 # CairoMakie, DeepSpaceTelemetry and CurvatureDistinguishability extensions
 ├── scripts/             # entry points, own environment
 ├── test/                # suite with static QA, own environment
 ├── bench/               # benchmarks, own environment
@@ -54,7 +54,9 @@ it. The script and test environments also pin the telemetry producer
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl),
 unregistered likewise, as a git source at a release commit; its
 [manual](https://PaulGoG.github.io/DeepSpaceTelemetry.jl/stable/)
-documents the run directory this package reads. On a machine whose git
+documents the run directory this package reads. They pin
+[CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
+the same way, for the constellation response of the simulator. On a machine whose git
 configuration rewrites GitHub URLs to SSH, instantiate them with
 `JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses the
 command-line git client and its agent.
@@ -81,7 +83,7 @@ julia docs/make.jl                                  # manual, written to docs/bu
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
-| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; no spins, higher modes, or LISA response |
+| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; optionally the A and E channels of the constellation through the CurvatureDistinguishability extension (antenna patterns on the orbits, Doppler phase, transfer roll-off, injections at physical amplitude for a drawn distance); no spins or higher modes |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model together with the phase-encoding span (`[0, π]` by default; earlier artifacts load on `[0, 2π]`) |
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
@@ -184,6 +186,8 @@ julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTeleme
     --model models/run_<RUN_ID>/gw_model.jld2 \
     --events data/inputs/simulated_telemetry_complex_events.csv --run-id coupling01
 ```
+
+The simulator records, by default, one strain referred to the sky-averaged sensitivity, with every source placed at a matched-filter SNR. With `response = "lisa"` in `[generation]` it records the A and E channels of the constellation instead — antenna patterns on the LISA orbits, orbital Doppler phase and transfer roll-off from CurvatureDistinguishability.jl, loaded as a package extension — with the MBHB injections at physical amplitude for a luminosity distance drawn from `[mbhb_distance_min_gpc, mbhb_distance_max_gpc]` and isotropic orientation, independent noise per channel at the Michelson-channel level, and labels on the channel named by `label_channel`. Such records are whitened with `psd = "channel"` (or `"welch"`) in `[preprocessing]`; the physics page of the manual states the conventions and their limits.
 
 `infer_telemetry.jl` writes `telemetry_windows.csv` (one row per scored window with its completion time and inference wall time), `alert_latency.csv` (per event: first alarmed window, data latency, total latency with the ground processing budget, false-alarm episodes per 30 days), a snapshot, and the alert figure. The `[telemetry]` section of the configuration holds the geometry, the coverage and erosion policy, the accepted producer version, and the processing budget.
 
@@ -373,6 +377,7 @@ MilliHertzQML/
 │   └── persistence.jl      # JLD2 model save/load (parameters, hyperparameters, feature scaler)
 ├── ext/
 │   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures (loads with CairoMakie)
+│   ├── MilliHertzQMLCurvatureDistinguishabilityExt.jl # Constellation response of the simulator (loads with CurvatureDistinguishability)
 │   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API (loads with DeepSpaceTelemetry)
 ├── scripts/
 │   ├── Project.toml        # Script environment (package consumed by path)

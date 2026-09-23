@@ -1,6 +1,7 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CurvatureDistinguishability = "023135ff-521e-423d-a4c9-75a9bc432dee"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -10,5 +11,6 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
+CurvatureDistinguishability = {rev = "8618306dfd7158603579f54ef3fa61dd30358c1a", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
 DeepSpaceTelemetry = {rev = "1780e628f7064cffd27b417081147e25b9d65707", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
 MilliHertzQML = {path = ".."}

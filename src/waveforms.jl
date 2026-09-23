@@ -175,16 +175,16 @@ function cosine_rolloff(f::Real, f_start::Real, f_stop::Real)
 end
 
 """
-    phenoma_waveform(fs, duration_sec; total_mass, mass_ratio,
-                     nyquist_taper = 0.9, rolloff_width = 0.1) -> (h, merger_index, p)
+    phenoma_spectrum(fs, duration_sec; total_mass, mass_ratio,
+                     nyquist_taper = 0.9, rolloff_width = 0.1) -> NamedTuple
 
-Unit-peak time-domain IMRPhenomA strain of a non-spinning binary of
-detector-frame `total_mass` [M⊙] and `mass_ratio` ``q \\ge 1``, sampled at
-`fs` [Hz] over `duration_sec`, with coalescence near the end of the
-segment. The waveform is built in the frequency domain on a grid of twice
-the segment length and inverted:
+Frequency-domain IMRPhenomA strain of a non-spinning binary of
+detector-frame `total_mass` [M⊙] and `mass_ratio` ``q \\ge 1`` on the
+`rfft` grid of twice the segment of `duration_sec` [s] sampled at `fs`
+[Hz], with the coalescence near the end of the segment:
 
-- the spectrum is ``A(f) \\exp[i(\\Psi(f) - 2\\pi f t_0)]`` with ``t_0``
+- the spectrum is ``H(f) = A(f) \\exp[i(\\Psi(f) - 2\\pi f t_0)]`` with the
+  unit inspiral normalisation of [`phenoma_amplitude`](@ref) and ``t_0``
   chosen so that the ringdown frequency arrives at the target merger time
   ([`phenoma_group_delay`](@ref)); inspiral content arriving before the
   segment start is rolled on with a half-cosine of relative width
@@ -192,17 +192,15 @@ the segment length and inverted:
   signal starts inside the segment instead of wrapping around;
 - the spectrum is tapered to zero with a half-cosine ending at
   `nyquist_taper` times the Nyquist frequency (starting 0.1 Nyquist
-  below it), so the sampled waveform cannot alias whatever the mass;
-- the first 5 % of the segment is ramped with a half-Hann window to
-  remove residual ringing of the roll-on.
+  below it), so the sampled waveform cannot alias whatever the mass.
 
-Returns the strain scaled to unit peak amplitude, the sample of peak
-amplitude (`merger_index`), and the parameters `p` of
-[`phenoma_parameters`](@ref). The overall amplitude carries no physical
-meaning; injections are scaled to a matched-filter SNR by
-[`scale_to_snr`](@ref).
+Returns `(; freqs, H, n, t_merger, t0, p)`: the grid frequencies [Hz], the
+spectrum, the segment length in samples, the local merger time and time
+shift [s], and the parameters `p` of [`phenoma_parameters`](@ref). The
+spectrum carries no physical scale: [`phenoma_physical_amplitude`](@ref)
+supplies it, and [`phenoma_series`](@ref) inverts it.
 """
-function phenoma_waveform(
+function phenoma_spectrum(
     fs::Real,
     duration_sec::Real;
     total_mass::Real,
@@ -245,14 +243,117 @@ function phenoma_waveform(
         a == 0 && continue
         H[k] = a * cis(phenoma_phase(f, p) - 2π * f * t0)
     end
-    h_full = irfft(H, n_gen)
-    h = h_full[1:n]
+    return (freqs = freqs, H = H, n = n, t_merger = t_merger, t0 = t0, p = p)
+end
 
+"""
+    inverse_segment(H, n) -> Vector{Float64}
+
+Inverse transform of a spectrum on the `rfft` grid of `2n` samples, cut to
+its first `n` samples, with the first 5 % ramped by a half-Hann window to
+remove residual ringing of the roll-on; in the unnormalized FFT
+convention, so without physical scale.
+"""
+function inverse_segment(H::AbstractVector{<:Complex}, n::Integer)
+    n >= 2 || throw(ArgumentError("n = $n; the segment must hold at least 2 samples."))
+    length(H) == n + 1 || throw(
+        DimensionMismatch(
+            "the spectrum holds $(length(H)) bins; the rfft grid of 2n = $(2n) samples has $(n + 1).",
+        ),
+    )
+    h_full = irfft(H, 2n)
+    h = h_full[1:n]
     n_ramp = max(2, round(Int, 0.05 * n))
     for j in 1:n_ramp
         h[j] *= 0.5 * (1 - cos(π * (j - 1) / n_ramp))
     end
+    return h
+end
 
+"""
+    phenoma_series(H, n, fs) -> Vector{Float64}
+
+Time-domain segment of a spectrum built by [`phenoma_spectrum`](@ref) (or
+projected from one) on the `rfft` grid of `2n` samples at sampling
+frequency `fs` [Hz]: the inverse transform of [`inverse_segment`](@ref)
+scaled by `fs`, so that a spectrum ``\\tilde h(f)`` in seconds gives the
+strain ``h(t) = \\int \\tilde h(f) e^{2\\pi i f t}\\, \\mathrm{d}f`` that
+[`matched_filter_snr`](@ref) transforms back to ``\\tilde h``.
+"""
+function phenoma_series(H::AbstractVector{<:Complex}, n::Integer, fs::Real)
+    fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
+    return inverse_segment(H, n) .* fs
+end
+
+"""
+    phenoma_physical_amplitude(p; distance_sec)
+
+Newtonian normalisation of the IMRPhenomA spectrum for a source at
+luminosity distance `distance_sec` [light-seconds]:
+``\\sqrt{5/24}\\, \\pi^{-2/3}\\, \\mathcal{M}^{5/6} f_\\mathrm{merg}^{-7/6} / d_L``
+[s], with the chirp mass ``\\mathcal{M} = M \\eta^{3/5}`` in seconds
+(Ajith et al. 2008, Eq. 4.17). Multiplying the unit spectrum of
+[`phenoma_spectrum`](@ref), whose inspiral is ``(f/f_\\mathrm{merg})^{-7/6}``,
+gives ``|H(f)| = \\sqrt{5/24}\\, \\pi^{-2/3} \\mathcal{M}^{5/6} f^{-7/6} / d_L``
+in the inspiral: the plus-polarization amplitude of a face-on source,
+before the inclination factors ``(1 + \\cos^2\\iota)/2`` and ``\\cos\\iota``
+and the antenna patterns.
+"""
+function phenoma_physical_amplitude(p; distance_sec::Real)
+    distance_sec > 0 ||
+        throw(ArgumentError("distance_sec = $distance_sec; must be positive."))
+    chirp_mass = p.M_sec * p.η^(3 / 5)
+    return sqrt(5 / 24) * π^(-2 / 3) * chirp_mass^(5 / 6) * p.f_merg^(-7 / 6) / distance_sec
+end
+
+"""
+    phenoma_arrival_delay(f, p)
+
+Time [s] before the arrival of the merger–ringdown at which frequency `f`
+[Hz] arrives: ``g(f) - g(f_\\mathrm{ring})`` of [`phenoma_group_delay`](@ref)
+below the ringdown frequency, clamped at zero, and zero at and above it,
+where the derivative of the fitted phase is no longer an arrival time
+(and at ``f \\le 0``, which carries no signal). A detector response evaluated at
+this instant, and at the coalescence through the merger–ringdown, is the
+leading order of the Fourier-domain response of Marsat & Baker (2018).
+"""
+function phenoma_arrival_delay(f::Real, p)
+    (f <= 0 || f >= p.f_ring) && return 0.0
+    return max(phenoma_group_delay(f, p) - phenoma_group_delay(p.f_ring, p), 0.0)
+end
+
+"""
+    phenoma_waveform(fs, duration_sec; total_mass, mass_ratio,
+                     nyquist_taper = 0.9, rolloff_width = 0.1) -> (h, merger_index, p)
+
+Unit-peak time-domain IMRPhenomA strain of a non-spinning binary of
+detector-frame `total_mass` [M⊙] and `mass_ratio` ``q \\ge 1``, sampled at
+`fs` [Hz] over `duration_sec`, with coalescence near the end of the
+segment: the spectrum of [`phenoma_spectrum`](@ref) inverted by
+[`inverse_segment`](@ref) and scaled to unit peak amplitude.
+
+Returns the strain, the sample of peak amplitude (`merger_index`), and the
+parameters `p` of [`phenoma_parameters`](@ref). The overall amplitude
+carries no physical meaning; injections are scaled to a matched-filter
+SNR by [`scale_to_snr`](@ref).
+"""
+function phenoma_waveform(
+    fs::Real,
+    duration_sec::Real;
+    total_mass::Real,
+    mass_ratio::Real,
+    nyquist_taper::Real = 0.9,
+    rolloff_width::Real = 0.1,
+)
+    spectrum = phenoma_spectrum(
+        fs,
+        duration_sec;
+        total_mass = total_mass,
+        mass_ratio = mass_ratio,
+        nyquist_taper = nyquist_taper,
+        rolloff_width = rolloff_width,
+    )
+    h = inverse_segment(spectrum.H, spectrum.n)
     peak = maximum(abs, h)
     peak > 0 || throw(
         ArgumentError(
@@ -262,5 +363,5 @@ function phenoma_waveform(
     )
     h ./= peak
     merger_index = argmax(abs.(h))
-    return h, merger_index, p
+    return h, merger_index, spectrum.p
 end
