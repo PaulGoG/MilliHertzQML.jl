@@ -251,6 +251,9 @@ function train_classifier(
                 "target_far_per_30d" => trn.target_far_per_30d,
                 "target_fpr" => trn.target_fpr,
                 "scaler_quantiles" => collect(trn.scaler_quantiles),
+                "phase_span" => trn.phase_span,
+                "threshold_block" => trn.threshold_block,
+                "min_fit_episodes" => trn.min_fit_episodes,
                 "train_features" => rootrelative(trn.train_features),
                 "train_labels" => rootrelative(trn.train_labels),
                 "test_mode" => test_mode,
@@ -306,7 +309,11 @@ function train_classifier(
             blocks.test buffer = buffer
 
         # Feature scaler fitted on the training block only.
-        scaler = fit_scaler(X_raw[blocks.train, :]; quantiles = trn.scaler_quantiles)
+        scaler = fit_scaler(
+            X_raw[blocks.train, :];
+            quantiles = trn.scaler_quantiles,
+            phase_span = trn.phase_span * π,
+        )
         X_train = encode_features(scaler, X_raw[blocks.train, :])
         X_val = encode_features(scaler, X_raw[blocks.validation, :])
         X_test = encode_features(scaler, X_raw[blocks.test, :])
@@ -468,10 +475,16 @@ function train_classifier(
         @info "threshold" value = threshold criterion = info["criterion"] block =
             trn.threshold_block episodes = info["fit_false_alarm_episodes"] validation_auc =
             auc_val
-        info["fit_false_alarm_episodes"] < 5 && @warn "the fitted false-alarm rate rests " *
-              "on fewer than five episodes; its relative error exceeds 45 % and the " *
-              "operating point may not transfer to another record." episodes =
-            info["fit_false_alarm_episodes"] block = trn.threshold_block
+        n_episodes = info["fit_false_alarm_episodes"]
+        n_episodes < trn.min_fit_episodes && @warn "the fitted false-alarm rate rests " *
+              "on $n_episodes false-alarm episodes, below min_fit_episodes = " *
+              "$(trn.min_fit_episodes); its relative Poisson error is " *
+              (
+                  n_episodes == 0 ? "unbounded" :
+                  "about $(round(Int, 100 / sqrt(n_episodes))) %"
+              ) *
+              " and the operating point may not transfer to another record." block =
+            trn.threshold_block
 
         # The test block, scored once; part of the calibration set under
         # `threshold_block = "held_out"`, independent of it otherwise.

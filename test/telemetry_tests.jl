@@ -52,10 +52,14 @@
     @test isempty(newly_evaluable!(s, cov, 1:1200))   # nothing emitted twice
     @test_throws ArgumentError WindowScheduler(1000, 2000)
     @test_throws ArgumentError WindowScheduler(1000, 100; min_coverage = 0.0)
-    partial = WindowScheduler(1000, 100; min_coverage = 0.5)
+    # `min_coverage` bounds the conditioning stretch, never the window: a
+    # window with half its own rows missing is not scored across the hole
+    partial = WindowScheduler(1000, 100; min_coverage = 0.5, context_rows = 1000)
     cov2 = Coverage()
     add!(cov2, 1:500)
-    @test newly_evaluable!(partial, cov2, 1:500) == [1]
+    @test isempty(newly_evaluable!(partial, cov2, 1:500))
+    add!(cov2, 501:1000)
+    @test newly_evaluable!(partial, cov2, 501:1000) == [1]   # stretch 1:2000 half there
 
     # With a conditioning stretch a window waits for the data after it,
     # and an arriving batch can release a window that lies earlier
@@ -129,6 +133,7 @@
     @test all(0 .<= windows.score .<= 1)
     @test all(windows.decision .== Int.(windows.score .>= 0.5f0))
     @test issorted(windows.complete_at)
+    @test all(windows.psd_row .== 0)          # the detector's static PSD throughout
     # A window is scored when its conditioning stretch is delivered, not when
     # its own rows are: with two window lengths of context, window 1 waits for
     # rows 1:3000, batches 1–30, the last of which is the thirtieth event
@@ -142,6 +147,48 @@
     # made against the same rounding.
     direct = score_window(detector, Float32.(payload[1:4000]), 1001)
     @test isapprox(windows.score[11], direct; atol = 1e-6)
+
+    # Ground-causal whitening: every window is whitened by the Welch estimate
+    # of the delivered record behind its conditioning stretch, and the table
+    # records the last row of that record
+    @test_throws ArgumentError TrailingWelch(500, 100, 1000)
+    @test_throws ArgumentError TrailingWelch(3000, 0, 1000)
+    @test_throws ArgumentError TrailingWelch(3000, 100, 1)
+    trailing = replay_run(run, detector; trailing_psd = TrailingWelch(3000, 500, 1000))
+    @test nrow(trailing) == nrow(windows) && trailing.window == windows.window
+    @test all(trailing.psd_row .>= 1000)
+    @test all(0 .<= trailing.score .<= 1)
+    @test !all(isapprox.(trailing.score, windows.score; atol = 1e-4))
+    for m in (11, 31)
+        hi = trailing.psd_row[m]
+        lo = max(1, hi - 3000 + 1)
+        record = highpass_record(
+            Float64.(Float32.(payload[lo:hi])),
+            fs;
+            cutoff = detector.highpass_cutoff_hz,
+            order = detector.highpass_order,
+        )
+        freqs, table = welch_psd(record, fs; segment_length = 1000, average = :median)
+        w_lo = 1 + 100 * (m - 1)
+        s_lo, s_hi = max(1, w_lo - 2000), min(n_rows, w_lo + 999 + 2000)
+        expected = score_window(
+            detector,
+            Float32.(payload[s_lo:s_hi]),
+            w_lo - s_lo + 1;
+            psd = interpolated_psd(freqs, table),
+        )
+        @test isapprox(trailing.score[m], expected; atol = 1e-6)
+    end
+    # The estimate is reused while the delivered record has advanced by less
+    # than the refresh, redone otherwise
+    @test length(unique(trailing.psd_row)) < nrow(trailing)
+    @test all(diff(sort(unique(trailing.psd_row))) .>= 500)
+    # Replays are deterministic
+    @test replay_run(run, detector; trailing_psd = TrailingWelch(3000, 500, 1000)).score ==
+          trailing.score
+    # Without one segment of record on the ground the static PSD is used
+    static = replay_run(run, detector; trailing_psd = TrailingWelch(7000, 500, 7000))
+    @test all(static.psd_row .== 0) && static.score == windows.score
     # Lost batches are removed with erosion and their windows never complete
     lossy = ArrivalEvent[]
     for k in 1:n_batches
@@ -184,6 +231,9 @@
 
     # Alert latency: one event inside the burst, one outside every alarm
     forced = copy(windows)
+    # One arrival per window, so that the completing window of a run is
+    # unambiguous
+    forced.complete_at .= epoch .+ Dates.Second.(600 .* (1:nrow(forced)))
     forced.decision .= 0
     forced.decision[25:28] .= 1                     # windows covering rows 2401:3700
     events_table = DataFrame(
@@ -214,7 +264,44 @@
     @test latency2.alarm_window[2] == 46
     @test latency2.false_alarm_episodes[1] == 2
     @test latency2.false_alarms_per_30d[1] > 0
+    @test all(latency2.alert_persistence .== 1)
     @test_throws ArgumentError alert_latency_table(forced, DataFrame(x = [1]), geometry)
+    @test_throws ArgumentError alert_latency_table(
+        forced,
+        events_table,
+        geometry;
+        persistence = 0,
+    )
+    # A persistence criterion: the alert is raised by the arrival completing
+    # `persistence` consecutive alarmed windows, and isolated alarms are
+    # neither alerts nor false-alarm episodes. Windows complete in index
+    # order here, so the run 25–28 is complete at window 27 under three and
+    # at window 26 under two; the pair 45–46 needs two, the singleton 5 none.
+    three = alert_latency_table(forced, events_table, geometry; persistence = 3)
+    @test three.detected == [true, false]
+    @test three.alarm_window[1] == 27 && three.t_alarm[1] == forced.complete_at[27]
+    @test three.false_alarm_episodes[1] == 0
+    @test all(three.alert_persistence .== 3)
+    two = alert_latency_table(forced, events_table, geometry; persistence = 2)
+    @test two.detected == [true, true]
+    @test two.alarm_window == [26, 46]
+    @test two.false_alarm_episodes[1] == 0
+    @test !any(two.shared_alert) && !any(three.shared_alert)
+    # Two events whose spans overlap can share one alert; the table says so
+    twin = DataFrame(
+        event = [1, 2],
+        merger_time_s = [3500 / fs, 3600 / fs],
+        label_start_index = [3001, 3201],
+        label_end_index = [4000, 4100],
+    )
+    shared = alert_latency_table(forced, twin, geometry; persistence = 3)
+    @test shared.alarm_window == [27, 27] && all(shared.shared_alert)
+    # Out-of-order arrival: the run is complete only when its last-arriving
+    # window lands, whichever index that is
+    shuffled = copy(forced)
+    shuffled.complete_at[26] = maximum(forced.complete_at) + Dates.Hour(1)
+    late = alert_latency_table(shuffled, events_table, geometry; persistence = 3)
+    @test late.alarm_window[1] == 26 && late.t_alarm[1] == shuffled.complete_at[26]
 
     # Detector reconstruction from a training run directory
     mktempdir() do dir

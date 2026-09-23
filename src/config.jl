@@ -351,8 +351,8 @@ end
     training_settings(config) -> NamedTuple
 
 Validated `[training]` parameters: inputs, optimizer, chronological blocks,
-class weighting, threshold criterion and fitting block, scaler quantiles,
-test-mode caps, threading.
+class weighting, threshold criterion and fitting block, scaler quantiles and
+phase-encoding span, test-mode caps, threading.
 """
 function training_settings(config::AbstractDict)
     t = section(config, "training")
@@ -408,7 +408,7 @@ function training_settings(config::AbstractDict)
         threshold_block = cfgget(
             t,
             "threshold_block",
-            "held_out";
+            "validation";
             type = String,
             choices = ("validation", "held_out"),
         ),
@@ -420,7 +420,9 @@ function training_settings(config::AbstractDict)
             min = 0.0,
         ),
         target_fpr = cfgget(t, "target_fpr", 0.05; type = Float64, min = 0.0, max = 1.0),
+        min_fit_episodes = cfgget(t, "min_fit_episodes", 5; type = Int, min = 0),
         scaler_quantiles = (Float64(quantiles[1]), Float64(quantiles[2])),
+        phase_span = cfgget(t, "phase_span", 1.0; type = Float64, min = 1e-3, max = 2.0),
         test_mode_samples = cfgget(t, "test_mode_samples", 5000; type = Int, min = 1),
         test_mode_epochs = cfgget(t, "test_mode_epochs", 20; type = Int, min = 1),
         threaded = cfgget(t, "threaded", true; type = Bool),
@@ -532,8 +534,10 @@ Validated `[telemetry]` parameters of the coupling to a DeepSpaceTelemetry
 run: the exported scenario geometry (`segment_duration_sec`, `batch_size`,
 `start_sim_time`, `output_prefix`) and the consumer's replay settings
 (`run_dir`, `mode`, `min_coverage`, `tdi_gap_dilation_sec`,
-`context_windows`, `psd_sidecar`, `poll_interval_sec`, `producer_compat`,
-`processing_latency_hours`, `events_csv`).
+`context_windows`, `psd_sidecar`, `psd_mode`, `psd_trailing_days`,
+`psd_refresh_days`, `psd_segment_length`, `poll_interval_sec`,
+`producer_compat`, `processing_latency_hours`, `alert_persistence`,
+`events_csv`). `phase_span` of `[training]` is in units of ``\\pi``.
 """
 function telemetry_settings(config::AbstractDict)
     t = section(config, "telemetry")
@@ -586,6 +590,23 @@ function telemetry_settings(config::AbstractDict)
             type = Float64,
             min = 0.0,
         ),
+        alert_persistence = cfgget(t, "alert_persistence", 3; type = Int, min = 1),
+        psd_mode = cfgget(
+            t,
+            "psd_mode",
+            "sidecar";
+            type = String,
+            choices = ("sidecar", "trailing"),
+        ),
+        psd_trailing_days = cfgget(
+            t,
+            "psd_trailing_days",
+            30.0;
+            type = Float64,
+            min = 1e-6,
+        ),
+        psd_refresh_days = cfgget(t, "psd_refresh_days", 1.0; type = Float64, min = 1e-6),
+        psd_segment_length = cfgget(t, "psd_segment_length", 65536; type = Int, min = 2),
         events_csv = isempty(events_csv) ? "" : resolvepath(events_csv),
     )
 end

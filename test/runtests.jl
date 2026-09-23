@@ -248,7 +248,30 @@ end
             @test meta_out["run_id"] == "test"
             @test meta_out["seed"] == 1234
             @test scaler_out.lower == scaler.lower && scaler_out.upper == scaler.upper
+            @test scaler_out.phase_span == scaler.phase_span == Float32(π)
             @test isapprox(predict_probability(loaded, x), p_ref; atol = 1e-6)
+            # The span is persisted with the bounds
+            wide = FeatureScaler(scaler.lower, scaler.upper; phase_span = 2π)
+            save_model(joinpath(dir, "wide.jld2"), model; scaler = wide)
+            @test load_model(joinpath(dir, "wide.jld2"))[3].phase_span == Float32(2π)
+            # An artifact written before the span was persisted restores the
+            # full period its scaler was trained with, and says so
+            legacy = joinpath(dir, "legacy.jld2")
+            MilliHertzQML.JLD2.jldsave(
+                legacy;
+                n_qubits = model.n_qubits,
+                n_layers = model.n_layers,
+                params = model.params,
+                scaler_lower = scaler.lower,
+                scaler_upper = scaler.upper,
+                metadata = Dict{String,Any}("run_id" => "old"),
+            )
+            _, meta_legacy, scaler_legacy =
+                @test_logs (:warn, r"predates the persisted phase-encoding span") load_model(
+                    legacy,
+                )
+            @test meta_legacy["run_id"] == "old"
+            @test scaler_legacy.phase_span == Float32(2π)
 
             # Artifacts without a scaler load with `nothing`
             bare = joinpath(dir, "bare.jld2")
@@ -550,21 +573,72 @@ end
     rng = StableRNG(3)
     X = randn(rng, 500, 4) .* [1.0 10.0 0.1 100.0] .+ [0.0 5.0 0.5 -50.0]
     scaler = fit_scaler(X; quantiles = (0.01, 0.99))
+    @test scaler.phase_span == Float32(π)
     E = encode_features(scaler, X)
     @test size(E) == size(X)
     @test eltype(E) == Float32
-    @test all(0 .<= E .<= Float32(2π))
-    @test minimum(E) == 0.0f0 && isapprox(maximum(E), 2π; atol = 1e-5)
+    @test all(0 .<= E .<= Float32(π))
+    @test minimum(E) == 0.0f0 && isapprox(maximum(E), π; atol = 1e-5)
     # The bounds map to the interval ends; outside values clamp
     @test encode_features(scaler, reshape(scaler.lower, 1, :)) == zeros(Float32, 1, 4)
     @test all(
-        isapprox.(encode_features(scaler, reshape(scaler.upper, 1, :)), 2π; atol = 1e-5),
+        isapprox.(encode_features(scaler, reshape(scaler.upper, 1, :)), π; atol = 1e-5),
     )
-    @test all(encode_features(scaler, fill(1e9, 1, 4)) .≈ Float32(2π))
+    @test all(encode_features(scaler, fill(1e9, 1, 4)) .≈ Float32(π))
+    # The full period is admissible for artifacts trained on it, and folds
+    # the two clamp ends onto one state: R_z(2π) = −I is a global phase, so
+    # a saturated feature scores exactly as one at the floor
+    legacy = fit_scaler(X; quantiles = (0.01, 0.99), phase_span = 2π)
+    @test legacy.phase_span == Float32(2π)
+    @test isapprox(maximum(encode_features(legacy, X)), 2π; atol = 1e-5)
+    model = VariationalQuantumClassifier(4, 2; rng = rng)
+    x_floor = fill(0.0f0, 4)
+    x_wide = vec(encode_features(legacy, fill(1e9, 1, 4)))
+    x_half = vec(encode_features(scaler, fill(1e9, 1, 4)))
+    @test isapprox(
+        predict_probability(model, x_wide),
+        predict_probability(model, x_floor);
+        atol = 1e-5,
+    )
+    @test abs(predict_probability(model, x_half) - predict_probability(model, x_floor)) >
+          1e-3
+    @test_throws ArgumentError FeatureScaler([0.0], [1.0]; phase_span = 3π)
+    @test_throws ArgumentError FeatureScaler([0.0], [1.0]; phase_span = 0.0)
     @test_throws ArgumentError fit_scaler(hcat(X, ones(500)))
     @test_throws ArgumentError fit_scaler(X; quantiles = (0.9, 0.1))
     @test_throws DimensionMismatch encode_features(scaler, X[:, 1:3])
     @test_throws ArgumentError FeatureScaler([0.0, 1.0], [1.0, 1.0])
+end
+
+@testset "Threshold file migration" begin
+    info = Dict{String,Any}(
+        "value" => 0.5,
+        "validation_recall" => 1.0,
+        "validation_windows" => 10,
+        "fit_fpr" => 0.0,
+        "validation_fpr" => 0.1,
+    )
+    @test_logs (:info, r"predates the configurable fitting block") MilliHertzQML.migrate_threshold_info!(
+        info,
+    )
+    @test info["fit_recall"] == 1.0 && info["fit_windows"] == 10
+    @test !haskey(info, "validation_recall") && !haskey(info, "validation_windows")
+    # A key already present under its current name is kept as it is
+    @test info["fit_fpr"] == 0.0 && info["validation_fpr"] == 0.1
+    @test_logs MilliHertzQML.migrate_threshold_info!(Dict{String,Any}("value" => 0.5))
+    mktempdir() do dir
+        open(joinpath(dir, "threshold.toml"), "w") do io
+            TOML.print(
+                io,
+                Dict(
+                    "threshold" =>
+                        Dict("value" => 0.42, "validation_false_alarms_per_30d" => 1.5),
+                ),
+            )
+        end
+        thr, old = MilliHertzQML.load_threshold(dir)
+        @test thr == 0.42f0 && old["fit_false_alarms_per_30d"] == 1.5
+    end
 end
 
 @testset "Evaluation protocol" begin
@@ -1006,12 +1080,35 @@ end
     )
     @test model_settings(empty).n_qubits == 4
     @test training_settings(empty).threshold_criterion == "far"
-    @test training_settings(empty).threshold_block == "held_out"
+    @test training_settings(empty).threshold_block == "validation"
     @test training_settings(
-        Dict{String,Any}("training" => Dict{String,Any}("threshold_block" => "validation")),
-    ).threshold_block == "validation"
+        Dict{String,Any}("training" => Dict{String,Any}("threshold_block" => "held_out")),
+    ).threshold_block == "held_out"
     @test_throws ArgumentError training_settings(
         Dict{String,Any}("training" => Dict{String,Any}("threshold_block" => "test")),
+    )
+    @test training_settings(empty).phase_span == 1.0
+    @test training_settings(empty).min_fit_episodes == 5
+    @test training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("phase_span" => 2.0)),
+    ).phase_span == 2.0
+    @test_throws ArgumentError training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("phase_span" => 2.5)),
+    )
+    @test_throws ArgumentError training_settings(
+        Dict{String,Any}("training" => Dict{String,Any}("min_fit_episodes" => -1)),
+    )
+    @test telemetry_settings(empty).alert_persistence == 3
+    @test telemetry_settings(empty).psd_mode == "sidecar"
+    @test telemetry_settings(empty).psd_segment_length == 65536
+    @test telemetry_settings(
+        Dict{String,Any}("telemetry" => Dict{String,Any}("psd_mode" => "trailing")),
+    ).psd_mode == "trailing"
+    @test_throws ArgumentError telemetry_settings(
+        Dict{String,Any}("telemetry" => Dict{String,Any}("psd_mode" => "oracle")),
+    )
+    @test_throws ArgumentError telemetry_settings(
+        Dict{String,Any}("telemetry" => Dict{String,Any}("alert_persistence" => 0)),
     )
     @test inference_settings(empty).block == "all"
     @test ldc_settings(empty).label_before_sec == 4 * 86400.0
@@ -1468,8 +1565,8 @@ end
         thr = TOML.parsefile(joinpath(run_dir, "threshold.toml"))["threshold"]
         @test haskey(thr, "value") && haskey(thr, "criterion") && haskey(thr, "auc")
         @test thr["criterion"] in ("far", "fpr")
-        @test thr["block"] == "held_out"
-        @test thr["fit_windows"] == blocks["test"][2] - blocks["validation"][1] + 1
+        @test thr["block"] == "validation"
+        @test thr["fit_windows"] == blocks["validation"][2] - blocks["validation"][1] + 1
         @test haskey(thr, "fit_false_alarm_episodes")
         metrics = TOML.parsefile(joinpath(run_dir, "metrics.toml"))
         @test haskey(metrics, "validation") && haskey(metrics, "test")

@@ -84,13 +84,28 @@ function main()
     mkpath(results_dir)
     mkpath(plot_dir)
 
+    run = open_telemetry_run(run_dir; producer_compat = settings.producer_compat)
+    geometry = run_geometry(run)
+    trailing = nothing
+    psd_sidecar = settings.psd_sidecar
+    if settings.psd_mode == "trailing"
+        # Ground-causal whitening: the estimate follows the delivered record,
+        # and a sidecar PSD of the whole record would defeat it.
+        isempty(psd_sidecar) ||
+            @warn "psd_sidecar is ignored under psd_mode = \"trailing\"" psd_sidecar
+        psd_sidecar = ""
+        rows_per_day = 86400 * geometry.sample_rate
+        trailing = TrailingWelch(
+            round(Int, settings.psd_trailing_days * rows_per_day),
+            round(Int, settings.psd_refresh_days * rows_per_day),
+            settings.psd_segment_length,
+        )
+    end
     detector = detector_from_run(
         resolvepath(args["model"]);
         context_windows = settings.context_windows,
-        psd_sidecar = settings.psd_sidecar,
+        psd_sidecar = psd_sidecar,
     )
-    run = open_telemetry_run(run_dir; producer_compat = settings.producer_compat)
-    geometry = run_geometry(run)
     @info "telemetry run opened" run_dir state = run_state(run) sample_rate =
         geometry.sample_rate points_per_batch = geometry.points_per_batch producer =
         geometry.package_version
@@ -111,6 +126,7 @@ function main()
                 poll_interval_sec = settings.poll_interval_sec,
                 min_coverage = settings.min_coverage,
                 tdi_gap_dilation_sec = settings.tdi_gap_dilation_sec,
+                trailing_psd = trailing,
                 on_window = on_window,
             )
         else
@@ -119,6 +135,7 @@ function main()
                 detector;
                 min_coverage = settings.min_coverage,
                 tdi_gap_dilation_sec = settings.tdi_gap_dilation_sec,
+                trailing_psd = trailing,
                 on_window = on_window,
             )
         end
@@ -136,6 +153,7 @@ function main()
             events,
             geometry;
             processing_latency_hours = settings.processing_latency_hours,
+            persistence = settings.alert_persistence,
         )
         write_csv(joinpath(results_dir, "alert_latency.csv"), latencies)
         spans = label_span_times(events, geometry)
@@ -162,7 +180,13 @@ function main()
                 "min_coverage" => settings.min_coverage,
                 "tdi_gap_dilation_sec" => settings.tdi_gap_dilation_sec,
                 "context_windows" => settings.context_windows,
+                "psd_mode" => settings.psd_mode,
+                "psd_sidecar" => isempty(psd_sidecar) ? "" : rootrelative(psd_sidecar),
+                "psd_trailing_days" => settings.psd_trailing_days,
+                "psd_refresh_days" => settings.psd_refresh_days,
+                "psd_segment_length" => settings.psd_segment_length,
                 "processing_latency_hours" => settings.processing_latency_hours,
+                "alert_persistence" => settings.alert_persistence,
                 "events_csv" =>
                     isempty(events_path) ? "" : rootrelative(resolvepath(events_path)),
                 "run_id" => run_id,

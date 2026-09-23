@@ -70,10 +70,12 @@ train_fraction = 0.7       # chronological training block; in (0, 1)
 validation_fraction = 0.15 # chronological validation block (early stopping, threshold); in (0, 1); the rest is the test block
 class_weight = "balanced"  # positive-class loss weight; one of: "balanced" (negative/positive count ratio) | "none"
 threshold_criterion = "far"  # criterion fitting the threshold on the calibration block; one of: "far" | "fpr" | "youden"
-threshold_block = "held_out"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
+threshold_block = "validation"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
+phase_span = 1.0           # phase-encoding interval [0, phase_span π] of the feature scaler; in (0, 2]
+min_fit_episodes = 5       # false-alarm episodes on the calibration block below which the training stage warns; >= 0
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 20      # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
@@ -115,11 +117,16 @@ start_sim_time = "2035-01-01T00:00:00"   # mission epoch of the exported payload
 output_prefix = "telemetry"     # prefix of the payload CSV and scenario fragment
 run_dir = ""                    # DeepSpaceTelemetry run directory; "" requires --run-dir
 mode = "replay"                 # arrival feed handling; one of: "replay" | "live"
-min_coverage = 1.0              # fraction of a window's samples on the ground before scoring; in (0, 1]
+min_coverage = 1.0              # delivered fraction of a window's conditioning stretch before scoring; its own samples must all be there; in (0, 1]
 tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch [s]; >= 0
 context_windows = 4             # window lengths of delivered context on each side used for whitening; >= 0
 psd_sidecar = ""                # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
 producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver)
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
+alert_persistence = 3           # consecutive alarmed windows that raise an alert; >= 1
+psd_mode = "sidecar"            # whitening PSD of the replay; one of: "sidecar" (psd_sidecar, else the training run's) | "trailing" (median Welch estimate of the delivered record behind each window)
+psd_trailing_days = 30.0        # delivered record behind a window used by the "trailing" estimate [days]; > 0
+psd_refresh_days = 1.0          # advance of the delivered record after which the "trailing" estimate is redone [days]; > 0
+psd_segment_length = 65536      # segment of the "trailing" estimate [samples]; >= 2
 events_csv = ""                 # event table (merger_time_s, label spans) for the alert-latency table; "" disables

@@ -44,6 +44,8 @@ threshold_block = "held_out"  # calibration block of the threshold; one of: "val
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
+phase_span = 1.0           # phase-encoding interval [0, phase_span π] of the feature scaler; in (0, 2]
+min_fit_episodes = 5       # false-alarm episodes on the calibration block below which the training stage warns; >= 0
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false

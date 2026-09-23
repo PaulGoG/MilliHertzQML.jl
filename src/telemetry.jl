@@ -381,8 +381,10 @@ end
 
 Bookkeeping of the sliding windows (window `m` covers rows
 `[1 + (m − 1) S, (m − 1) S + W]`) that have become evaluable: a window is
-evaluable once at least `min_coverage` of its rows are delivered, and each
-window is emitted once.
+evaluable once its own rows are all delivered and at least `min_coverage`
+of its conditioning stretch is, and each window is emitted once. A hole
+inside a window is never scored across; `min_coverage` below one only
+admits a window whose context is incomplete.
 
 `context_rows` is the conditioning stretch the detector needs on each
 side of a window: a window becomes evaluable only once that stretch, cut
@@ -484,7 +486,10 @@ function newly_evaluable!(
     widened = (first(rows)-scheduler.context_rows):(last(rows)+scheduler.context_rows)
     for m in windows_touching(scheduler, widened)
         m in scheduler.emitted && continue
-        if covered_fraction(coverage, conditioning_rows(scheduler, m)) >=
+        # The window's own rows must all be on the ground; `min_coverage`
+        # bounds the delivered fraction of the stretch around them.
+        if !isempty(covered_stretch(coverage, window_rows(scheduler, m))) &&
+           covered_fraction(coverage, conditioning_rows(scheduler, m)) >=
            scheduler.min_coverage
             push!(scheduler.emitted, m)
             push!(ready, m)
@@ -574,16 +579,19 @@ struct StreamingDetector
 end
 
 """
-    score_window(detector, stretch, offset) -> Float32
+    score_window(detector, stretch, offset; psd = detector.psd) -> Float32
 
 Classifier probability of the window starting at `offset` (1-based) of the
 contiguous delivered `stretch`, conditioned as described for
-[`StreamingDetector`](@ref).
+[`StreamingDetector`](@ref). `psd` replaces the detector's whitening PSD
+for this window — the ground-causal estimate of a replay under
+[`TrailingWelch`](@ref) — or `nothing` for no whitening.
 """
 function score_window(
     detector::StreamingDetector,
     stretch::AbstractVector{<:Real},
-    offset::Integer,
+    offset::Integer;
+    psd = detector.psd,
 )
     W = detector.window_size
     1 <= offset && offset + W - 1 <= length(stretch) ||
@@ -597,8 +605,7 @@ function score_window(
             order = detector.highpass_order,
         )
     end
-    detector.psd === nothing ||
-        (record = whiten_record(record, detector.sample_rate; psd = detector.psd))
+    psd === nothing || (record = whiten_record(record, detector.sample_rate; psd = psd))
     window = view(record, offset:(offset+W-1))
     features = extract_features(
         window,
@@ -665,8 +672,10 @@ end
 One scored window of a replay: `window` index, payload `row_start` and
 `row_end`, their mission times `content_start` and `content_end`, the
 arrival time `complete_at` of the `completing_batch`, the window's
-`coverage`, the classifier `score`, the `decision`, and the inference wall
-time `inference_wall_ms`.
+`coverage`, the classifier `score`, the `decision`, the inference wall
+time `inference_wall_ms`, and `psd_row`, the last delivered row behind
+the ground-causal whitening estimate ([`TrailingWelch`](@ref)) the window
+was whitened with, 0 when the detector's static PSD was used.
 """
 struct WindowRecord
     window::Int
@@ -680,15 +689,55 @@ struct WindowRecord
     score::Float32
     decision::Int
     inference_wall_ms::Float64
+    psd_row::Int
 end
 
 """
-    ReplayState(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0)
+    TrailingWelch(span_rows, refresh_rows, segment_length)
+
+Ground-causal whitening of a replay. Each window is whitened by the median
+Welch estimate ([`welch_psd`](@ref), segments of `segment_length` samples)
+of the delivered record behind it: the covered interval holding the
+window's conditioning stretch, cut to the last `span_rows` rows before the
+stretch's end, high-passed as the detector high-passes every stretch — the
+order in which the batch pre-processor estimates its `"welch"` PSD.
+Nothing that has not reached the ground enters the estimate, unlike a
+PSD of the whole record, which at every window of a streamed mission
+contains data still to be delivered. The estimate is redone once the end
+of that record has moved by `refresh_rows` rows since the previous one;
+while fewer than `segment_length` rows are on the ground behind a window,
+the window is whitened by the detector's own static PSD.
+"""
+struct TrailingWelch
+    span_rows::Int
+    refresh_rows::Int
+    segment_length::Int
+    function TrailingWelch(
+        span_rows::Integer,
+        refresh_rows::Integer,
+        segment_length::Integer,
+    )
+        segment_length >= 2 || throw(ArgumentError("segment_length must be at least 2."))
+        span_rows >= segment_length || throw(
+            ArgumentError(
+                "span_rows = $span_rows; must hold at least one segment of $segment_length rows.",
+            ),
+        )
+        refresh_rows >= 1 || throw(ArgumentError("refresh_rows must be at least 1."))
+        return new(Int(span_rows), Int(refresh_rows), Int(segment_length))
+    end
+end
+
+"""
+    ReplayState(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0,
+                trailing_psd = nothing)
 
 Consumer state of a replay: the batches of the run, the [`Coverage`](@ref)
 of delivered rows, the [`WindowScheduler`](@ref), the delivered payload
-per batch, the scored windows, and the number of arrival events consumed.
-Fed one event at a time by [`process_event!`](@ref).
+per batch, the scored windows, the number of arrival events consumed, and,
+under `trailing_psd::`[`TrailingWelch`](@ref), the current ground-causal
+whitening estimate with the last delivered row it was made on. Fed one
+event at a time by [`process_event!`](@ref).
 """
 mutable struct ReplayState
     geometry::RunGeometry
@@ -701,11 +750,15 @@ mutable struct ReplayState
     excluded::Vector{UnitRange{Int}}
     erosion::Int
     consumed::Int
+    trailing::Union{Nothing,TrailingWelch}
+    trailing_psd::Any
+    trailing_row::Int
     function ReplayState(
         run::AbstractTelemetryRun,
         detector::StreamingDetector;
         min_coverage::Real = 1.0,
         tdi_gap_dilation_sec::Real = 0.0,
+        trailing_psd::Union{Nothing,TrailingWelch} = nothing,
     )
         geometry = run_geometry(run)
         isapprox(geometry.sample_rate, detector.sample_rate; rtol = 1e-9) || throw(
@@ -733,8 +786,73 @@ mutable struct ReplayState
             UnitRange{Int}[],
             round(Int, tdi_gap_dilation_sec * geometry.sample_rate),
             0,
+            trailing_psd,
+            nothing,
+            0,
         )
     end
+end
+
+"""
+    delivered_rows(state, rows) -> Vector{Float32}
+
+The payload of the delivered rows `rows`, assembled from the batches on the
+ground; every row must be covered.
+"""
+function delivered_rows(state::ReplayState, rows::UnitRange{Int})
+    P = state.geometry.points_per_batch
+    lo, hi = first(rows), last(rows)
+    samples = Vector{Float32}(undef, hi - lo + 1)
+    for k in (div(lo-1, P)+1):(div(hi-1, P)+1)
+        data = state.payload[k]
+        r = batch_rows(k, P)
+        a = max(lo, first(r))
+        b = min(hi, last(r))
+        samples[(a-lo+1):(b-lo+1)] = view(data, (a-first(r)+1):(b-first(r)+1))
+    end
+    return samples
+end
+
+"""
+    whitening_psd!(state, window) -> (psd, psd_row)
+
+Whitening PSD of `window` in a replay: the detector's static PSD with
+`psd_row = 0`, or, under [`TrailingWelch`](@ref), the ground-causal
+estimate over the delivered record behind the window's conditioning
+stretch and the last row it was made on — reused while that end has moved
+by less than `refresh_rows`, redone otherwise, and replaced by the static
+PSD while fewer than one segment of rows is on the ground.
+"""
+function whitening_psd!(state::ReplayState, window::UnitRange{Int})
+    tw = state.trailing
+    tw === nothing && return state.detector.psd, 0
+    span = covered_stretch(state.coverage, window)
+    isempty(span) && return state.detector.psd, 0
+    d = state.detector
+    hi = min(last(span), last(window) + d.context_windows * d.window_size)
+    lo = max(first(span), hi - tw.span_rows + 1)
+    hi - lo + 1 >= tw.segment_length || return d.psd, 0
+    if state.trailing_psd !== nothing && abs(hi - state.trailing_row) < tw.refresh_rows
+        return state.trailing_psd, state.trailing_row
+    end
+    record = Float64.(delivered_rows(state, lo:hi))
+    if d.highpass_cutoff_hz > 0
+        record = highpass_record(
+            record,
+            d.sample_rate;
+            cutoff = d.highpass_cutoff_hz,
+            order = d.highpass_order,
+        )
+    end
+    freqs, table = welch_psd(
+        record,
+        d.sample_rate;
+        segment_length = tw.segment_length,
+        average = :median,
+    )
+    state.trailing_psd = interpolated_psd(freqs, table)
+    state.trailing_row = hi
+    return state.trailing_psd, hi
 end
 
 """
@@ -751,16 +869,7 @@ function delivered_stretch(state::ReplayState, window::UnitRange{Int})
     context = state.detector.context_windows * state.detector.window_size
     lo = max(first(span), first(window) - context)
     hi = min(last(span), last(window) + context)
-    P = state.geometry.points_per_batch
-    samples = Vector{Float32}(undef, hi - lo + 1)
-    for k in (div(lo-1, P)+1):(div(hi-1, P)+1)
-        data = state.payload[k]
-        r = batch_rows(k, P)
-        a = max(lo, first(r))
-        b = min(hi, last(r))
-        samples[(a-lo+1):(b-lo+1)] = view(data, (a-first(r)+1):(b-first(r)+1))
-    end
-    return samples, first(window) - lo + 1
+    return delivered_rows(state, lo:hi), first(window) - lo + 1
 end
 
 """
@@ -797,8 +906,9 @@ function process_event!(
             0 < state.geometry.payload_rows < last(window) && continue
             stretch, offset = delivered_stretch(state, window)
             stretch === nothing && continue
+            psd, psd_row = whitening_psd!(state, window)
             t0 = time()
-            score = score_window(state.detector, stretch, offset)
+            score = score_window(state.detector, stretch, offset; psd = psd)
             record = WindowRecord(
                 m,
                 first(window),
@@ -811,6 +921,7 @@ function process_event!(
                 score,
                 score >= state.detector.threshold ? 1 : 0,
                 1000 * (time() - t0),
+                psd_row,
             )
             push!(state.windows, record)
             push!(scored, record)
@@ -846,24 +957,28 @@ function windows_table(state::ReplayState)
         score = [r.score for r in w],
         decision = [r.decision for r in w],
         inference_wall_ms = [r.inference_wall_ms for r in w],
+        psd_row = [r.psd_row for r in w],
     )
 end
 
 """
     replay_run(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0,
-               on_window = nothing) -> DataFrame
+               trailing_psd = nothing, on_window = nothing) -> DataFrame
 
 Replay the arrival feed of `run` in mission-time order through
 [`process_event!`](@ref) and return the [`windows_table`](@ref): one row
 per scored window with `window`, `row_start`, `row_end`, `content_start`,
 `content_end`, `complete_at`, `completing_batch`, `coverage`, `score`,
-`decision`, `inference_wall_ms`.
+`decision`, `inference_wall_ms`, `psd_row`. `trailing_psd`, a
+[`TrailingWelch`](@ref), whitens every window by a ground-causal estimate
+instead of the detector's static PSD.
 """
 function replay_run(
     run::AbstractTelemetryRun,
     detector::StreamingDetector;
     min_coverage::Real = 1.0,
     tdi_gap_dilation_sec::Real = 0.0,
+    trailing_psd::Union{Nothing,TrailingWelch} = nothing,
     on_window = nothing,
 )
     return @timeit TIMER "telemetry replay" begin
@@ -872,6 +987,7 @@ function replay_run(
             detector;
             min_coverage = min_coverage,
             tdi_gap_dilation_sec = tdi_gap_dilation_sec,
+            trailing_psd = trailing_psd,
         )
         for event in arrival_events(run)
             process_event!(state, run, event; on_window = on_window)
@@ -882,8 +998,8 @@ end
 
 """
     follow_run(run, detector; poll_interval_sec = 1.0, min_coverage = 1.0,
-               tdi_gap_dilation_sec = 0.0, on_window = nothing, max_wall_sec = Inf)
-        -> DataFrame
+               tdi_gap_dilation_sec = 0.0, trailing_psd = nothing,
+               on_window = nothing, max_wall_sec = Inf) -> DataFrame
 
 Live mode: poll the arrival feed of `run` every `poll_interval_sec`,
 consuming events beyond those already processed, until the run reaches a
@@ -897,6 +1013,7 @@ function follow_run(
     poll_interval_sec::Real = 1.0,
     min_coverage::Real = 1.0,
     tdi_gap_dilation_sec::Real = 0.0,
+    trailing_psd::Union{Nothing,TrailingWelch} = nothing,
     on_window = nothing,
     max_wall_sec::Real = Inf,
 )
@@ -906,6 +1023,7 @@ function follow_run(
         detector;
         min_coverage = min_coverage,
         tdi_gap_dilation_sec = tdi_gap_dilation_sec,
+        trailing_psd = trailing_psd,
     )
     start = time()
     while true
@@ -1042,30 +1160,41 @@ function event_merger_times(events::DataFrame)
 end
 
 """
-    alert_latency_table(windows, events, geometry; processing_latency_hours = 1.0)
-        -> DataFrame
+    alert_latency_table(windows, events, geometry; processing_latency_hours = 1.0,
+                        persistence = 1) -> DataFrame
 
 Per event of `events` (columns `merger_time_s` [s after the mission epoch]
 and, when present, `label_start_index`/`label_end_index` payload rows; a
-`label` or `event` column names it): the first alarmed window of `windows`
-(the table of [`replay_run`](@ref)) overlapping the event's label span
-(rows, or the window containing the merger when no span is given),
-`t_alarm` = its `complete_at`, `latency_data_h = t_alarm − t_merger`
-(negative when the alarm precedes the merger, i.e. the inspiral was
-detected inside the label span before the coalescence),
+`label` or `event` column names it): the earliest alert of `windows` (the
+table of [`replay_run`](@ref)) touching the event's label span (rows, or
+the window containing the merger when no span is given).
+
+An alert is a run of `persistence` consecutive alarmed windows —
+consecutive in window index, whatever order they reached the ground — at
+least one of which overlaps the span. It is raised by the arrival that
+completes the run: `t_alarm` is the latest `complete_at` of its windows
+and `alarm_window` the window of that arrival. With `persistence = 1`
+every alarmed window is an alert on its own. `latency_data_h = t_alarm −
+t_merger` (negative when the alert precedes the merger),
 `latency_total_h = latency_data_h + processing_latency_hours`, the
-inference wall time of that window, and `detected`. Windows alarmed outside
-every label span count as false alarms, reported as
-`false_alarms_per_30d` in every row.
+inference wall time of the completing window, `detected`, and
+`shared_alert`, true when the same alert is also another event's (label
+spans that overlap). Runs of
+alarmed windows outside every label span that reach `persistence` are
+false-alarm episodes, reported as `false_alarms_per_30d` in every row;
+shorter runs raise no alert and are not charged. `alert_persistence`
+records the criterion.
 """
 function alert_latency_table(
     windows::DataFrame,
     events::DataFrame,
     geometry::RunGeometry;
     processing_latency_hours::Real = 1.0,
+    persistence::Integer = 1,
 )
     processing_latency_hours >= 0 ||
         throw(ArgumentError("processing_latency_hours must be non-negative."))
+    persistence >= 1 || throw(ArgumentError("persistence must be at least 1."))
     times = event_merger_times(events)
     n_events = nrow(events)
     has_span = "label_start_index" in names(events) && "label_end_index" in names(events)
@@ -1085,7 +1214,15 @@ function alert_latency_table(
     else
         ["event_$i" for i in 1:n_events]
     end
+    # Alarmed windows in window order, cut into maximal runs of consecutive
+    # indices; `runs` holds position ranges into `alarmed`.
     alarmed = nrow(windows) == 0 ? Int[] : findall(==(1), windows.decision)
+    alarmed = alarmed[sortperm(Int.(windows.window[alarmed]))]
+    runs = alarm_runs(Int.(windows.window[alarmed]))
+    overlaps(j, span) = begin
+        r = Int(windows.row_start[alarmed[j]]):Int(windows.row_end[alarmed[j]])
+        first(r) <= last(span) && first(span) <= last(r)
+    end
     in_span = falses(length(alarmed))
     out = DataFrame(
         label = String[],
@@ -1101,18 +1238,29 @@ function alert_latency_table(
     for i in 1:n_events
         span = spans[i]
         t_merger = geometry.start_sim_time + Dates.Millisecond(round(Int, 1000 * times[i]))
-        first_alarm = nothing
-        for (j, w) in enumerate(alarmed)
-            r = Int(windows.row_start[w]):Int(windows.row_end[w])
-            overlaps = first(r) <= last(span) && first(span) <= last(r)
-            overlaps || continue
+        hits = Set(j for j in eachindex(alarmed) if overlaps(j, span))
+        for j in hits
             in_span[j] = true
-            if first_alarm === nothing ||
-               windows.complete_at[w] < windows.complete_at[first_alarm]
-                first_alarm = w
+        end
+        best_t = nothing
+        best_w = 0
+        for r in runs
+            length(r) >= persistence || continue
+            for a in first(r):(last(r)-persistence+1)
+                sub = a:(a+persistence-1)
+                any(in(hits), sub) || continue
+                # The arrival completing the run; among windows completed by
+                # the same arrival, the latest in mission time
+                ts = [windows.complete_at[alarmed[j]] for j in sub]
+                t = maximum(ts)
+                k = sub[findlast(==(t), ts)]
+                if best_t === nothing || t < best_t
+                    best_t = t
+                    best_w = alarmed[k]
+                end
             end
         end
-        if first_alarm === nothing
+        if best_t === nothing
             push!(
                 out,
                 (
@@ -1128,8 +1276,7 @@ function alert_latency_table(
                 ),
             )
         else
-            t_alarm = windows.complete_at[first_alarm]
-            latency_h = Dates.value(t_alarm - t_merger) / 3.6e6
+            latency_h = Dates.value(best_t - t_merger) / 3.6e6
             push!(
                 out,
                 (
@@ -1137,31 +1284,51 @@ function alert_latency_table(
                     times[i],
                     t_merger,
                     true,
-                    Int(windows.window[first_alarm]),
-                    t_alarm,
+                    Int(windows.window[best_w]),
+                    best_t,
                     latency_h,
                     latency_h + processing_latency_hours,
-                    Float64(windows.inference_wall_ms[first_alarm]),
+                    Float64(windows.inference_wall_ms[best_w]),
                 ),
             )
         end
     end
-    n_false = 0
-    if !isempty(alarmed)
-        outside = alarmed[.!in_span]
-        # Contiguous alarmed windows outside every span form one episode
-        sorted = sort(Int.(windows.window[outside]))
-        n_false =
-            isempty(sorted) ? 0 :
-            1 + count(k -> sorted[k] != sorted[k-1] + 1, 2:length(sorted))
-    end
+    # One alert can touch two events whose label spans overlap; the table
+    # says so rather than counting each as detected on its own.
+    raised = [ismissing(w) ? 0 : Int(w) for w in out.alarm_window]
+    out.shared_alert = [w != 0 && count(==(w), raised) > 1 for w in raised]
+    # Contiguous alarmed windows outside every span form one episode; only
+    # those long enough to raise an alert are charged.
+    outside = Int.(windows.window[alarmed[.!in_span]])
+    n_false = count(r -> length(r) >= persistence, alarm_runs(outside))
     observation_days =
         nrow(windows) == 0 ? 0.0 :
         nrow(windows) * geometry.sample_rate^-1 * detector_step(windows) / 86400
     out.false_alarm_episodes = fill(n_false, n_events)
     out.false_alarms_per_30d =
         fill(observation_days == 0 ? NaN : n_false / observation_days * 30, n_events)
+    out.alert_persistence = fill(Int(persistence), n_events)
     return out
+end
+
+"""
+    alarm_runs(indices) -> Vector{UnitRange{Int}}
+
+Maximal runs of consecutive integers of the sorted vector `indices`, as
+ranges of positions into it.
+"""
+function alarm_runs(indices::AbstractVector{<:Integer})
+    runs = UnitRange{Int}[]
+    isempty(indices) && return runs
+    start = 1
+    for j in 2:length(indices)
+        if indices[j] != indices[j-1] + 1
+            push!(runs, start:(j-1))
+            start = j
+        end
+    end
+    push!(runs, start:length(indices))
+    return runs
 end
 
 """

@@ -28,10 +28,52 @@ function inference_geometry(features_path::AbstractString, config::AbstractDict)
 end
 
 """
+    THRESHOLD_FIT_KEYS
+
+Rates of the fitting block recorded in `threshold.toml` under `fit_<key>`;
+files written before the fitting block became configurable hold them
+under `validation_<key>`.
+"""
+const THRESHOLD_FIT_KEYS = (
+    "windows",
+    "positive_windows",
+    "recall",
+    "precision",
+    "fpr",
+    "false_alarms_per_30d",
+    "false_alarm_episodes",
+    "observation_days",
+)
+
+"""
+    migrate_threshold_info!(info) -> info
+
+Rename the `validation_*` rate keys of a `threshold.toml` written before
+the fitting block became configurable to their current `fit_*` names,
+wherever the new name is absent, so that an artifact of either vintage
+reads alike; the renamed keys are logged.
+"""
+function migrate_threshold_info!(info::AbstractDict)
+    renamed = String[]
+    for k in THRESHOLD_FIT_KEYS
+        old, new = "validation_$k", "fit_$k"
+        if haskey(info, old) && !haskey(info, new)
+            info[new] = info[old]
+            delete!(info, old)
+            push!(renamed, old)
+        end
+    end
+    isempty(renamed) ||
+        @info "threshold.toml predates the configurable fitting block; validation_* keys read as fit_*" renamed
+    return info
+end
+
+"""
     load_threshold(model_dir) -> (threshold::Float32, info::Dict)
 
 Decision threshold persisted in `threshold.toml` of a training run
-directory; the file is required.
+directory; the file is required. Older files are read through
+[`migrate_threshold_info!`](@ref).
 """
 function load_threshold(model_dir::AbstractString)
     path = joinpath(model_dir, "threshold.toml")
@@ -41,7 +83,7 @@ function load_threshold(model_dir::AbstractString)
             "block by the training stage.",
         ),
     )
-    info = TOML.parsefile(path)["threshold"]
+    info = migrate_threshold_info!(TOML.parsefile(path)["threshold"])
     haskey(info, "value") ||
         throw(ArgumentError("threshold.toml at $path carries no `value` key."))
     return Float32(info["value"]), info

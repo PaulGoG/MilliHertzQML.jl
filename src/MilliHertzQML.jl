@@ -87,7 +87,7 @@ export row_time,
 export arrival_events, run_state, MemoryTelemetryRun, Coverage, add!, remove!
 export covered_fraction, holes, covered_stretch, WindowScheduler, window_rows
 export conditioning_rows
-export windows_touching, newly_evaluable!, StreamingDetector, score_window
+export windows_touching, newly_evaluable!, StreamingDetector, score_window, TrailingWelch
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
 export event_merger_times
