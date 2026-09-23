@@ -211,19 +211,19 @@ it. And the blind year is whitened by its own year-median PSD, which is
 legitimate for a finished record and an oracle for a streamed one.
 
 Replayed through a simulated year-long telemetry mission with daily
-ground-station passes and that oracle PSD, the same model raises a
-sustained alert — three consecutive alarmed windows — for five of the
-six coalescences, event 2 being only ever alarmed by event 1's windows,
-at 0.74 false-alarm episodes per 30 days, between twenty minutes before
-and eighteen hours after the merger in data time. Read on isolated
-alarms instead, the same replay alarms all six spans at 2.56 per 30 days
-with four alerts 1.9 to 2.7 days early, each a single window
-indistinguishable from the false-alarm population. Under ground-causal
-whitening — the PSD estimated from the delivered record behind each
-window, redone daily — the same protocol keeps the five alerts at 1.16
-per 30 days, two of them later (22 and 42 hours after the merger). That
-mission lost no data, and the coupling excludes delivery holes from
-scoring rather than handling them.
+ground-station passes and whitened causally — the PSD estimated from the
+delivered record behind each window, redone daily — the same model raises
+a sustained alert (three consecutive alarmed windows, a persistence fixed
+on the training year's calibration block) for five of the six
+coalescences, event 2 being only ever alarmed by event 1's windows, at
+1.16 false-alarm episodes per 30 days, between twenty minutes before and
+42 hours after the merger in data time. Read on isolated alarms instead,
+the same replay alarms three coalescences 1.9 to 2.7 days early at 3.71
+per 30 days, which is what chance gives at that rate. Whitened by the
+oracle year-median PSD of the whole blind year, the replay reaches 0.74
+per 30 days with two alerts 20 and 24 hours earlier; that is the bound,
+not the result. The mission lost no data, and the coupling excludes
+delivery holes from scoring rather than handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
@@ -231,7 +231,7 @@ The replay animates: four panels sweep the year in the order the ground
 received the windows, the dotted rule marking how far the delivery lags
 the measurement.
 
-![A year of telemetry replay: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
+![A year of telemetry replay under ground-causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
 
 ### The spread under re-initialisation
 
@@ -333,9 +333,9 @@ blind year's own whitening PSD.
   ``[0, 2π]``, under which the classifier cannot separate a saturated
   feature from the noise floor; the default is now ``[0, π]`` and the
   retraining is pending.
-- **The headline is the best of seven blind evaluations,** and the
-  latencies of the headline replay rest on a whitening PSD of the whole
-  blind year; the ground-causal replay is reported beside it.
+- **The headline is the best of seven blind evaluations.** The replay
+  latencies are quoted under ground-causal whitening; the oracle replay
+  beside them, whitened by the whole blind year, is a bound.
 
 The physical and methodological deficiencies behind these — waveform and
 noise-model scope, the single evaluation record — are listed in

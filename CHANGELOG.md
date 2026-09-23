@@ -31,9 +31,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
   episodes. The lead times of the first release rested on isolated one-
   or two-window alarms up to four days before the merger; under the
   persistence criterion no alert precedes its merger by more than twenty
-  minutes, and the false-alarm rate of the year replay falls from 2.56 to
-  0.74 episodes per 30 days. `alert_latency_table` takes `persistence`
-  and records it.
+  minutes, and the false-alarm rate of the year replay falls from 3.71 to
+  1.16 episodes per 30 days under ground-causal whitening (2.56 to 0.74
+  under the oracle PSD). The value is fixed on the calibration block of
+  the training year: the smallest persistence under one false alert per
+  30 days that keeps every calibration event alerted with a window of
+  margin. `alert_latency_table` takes `persistence` and records it.
 - `min_coverage` bounds the delivered fraction of a window's conditioning
   stretch; the window's own rows must all be on the ground. A window with
   rows of its own missing could previously be emitted by the scheduler
@@ -56,11 +59,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   Welch estimate of the delivered record behind its conditioning stretch,
   refreshed as the record advances, so that no data still in flight
   enters the estimate; the scored-window table records the last row
-  behind each estimate (`psd_row`). The year-median sidecar PSD of the
-  published replay contains, at the first event, nine months of
-  undelivered data; the benchmark page says so and reports the causal
-  replay beside it, which alerts the same five coalescences at 1.16
-  false-alarm episodes per 30 days against 0.74 with the oracle.
+  behind each estimate (`psd_row`). The Sangria configuration replays
+  under it (`psd_mode = "trailing"` in `configs/sangria.toml`), and the
+  benchmark page quotes the
+  causal replay — the same five coalescences at 1.16 false-alarm
+  episodes per 30 days — with the oracle replay of the year-median
+  sidecar PSD, 0.74, beside it as a bound: at the first event that PSD
+  contains nine months of undelivered data.
 - `threshold.toml` files written before the fitting block became
   configurable are read through `migrate_threshold_info!`, which renames
   their `validation_*` rates to `fit_*`.
