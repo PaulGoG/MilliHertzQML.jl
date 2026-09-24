@@ -182,8 +182,8 @@ that moved from 0.826 to 0.737.
 ![Classifier output over the blind year](assets/benchmark_mission_trace.png)
 
 The trace of `q8_b6_pi` over the blind year shows what the protocol is up
-against. The bulk of the noise score rises between day 30 and day 250 and
-falls back by day 350 — the Galactic foreground seen through the
+against. The bulk of the noise score rises between day 200 and day 300
+and falls back by day 350 — the Galactic foreground seen through the
 constellation's rotating antenna pattern — while the five labelled spans
 (beige) carry the peaks that clear the threshold. The threshold works
 because it sits above the annual excursion, not because the events are
