@@ -1,12 +1,12 @@
-written_at = "2026-09-23T13:06:32.020"
+written_at = "2026-09-24T17:07:37.746"
 
 [environment]
-manifest_sha256 = "634e38b8e28c65157be476e07b2c0e8a9fe66ed52b024524084c94c2b736f6bf"
+manifest_sha256 = "d5a7ec49c3eaea738e91a8660b89bd03dae546dd26ffb56d8e98ee7d8ef80ef2"
 active_project = "test/Project.toml"
 
 [figure]
 files = ["loss_survival.pdf", "loss_survival.png"]
-run_id = "loss_sweep"
+run_id = "loss_sweep_pi"
 size_pt = [900, 780]
 px_per_unit = 4
 
@@ -23,6 +23,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.0.0-8-gd38ac42-dirty"
-git_dirty = true
-package_version = "1.0.0"
+git_commit = "v1.0.0-21-g515110b"
+git_dirty = false
+package_version = "1.1.0"

@@ -1,12 +1,12 @@
-written_at = "2026-09-23T13:05:54.224"
+written_at = "2026-09-24T16:58:57.251"
 
 [environment]
-manifest_sha256 = "634e38b8e28c65157be476e07b2c0e8a9fe66ed52b024524084c94c2b736f6bf"
+manifest_sha256 = "d5a7ec49c3eaea738e91a8660b89bd03dae546dd26ffb56d8e98ee7d8ef80ef2"
 active_project = "test/Project.toml"
 
 [figure]
 files = ["telemetry_alerts.pdf", "telemetry_alerts.png"]
-run_id = "telemetry_year"
+run_id = "telemetry_year_oracle_pi"
 size_pt = [900, 950]
 px_per_unit = 4
 
@@ -23,6 +23,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.0.0-8-gd38ac42-dirty"
-git_dirty = true
+git_commit = "v1.0.0-19-g9e165fe"
+git_dirty = false
 package_version = "1.0.0"
