@@ -6,6 +6,18 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-24
+
+The models are retrained on the half-period encoding and the benchmark
+page is rewritten from those runs. The shipped run is `q8_b6_pi`: the
+configuration of the first release, selected again on the validation block
+of the training year by a pre-registered rule, delivering all five blind
+label spans at 1.57 false-alarm episodes per 30 days (fit 1.38, ROC area
+0.807) against 2.47 (fit 2.20, 0.793) before. Every model of the grid, the
+three further seeds and the paper-feature parity run were retrained and
+scored once; the ranking between configurations lies inside the seed
+spread and is reported as unresolved.
+
 ### Changed
 - Features are encoded on `[0, π]` instead of `[0, 2π]`. The encoding
   gate `R_z` is 2π-periodic with `R_z(2π) = −I`, so the full period sent
@@ -16,8 +28,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   (`[training] phase_span`, in units of π) persisted with the scaler;
   artifacts written before it existed load with `2π` and a warning. Every
   result on the benchmark page was produced under the old encoding and is
-  labelled so; the retraining is pending. Models trained from now on are
-  not comparable to the shipped ones.
+  labelled so. The retrained grid ships with this release; the
+  full-period runs of the first release remain only in the page's
+  history.
 - The decision threshold is fitted on the validation block by default
   (`threshold_block = "validation"`); pooling validation and test is an
   opt-in that the Sangria configurations declare. The pooled block never
@@ -27,16 +40,19 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The alert protocol of the telemetry replay requires persistence: an
   alert is raised by the arrival that completes
   `[telemetry] alert_persistence` consecutive alarmed windows (three by
-  default), and shorter runs are neither alerts nor charged as false-alarm
-  episodes. The lead times of the first release rested on isolated one-
+  default; two in the Sangria configuration, fitted on the retrained
+  model's calibration block), and shorter runs are neither alerts nor
+  charged as false-alarm episodes. The lead times of the first release rested on isolated one-
   or two-window alarms up to four days before the merger; under the
   persistence criterion no alert precedes its merger by more than twenty
   minutes, and the false-alarm rate of the year replay falls from 3.71 to
   1.16 episodes per 30 days under ground-causal whitening (2.56 to 0.74
-  under the oracle PSD). The value is fixed on the calibration block of
-  the training year: the smallest persistence under one false alert per
-  30 days that keeps every calibration event alerted with a window of
-  margin. `alert_latency_table` takes `persistence` and records it.
+  under the oracle PSD) for the full-period model, and 6.35 to 1.40
+  (oracle 1.65 to 1.32) for the retrained one at its persistence of two.
+  The value is fixed on the calibration block of the training year: the
+  smallest persistence under one false alert per 30 days that keeps every
+  calibration event alerted with a window of margin. `alert_latency_table`
+  takes `persistence` and records it.
 - `min_coverage` bounds the delivered fraction of a window's conditioning
   stretch; the window's own rows must all be on the ground. A window with
   rows of its own missing could previously be emitted by the scheduler
@@ -78,18 +94,19 @@ versioning follows [Semantic Versioning](https://semver.org/).
   enters the estimate; the scored-window table records the last row
   behind each estimate (`psd_row`). The Sangria configuration replays
   under it (`psd_mode = "trailing"` in `configs/sangria.toml`), and the
-  benchmark page quotes the
-  causal replay — the same five coalescences at 1.16 false-alarm
-  episodes per 30 days — with the oracle replay of the year-median
-  sidecar PSD, 0.74, beside it as a bound: at the first event that PSD
-  contains nine months of undelivered data.
+  benchmark page quotes the causal replay — five coalescences alerted on
+  their own at 1.40 false-alarm episodes per 30 days with the retrained
+  model — with the oracle replay of the year-median sidecar PSD, 1.32,
+  beside it as a bound: at the first event that PSD contains nine months
+  of undelivered data.
 - `threshold.toml` files written before the fitting block became
   configurable are read through `migrate_threshold_info!`, which renames
   their `validation_*` rates to `fit_*`.
 
 ### Fixed
-- The benchmark page discloses the shipped model as the best of seven
-  blind-year evaluations; counts five coalescences detected on their own,
+- The benchmark page selects the shipped model on the training year by
+  a pre-registered rule and reports every run; counts five coalescences
+  detected on their own,
   event 2 being only ever alarmed by event 1's windows; describes the
   classical baseline's refitted scaler and this pipeline's blind-year
   whitening symmetrically; attributes the inspiral-time alerts to the

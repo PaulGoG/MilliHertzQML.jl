@@ -197,37 +197,44 @@ Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fit
 
 On the LISA Data Challenge 2a "Sangria" blind year, the eight-qubit model
 (`configs/experiments/q8_b6.toml`: 8 qubits, 4 re-uploading layers, six
-sub-mHz band powers) detects **all five labelled MBHB events at 2.47
-false-alarm episodes per 30 mission days**, from a decision threshold
-fitted on the pooled held-out block of the *training* year — validation
-and test together, 110 days — and applied without adjustment; the fit
-predicted 2.20. Three things qualify that number, and the [benchmark
-page](docs/src/benchmark.md) sets them out with the evidence. The shipped
-model is the best of seven configurations that were all scored on the
-blind year, so the rate carries a selection effect of the order of the
-seed spread (1.48 to 2.97). Every model was trained with its features
-encoded on the full period ``[0, 2π]`` of the ``R_z`` gate, under which a
-feature saturated above the training range is encoded as one at the
-floor: five of the six blind coalescences score below the threshold at
-the merger itself, and the classifier fires on the inspiral instead. The
-package now encodes on ``[0, π]``; the models have not been retrained on
-it. And the blind year is whitened by its own year-median PSD, which is
+sub-mHz band powers, run `q8_b6_pi`) detects **all five labelled MBHB
+events at 1.57 false-alarm episodes per 30 mission days**, from a decision
+threshold fitted on the pooled held-out block of the *training* year —
+validation and test together, 110 days — and applied without adjustment;
+the fit predicted 1.38. The configuration and seed were chosen on the
+validation block of the training year by a rule written down before the
+blind year was scored, and the [benchmark page](docs/src/benchmark.md)
+reports every run of the grid beside it. Two things qualify the number.
+The spread under re-initialisation alone runs from 1.57 to 8.74 per 30
+days across four seeds of the same configuration, and every other
+configuration's single seed lies inside that spread on the selection
+statistic, so the ranking between configurations is not established. And
+the blind year is whitened by its own year-median PSD, which is
 legitimate for a finished record and an oracle for a streamed one.
+
+Every run encodes its features on the half period ``[0, π]`` of the
+``R_z`` gate. The first release used the full period, under which a
+feature saturated above the training range was encoded as one at the
+floor and five of the six blind coalescences scored below the threshold
+at the merger itself; the retrained model clears the threshold in the
+merger bin of four of the six, and the two most saturated still rely on
+the inspiral excess of the hours before.
 
 Replayed through a simulated year-long telemetry mission with daily
 ground-station passes and whitened causally — the PSD estimated from the
 delivered record behind each window, redone daily — the same model raises
-a sustained alert (three consecutive alarmed windows, a persistence fixed
-on the training year's calibration block) for five of the six
-coalescences, event 2 being only ever alarmed by event 1's windows, at
-1.16 false-alarm episodes per 30 days, between twenty minutes before and
-42 hours after the merger in data time. Read on isolated alarms instead,
-the same replay alarms three coalescences 1.9 to 2.7 days early at 3.71
-per 30 days, which is what chance gives at that rate. Whitened by the
-oracle year-median PSD of the whole blind year, the replay reaches 0.74
-per 30 days with two alerts 20 and 24 hours earlier; that is the bound,
-not the result. The mission lost no data, and the coupling excludes
-delivery holes from scoring rather than handling them.
+a sustained alert (two consecutive alarmed windows, a persistence fixed on
+the training year's calibration block) for five of the six coalescences,
+event 2 being only ever alarmed by event 1's windows, at 1.40 false-alarm
+episodes per 30 days, between twenty minutes before and 42 hours after
+the merger in data time. Read on isolated alarms instead, the same replay
+alarms four coalescences 1.1 to 1.9 days early at 6.35 per 30 days, which
+is what chance gives at that rate. Whitened by the oracle year-median PSD
+of the whole blind year, the replay reaches 1.32 per 30 days with two
+alerts two to three days early on two-window inspiral runs the causal
+whitening does not produce; that is the bound, not the result. The
+mission lost no data, and the coupling excludes delivery holes from
+scoring rather than handling them.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
@@ -239,73 +246,43 @@ the measurement.
 
 ### The spread under re-initialisation
 
-Retrained at three further seeds, each refitting its own threshold: all
-four realisations recover 5 of 5 events and all four stay under the
-requested three per 30 days, but the delivered rate spans 1.48 to 2.97
-while the ROC area moves from 0.7933 to 0.7981. The recall is stable; the
-false-alarm rate carries a factor-of-two uncertainty from initialisation
-alone.
+Trained at three further seeds inside the same grid, each refitting its
+own threshold: all four realisations recover 5 of 5 events, two of the
+four stay under the requested three per 30 days, and the delivered rate
+spans 1.57 to 8.74 while the ROC area moves from 0.807 to 0.827 in the
+opposite direction. The recall is stable; the false-alarm rate carries a
+factor-of-several uncertainty from initialisation alone, and the seed
+whose threshold fitted lowest is the one that does not transfer.
 
 ![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](docs/src/assets/benchmark_seed_spread.png)
 
 ### What a lossy link costs
 
-The replayed mission delivered every batch, so a second study asked what
-happens when it does not. Five 30-day missions over the same payload
-window — days 65 to 95 of the blind year, carrying two coalescences — and
-the same pass schedule differ only in the channel, which drops a fraction
-of transfers for good:
+Five 30-day missions over the same payload window, with a channel that
+drops a fraction of its transfers for good: a window is scored only once
+its whole conditioning stretch of 410 consecutive batches has reached the
+ground, so the scorable fraction falls as `(1 − p)^410` and collapses
+once the loss rate exceeds about 0.2 %. At half a per cent the replay
+scores a tenth of the windows and still alerts on both coalescences of
+the window; at one per cent it scores nothing. The requirement is on
+permanent loss; retransmitted batches cost nothing.
 
-| Permanent batch loss | 0 | 0.14 % | 0.45 % | 1.01 % | 2.99 % |
-|---|---|---|---|---|---|
-| Windows scored | 4946 | 2653 | 563 | 0 | 0 |
-| Events detected | 2 of 2 | 2 of 2 | 0 of 2 | 0 of 2 | 0 of 2 |
+![Windows a replay can score, and the events it still detects, against the permanent batch loss of the link](docs/src/assets/benchmark_loss_survival.png)
 
-**Half a per cent of permanent loss costs both events, and one per cent
-leaves nothing to score at all.** The cause is not the loss rate but the
-conditioning: a window is scored only once its whole conditioning stretch
-has arrived — twenty window lengths on each side, 410 consecutive batches
-— so the tolerable loss rate is of order one loss per stretch, 1/410 ≈
-0.24 %, and the collapse sets in there. Above it a clean stretch is a
-rare event rather than a typical one, which is why the measured survival
-falls below the independent-batch estimate exactly where that estimate
-stops being the right summary.
-
-![Windows a replay can score, and events it still detects, against the permanent batch loss of the link](docs/src/assets/benchmark_loss_survival.png)
-
-This is the first statement this repository can make about gaps, and it
-is a limit rather than a result: it says the streaming detector as
-configured needs a near-lossless link, and that shortening the
-conditioning kernel — the smoothed whitening PSD deferred to v1.1 — is
-the precondition for operating on a real one, not a refinement of it.
-
-Against the published method, the comparison is like for like: same blind
-year, same A channel, same 1000-sample windows at step 100, same label
-span. Run with the feature set and four-qubit register of Isfan et al.
-(`configs/sangria_paper.toml`), this pipeline reproduces their result —
-five of six blind mergers, the missed one being the lowest-SNR source, at
-a peak score of 0.550 against a 0.584 threshold. Whitening the record and
-partitioning the milliHertz decade into six bands recovers that event
-(peak 0.892 against a 0.826 threshold) and takes the false-alarm rate
-from 17.7 to 2.47 episodes per 30 days. The paper reports no false-alarm
-rate, so its five of six carries no operating point; the improvement here
-is in the conditioning, not in the circuit.
-
-Two results of the benchmark are worth more than the numbers. The ROC area
-ranks the seven models tried in almost the opposite order to their
-delivered false-alarm rate, because the two observation years' noise
-distributions agree only in the far tail and an operating point placed
-below it inherits the annual modulation of the Galactic foreground. And
-the conditioning is not causal: the whitening is zero-phase, so a window
-scored the moment its samples arrive finds two of five events, and an
-alert carries an irreducible look-ahead of 1.16 days. Both are set out,
-with the evidence, in the [benchmark page](docs/src/benchmark.md), which
-also states where a 29.6 k-parameter classical baseline does better — and
-what that comparison rests on, since the baseline is quoted from the
-predictions shipped with the challenge material rather than reproduced,
-and both classifiers see a record renormalised towards the training one,
-the baseline through a refitted scaler and this pipeline through the
-blind year's own whitening PSD.
+Against the published method, reproduced on the same years and encoding
+with its own raw-periodogram features and four-qubit register
+(`configs/sangria_paper.toml`), the band features cut the false-alarm
+rate from 31.7 to 1.57 episodes per 30 days and take the loudest merger
+from a margin of 0.002 above the threshold to well clear of it. The paper
+reports no false-alarm rate. Against the classical multilayer perceptron
+shipped with the challenge material, which detects all six coalescences
+with no false alarm at all on 29,569 parameters, the 64-parameter circuit
+does not win, and the benchmark page says so, together with the reasons
+the comparison is indicative rather than decided: the baseline is quoted
+from its shipped predictions, not reproduced, and both classifiers see a
+record renormalised towards the training one, the baseline through a
+refitted scaler and this pipeline through the blind year's own whitening
+PSD.
 
 ## Limitations
 
@@ -313,33 +290,33 @@ blind year's own whitening PSD.
   false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Read the recall as a result, not a rate.
 - **Four initialisations, not a distribution.** The shipped configuration
-  was retrained at three further seeds: all four recover 5 of 5 events and
-  all four land under the requested rate, but the delivered false-alarm
-  rate spans 1.48 to 2.97 per 30 days while the ROC area moves by half a
-  per cent. Read the recall as stable and the false-alarm rate as carrying
-  a factor-of-two uncertainty from initialisation alone. The rest of the
-  model grid remains single-run at `seed = 9999`.
+  was trained at four seeds: all recover 5 of 5 events, two of four land
+  under the requested rate, and the delivered false-alarm rate spans 1.57
+  to 8.74 per 30 days. Read the recall as stable and the false-alarm rate
+  as carrying a factor-of-several uncertainty from initialisation alone.
+  The rest of the grid remains single-run at `seed = 9999`, inside that
+  spread.
 - **Single channel.** Only A is used. E and T carry independent
   information and would allow a null-channel veto.
 - **The link must be near-lossless.** The Sangria products are gapless and
   the year-long mission lost no data. The coupling discards windows that
   cross a delivery hole instead of scoring them, and because a window
-  needs its whole conditioning stretch, the measured tolerance is about
-  0.2 % of permanently lost batches; at 0.45 % both events of the 30-day
-  study are missed and at 1 % nothing is scorable. The classifier has also
-  never been trained on gapped data. Gap-tolerant conditioning is planned,
-  not implemented.
+  needs its whole conditioning stretch, the scorable record collapses
+  above about 0.2 % of permanently lost batches; at half a per cent a
+  tenth of the windows survive and the two coalescences of the 30-day
+  study are still alerted, at 1 % nothing is scorable. The classifier has
+  also never been trained on gapped data. Gap-tolerant conditioning is
+  planned, not implemented.
 - **The threshold comes from the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here spans one year, in one direction.
-- **The shipped models encode on the full period.** They were trained
-  before the encoding span became a configuration key and load with
-  ``[0, 2π]``, under which the classifier cannot separate a saturated
-  feature from the noise floor; the default is now ``[0, π]`` and the
-  retraining is pending.
-- **The headline is the best of seven blind evaluations.** The replay
-  latencies are quoted under ground-causal whitening; the oracle replay
-  beside them, whitened by the whole blind year, is a bound.
+- **The encoding is mitigated, not solved.** On ``[0, π]`` a clamped
+  feature is a state distinct from the floor, but every clamped feature is
+  the same state whatever its magnitude; the two most saturated
+  coalescences still score below the threshold in their merger bin.
+- **The oracle replay is a bound.** The replay latencies are quoted under
+  ground-causal whitening; the oracle replay beside them, whitened by the
+  whole blind year, is a bound.
 
 The physical and methodological deficiencies behind these — waveform and
 noise-model scope, the single evaluation record — are listed in
@@ -433,7 +410,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {1.0.0},
+  version = {1.1.0},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }

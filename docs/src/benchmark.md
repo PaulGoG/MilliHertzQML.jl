@@ -6,26 +6,30 @@ second, blind year for evaluation. It is the honest result, including the
 respects in which a small classical network does better.
 
 Headline: on the blind year the eight-qubit model detects **all five
-labelled MBHB events at 2.47 false-alarm episodes per 30 mission days**,
-from a decision threshold fitted on held-out data of the *training* year
-and applied without adjustment. The threshold's own prediction for that
-rate was 2.20, so the operating point transfers.
+labelled MBHB events at 1.57 false-alarm episodes per 30 mission days**
+(19 episodes over 364 days), from a decision threshold fitted on held-out
+data of the *training* year and applied without adjustment. The
+threshold's own prediction for that rate was 1.38, so the operating point
+transfers. The model was chosen on the validation block of the training
+year before the blind year was scored, and it is the same configuration
+and seed that shipped with the first release, retrained on the
+half-period encoding.
 
 Three qualifications belong next to the headline rather than among the
-caveats. The shipped model is the best of seven configurations that were
-all scored on the blind year, so the 2.47 carries a selection effect; the
-spread under re-initialisation alone, measured below, runs from 1.48 to
-2.97. Every run on this page encodes its features on the full period
-``[0, 2\pi]`` of the ``R_z`` gate, under which the two ends of the
-encoding interval prepare the same state; the consequence — the
-classifier is blind at the merger itself and fires on the inspiral — is
-measured in the section on the encoding below. And the blind year is
-whitened by its own Welch estimate, a label-free statistic of the record
-under evaluation — legitimate for a finished record and an oracle for a
-streamed one, which is why the telemetry replay below is quoted under
-ground-causal whitening, with the oracle replay beside it as a bound. The
-package now encodes on ``[0, \pi]``; the retraining that will replace
-these numbers has not been made, and the page reports what was measured.
+caveats. The configuration was selected by a pre-registered statistic on
+the training year, so the 1.57 carries no selection on the blind year; but
+the spread under re-initialisation alone, measured below, runs from 1.57
+to 8.74, and every other configuration of the grid falls inside that
+spread, so the ranking *between* configurations is not resolved. Every
+run on this page encodes its features on the half period ``[0, \pi]`` of
+the ``R_z`` gate; the merger windows of the loud coalescences, which the
+full-period encoding folded onto the noise floor, now score above the
+threshold for four of the six, and still not for the two most saturated
+(the encoding section). And the blind year is whitened by its own Welch
+estimate, a label-free statistic of the record under evaluation —
+legitimate for a finished record and an oracle for a streamed one, which
+is why the telemetry replay below is quoted under ground-causal
+whitening, with the oracle replay beside it as a bound.
 
 ## Data and labels
 
@@ -68,8 +72,8 @@ validation block, and the **decision threshold is fitted on validation and
 test pooled** — the held-out block, 110 days (`threshold_block = "held_out"`,
 the opt-in the Sangria configurations declare; the package default is the
 validation block). The blind year enters twice: label-free, through the
-Welch estimate that whitens it, and at evaluation, where every
-configuration of the grid was scored on it.
+Welch estimate that whitens it, and at evaluation, where every model is
+scored once.
 
 **Threshold.** The `far` criterion places the operating point of an alert
 trigger: among the candidates whose false-alarm episode rate does not
@@ -83,17 +87,25 @@ upward scan would accept.
 
 **Why the pooled block.** The fitted rate is a Poisson count of the alarm
 episodes its block charges, so its relative error is the inverse square
-root of that count. Across the seven models below, a 55-day validation
-block charges one to five episodes — `q6_b4` fits its operating point on a
-single one — which is not enough to place a rate. Pooling validation with
-test doubles the exposure. It does not leak into the model — the test
-block is scored once after training and enters neither model selection
-nor early stopping — but it costs the test block's independence: its
-operating-point metrics are then in-sample, and the only independent
-check of the operating point is the blind year. That is why the package
-default is the validation block alone (`threshold_block = "validation"`)
-and the pooled block is an opt-in for records that come with a separate
-blind product, as this one does.
+root of that count. Across the grid below, a 55-day validation block
+charges four to ten episodes, which is not enough to place a rate.
+Pooling validation with test doubles the exposure. It does not leak into
+the model — the test block is scored once after training and enters
+neither model selection nor early stopping — but it costs the test
+block's independence: its operating-point metrics are then in-sample, and
+the only independent check of the operating point is the blind year. That
+is why the package default is the validation block alone
+(`threshold_block = "validation"`) and the pooled block is an opt-in for
+records that come with a separate blind product, as this one does.
+
+**Selection.** Which configuration and seed ship was fixed on the training
+year, by a rule written down before any blind score existed: the
+false-alarm episode count at the fitted threshold on the validation block,
+with every event of the block recovered as a constraint; counts within
+one Poisson standard deviation of each other are ties, broken by the
+validation ROC area and then by the smaller circuit. The blind year is
+then scored once per model and every model is reported, whatever its
+blind rank.
 
 **Metrics.** An event is a contiguous run of positive labels and counts as
 detected when any window inside it alarms. A false-alarm episode is a
@@ -102,94 +114,108 @@ operational rate is episodes per 30 mission days. Window-level precision,
 recall and ROC area are reported too, but the event-level pair is the
 operating point.
 
-**Encoding.** Every run on this page maps its features onto ``[0, 2\pi]``
-before the ``R_z`` encoding gate. The runs predate the configuration key
-that now fixes the span (`[training] phase_span`, in units of ``\pi``),
-and their artifacts load with the full period they were trained on.
-``R_z(2\pi) = -I`` is a global phase, so a feature clamped at the upper
-scaler bound is encoded exactly as one at the lower bound, and by
-continuity the response returns to its floor value as a feature
-approaches the bound. Measured with the shipped model on the blind year,
-in the six-hour bin holding each coalescence, from the persisted model
-and feature table:
+**Encoding.** Every run on this page maps its features onto ``[0, \pi]``
+before the ``R_z`` encoding gate (`[training] phase_span = 1.0`). The
+first release used the full period ``[0, 2\pi]``: ``R_z(2\pi) = -I`` is a
+global phase, so a feature clamped at the upper scaler bound was encoded
+exactly as one at the lower bound, and by continuity the response
+returned to its floor value as a feature approached the bound. At the
+coalescence itself the band powers exceed the scaler bound by two to
+three orders of magnitude, and under the full period five of the six
+blind coalescences scored below the threshold in the six-hour bin holding
+the merger. Measured with the retrained model, from the persisted model
+and feature table, in that same bin:
 
-| Event | Merger-window SNR | Peak band power / scaler upper bound | Peak score in the bin |
-|---|---|---|---|
-| 1 | 598 | 129 | 0.738 |
-| 2 | 690 | 106 | 0.708 |
-| 3 | 1312 | 788 | 0.682 |
-| 4 | 799 | 158 | 0.764 |
-| 5 | 272 | 109 | **0.861** |
-| 6 | 723 | 193 | 0.585 |
+| Event | Merger-window SNR | Features at the upper bound (mean per window) | Peak band power / scaler upper bound | Peak score, ``[0, 2\pi]`` model (threshold 0.826) | Peak score, ``[0, \pi]`` model (threshold 0.737) |
+|---|---|---|---|---|---|
+| 1 | 598 | 1.1 | 129 | 0.738 | **0.852** |
+| 2 | 690 | 1.1 | 106 | 0.708 | **0.795** |
+| 3 | 1312 | 2.7 | 788 | 0.682 | 0.703 |
+| 4 | 799 | 1.2 | 158 | 0.764 | **0.849** |
+| 5 | 272 | 0.9 | 109 | **0.861** | **0.913** |
+| 6 | 723 | 1.2 | 193 | 0.585 | 0.730 |
 
-Five of the six coalescences score below the 0.826 threshold at the
-merger; the only one above it is the quietest. The scores peak 12 to 36
-hours earlier, where the band powers sit at 0.4 to 0.8 of the upper
-bound. The detector is therefore one of intermediate sub-mHz excess, and
-its efficiency is not monotone in signal strength. The package default is
-now ``[0, \pi]`` (`phase_span = 1.0`), the widest interval whose two ends
-are distinct states; the models on this page have not been retrained on
-it, and reproducing them needs `phase_span = 2.0`.
+The half period lifts the merger bin above the threshold for four of the
+six coalescences. The two that stay below are the two most saturated:
+event 3, the loudest, has on average 2.7 of its six band powers clamped at
+the bound in that bin, and event 6 1.2. A clamped feature is now a state
+distinct from the floor, but every clamped feature is the *same* state
+whatever its magnitude, and a window with several bands clamped at once is
+a pattern the training year offers few examples of. The scores still peak
+12 to 30 hours before the merger (0.91 to 0.95 for every event), where the
+band powers sit at 0.4 to 0.8 of the bound: the detector remains one of
+intermediate sub-mHz excess, with a merger response that is now mostly,
+not entirely, above threshold.
 
 ## Results
 
-Seven models, all trained on the same training year, all evaluated on the
-blind year with the threshold carried over unchanged.
+Ten runs, all trained on the same training year with the same protocol,
+all evaluated once on the blind year with the threshold carried over
+unchanged. The validation column is the selection statistic; the blind
+columns were computed after the selection was recorded.
 
-| Run | Qubits × layers, features | Epochs | Threshold | Blind events | **Blind FA / 30 d** | Blind AUC |
-|---|---|---|---|---|---|---|
-| `sangria02` | 4 × 4, 2 bands | 28 | 0.856 | 3 / 5 | 1.07 | 0.7911 |
-| `q4_l6` | 4 × 6, 2 bands | 15 | 0.758 | **5 / 5** | 12.29 | 0.7840 |
-| `q6_b4` | 6 × 4, 4 bands | 26 | 0.706 | **5 / 5** | 7.01 | 0.7997 |
-| **`q8_b6`** | **8 × 4, 6 bands** | 35 | 0.826 | **5 / 5** | **2.47** | 0.7933 |
-| `q8_b6_l6` | 8 × 6, 6 bands | 50 | 0.857 | **5 / 5** | 2.72 | 0.8046 |
-| `q6_b4_w2000` | 6 × 4, 4 bands, 2000-sample windows | 18 | 0.714 | **5 / 5** | 27.55 | 0.8132 |
-| `q6_b4_noweight` | 6 × 4, 4 bands, unweighted loss | 39 | 0.554 | **5 / 5** | 5.20 | **0.8205** |
+| Run | Qubits × layers, features | Epochs | Threshold | Validation episodes | Blind events | **Blind FA / 30 d** | Blind AUC |
+|---|---|---|---|---|---|---|---|
+| `sangria_pi` | 4 × 4, 2 bands | 37 | 0.816 | 9 | **5 / 5** | 2.64 | 0.8101 |
+| `q4_l6_pi` | 4 × 6, 2 bands | 37 | 0.844 | 10 | 4 / 5 | 1.98 | 0.8139 |
+| `q6_b4_pi` | 6 × 4, 4 bands | 24 | 0.765 | 8 | **5 / 5** | 5.53 | 0.7919 |
+| `q6_b4_noweight_pi` | 6 × 4, 4 bands, unweighted loss | 50 | 0.426 | 7 | **5 / 5** | 9.81 | 0.8115 |
+| `q6_b4_w2000_pi` | 6 × 4, 4 bands, 2000-sample windows | 36 | 0.618 | 10 | **5 / 5** | 26.39 | 0.8071 |
+| **`q8_b6_pi`** | **8 × 4, 6 bands** | 30 | 0.737 | **4** | **5 / 5** | **1.57** | 0.8065 |
+| `q8_b6_pi_s1009` | 8 × 4, 6 bands, seed 1009 | 20 | 0.740 | 10 | **5 / 5** | 2.06 | 0.8110 |
+| `q8_b6_pi_s2027` | 8 × 4, 6 bands, seed 2027 | 36 | 0.643 | 10 | **5 / 5** | 8.74 | **0.8274** |
+| `q8_b6_pi_s3041` | 8 × 4, 6 bands, seed 3041 | 29 | 0.764 | 7 | **5 / 5** | 3.30 | 0.8129 |
+| `q8_b6_l6_pi` | 8 × 6, 6 bands | 50 | 0.716 | 9 | **5 / 5** | 4.78 | 0.8268 |
 
-Every model with a partitioned sub-mHz band set reaches full event recall;
-the two-band four-qubit baseline does not. Of the seven, **only `q8_b6`
-and `q8_b6_l6` meet the three-per-30-days target**. The table is seven
-evaluations on the blind year and the shipped model is the best of them,
-so its 2.47 is a minimum over seven draws; the difference to the 2.72 of
-`q8_b6_l6` lies inside the 1.48 to 2.97 that re-initialisation alone
-produces, so the six extra layers can be said to buy nothing measurable,
-not to cost anything.
+Every run but one recovers all five label spans — under the full-period
+encoding the two-band four-qubit baseline found three of them, and now
+finds five at 2.64 per 30 days. Four runs meet the three-per-30-days
+target on the blind year: `q8_b6_pi`, its seed 1009, `sangria_pi`, and
+`q4_l6_pi`, which misses an event. The selection rule picked `q8_b6_pi`
+with four validation episodes against seven for the runner-up, three
+apart, outside the tie band of two, and it is also the best operating
+point on the blind year; that agreement is a result, not a guarantee.
+The same configuration under the full period delivered 2.47 at a ROC
+area of 0.793; the retrained one delivers 1.57 at 0.807, with a threshold
+that moved from 0.826 to 0.737.
 
 ![Classifier output over the blind year](assets/benchmark_mission_trace.png)
 
-The trace of `q8_b6` over the blind year shows what the protocol is up
-against. The bulk of the noise score rises by half between day 30 and day
-250 and falls back by day 350 — the Galactic foreground seen through the
+The trace of `q8_b6_pi` over the blind year shows what the protocol is up
+against. The bulk of the noise score rises between day 30 and day 250 and
+falls back by day 350 — the Galactic foreground seen through the
 constellation's rotating antenna pattern — while the five labelled spans
 (beige) carry the peaks that clear the threshold. The threshold works
-because it sits *above* the annual excursion, not because the events are
+because it sits above the annual excursion, not because the events are
 loud in absolute terms.
 
 ![Event recall and false alarms against the threshold](assets/benchmark_threshold_sweep.png)
 
 The blind year's operating characteristic, drawn post hoc: event recall
 holds at 1 across the whole range up to the fitted threshold, so the
-operating point is limited by the false-alarm rate alone. The rate crosses
-the three-per-30-days target just below 0.826, which is where the fit —
-made on the training year, without sight of this curve — placed it.
+operating point is limited by the false-alarm rate alone, and the fit —
+made on the training year, without sight of this curve — placed it where
+the rate crosses the target with room to spare.
 
 ### What the table is really showing
 
-Order the same models by ROC area and the ranking nearly inverts. The two
-best discriminators are the two worst operating points. The fitted
-threshold orders the delivered rate better than the area does, though
-with six single-seed models the rank correlation (−0.43) is nowhere near
-significant and the raw thresholds of different circuits are not
-commensurable; the table is shown for the pattern, not as a test:
+Order the same runs by ROC area and the ranking inverts. The shipped model
+is ninth of ten by area and first by operating point; the best area,
+seed 2027 of the same configuration, delivers 8.74 false alarms per 30
+days:
 
 | Run | Blind AUC | Fitted threshold | Blind FA / 30 d |
 |---|---|---|---|
-| `q6_b4_noweight` | **0.8205** | 0.554 | 5.20 |
-| `q6_b4_w2000` | 0.8132 | 0.714 | **27.55** |
-| `q8_b6_l6` | 0.8046 | 0.857 | 2.72 |
-| `q6_b4` | 0.7997 | 0.706 | 7.01 |
-| `q8_b6` | 0.7933 | 0.826 | **2.47** |
-| `q4_l6` | 0.7840 | 0.758 | 12.29 |
+| `q8_b6_pi_s2027` | **0.8274** | 0.643 | 8.74 |
+| `q8_b6_l6_pi` | 0.8268 | 0.716 | 4.78 |
+| `q4_l6_pi` | 0.8139 | 0.844 | 1.98 (4 / 5) |
+| `q8_b6_pi_s3041` | 0.8129 | 0.764 | 3.30 |
+| `q6_b4_noweight_pi` | 0.8115 | 0.426 | 9.81 |
+| `q8_b6_pi_s1009` | 0.8110 | 0.740 | 2.06 |
+| `sangria_pi` | 0.8101 | 0.816 | 2.64 |
+| `q6_b4_w2000_pi` | 0.8071 | 0.618 | **26.39** |
+| **`q8_b6_pi`** | 0.8065 | 0.737 | **1.57** |
+| `q6_b4_pi` | 0.7919 | 0.765 | 5.53 |
 
 The reason is a property of the data, not of the classifier. The
 classifier's noise score is modulated over the year with a period of one
@@ -197,42 +223,41 @@ year and the same phase in both records: the Galaxy sits at a fixed sky
 position, LISA's response to it is modulated by the constellation's
 rotation, and a single year-median Welch estimate whitens the record
 correctly only on average. The two years' noise distributions therefore
-agree only in the far tail. Measuring the ratio of blind to training-year
-noise-window exceedance at a given score:
+agree only in the tail. Measuring the ratio of blind to training-year
+noise-window exceedance at a given score, for the two runs whose
+training-year scores were also computed:
 
-| Model | 0.65 | 0.70 | 0.75 | 0.80 | 0.85 |
-|---|---|---|---|---|---|
-| `sangria02` | 1.91 | 2.07 | 1.85 | 1.17 | 0.53 |
-| `q4_l6` | 2.26 | 2.67 | 3.48 | — | — |
-| `q6_b4` | 2.91 | 3.21 | 8.66 | — | — |
-| `q8_b6` | 1.79 | 1.66 | 1.51 | 1.22 | **1.00** |
+| Model | 0.55 | 0.60 | 0.65 | 0.70 | 0.75 | 0.80 | 0.85 |
+|---|---|---|---|---|---|---|---|
+| `sangria_pi` (threshold 0.816) | 1.60 | 1.90 | 2.02 | 1.74 | 1.10 | 0.70 | 0.54 |
+| `q8_b6_pi` (threshold 0.737) | 1.51 | 1.36 | 1.11 | 0.93 | 0.98 | 1.06 | — |
 
-(`—`: the training year has no noise window that high at all.)
+(`—`: the blind year has no noise window that high.)
 
-Below about 0.80 the blind year produces one and a half to three times as
-many exceedances as the training year; above it the two agree. A model
-whose training-year noise tail does not reach 0.80 cannot have its
-operating point placed there, so it is forced into the shoulder where the
-years disagree, and it delivers roughly the factor by which they disagree.
-The ROC area is a rank statistic over the whole distribution and is blind
-to where the tail ends, which is why it selects the worst model of the
-seven.
+Below about 0.65 the blind year produces one and a half to two times as
+many noise exceedances as the training year; the shipped model's
+threshold sits at 0.737, where the ratio is within a few per cent of one,
+and its fitted rate transfers (1.38 predicted, 1.57 delivered). The
+two-band baseline's tail crosses unity only above 0.75 and its threshold
+lands at 0.816, in the region where the blind year is *quieter* than the
+training year, which is why it transfers as well. A model whose threshold
+falls in the shoulder delivers roughly the factor by which the years
+disagree there. The ROC area is a rank statistic over the whole
+distribution and is blind to where the tail ends, which is why it favours
+the runs with the worst operating points.
 
 Six sub-mHz bands help twice over: they compress the annual excursion of
-the noise tail (peak-to-trough of the 99.9 % quantile falls from 0.40 for
-two bands to 0.22) and they lift the event peaks above it, so the
-threshold can sit in the stable region. The mechanism is that a contrast
-between two band powers that are modulated together is invariant to the
-modulation, and a single wide band offers no contrast to form.
-
-The mechanism — a contrast between band powers that are modulated
-together is invariant to the modulation — is what the exceedance table
-supports. Whether the ordering of the models generalises past this data
-set is not something one record and six single-seed models can
-establish. What does follow is the check itself: an operating point
-measured on one observation record means nothing on the next unless it
-sits where the two records' noise tails agree, and no amount of ROC area
-substitutes for verifying that.
+the noise tail and they lift the event peaks above it, so the threshold
+can sit in the stable region. The mechanism is that a contrast between two
+band powers that are modulated together is invariant to the modulation,
+and a single wide band offers no contrast to form. Whether the ordering of
+the configurations generalises past this data set is not something one
+record and single-seed runs can establish — the seed spread of the shipped
+configuration on the selection statistic, four to ten episodes, covers
+every other configuration's single seed. What does follow is the check
+itself: an operating point measured on one observation record means
+nothing on the next unless it sits where the two records' noise tails
+agree, and no amount of ROC area substitutes for verifying that.
 
 ## Against the published method
 
@@ -240,52 +265,56 @@ Everything above uses whitened sub-mHz band powers, which the paper this
 pipeline follows does not: Isfan et al. take the spectral entropy and the
 mean, standard deviation and maximum of the raw window periodogram, with
 no filtering and no whitening, on a four-qubit register. That
-configuration ships as `configs/sangria_paper.toml` and was run on the same
-two years, so the published result can be compared against a reproduction
-of its own method rather than only against a different one.
+configuration ships as `configs/sangria_paper.toml` and was retrained on
+the same two years and the same encoding (`sangria_paper_pi`), so the
+published result can be compared against a reproduction of its own method
+rather than only against a different one.
 
-The reproduction lands where the paper does. Isfan et al. report five of
-six blind mergers, the missed one being the lowest-SNR source. The parity
-run detects four of the five label spans — and the span it misses is the
-one holding **event 5, the lowest-SNR merger of the blind year** at a
-merger-window SNR of 272 against 598 to 1312 for the rest:
+Isfan et al. report five of six blind mergers, the missed one being the
+lowest-SNR source. The retrained parity run reaches all five label spans,
+one of them by a margin of 0.002 in score — and that span holds **event
+3, the loudest merger of the blind year**, at a merger-window SNR of 1312
+against 272 for the quietest:
 
-| Span | Events 1+2 | Event 3 | Event 4 | **Event 5** | Event 6 |
+| Span | Events 1+2 | **Event 3** | Event 4 | Event 5 | Event 6 |
 |---|---|---|---|---|---|
-| Peak score, paper features | 0.740 | 0.664 | 0.693 | **0.550** | 0.805 |
-| Peak score, band features | 0.905 | 0.885 | 0.889 | **0.892** | 0.923 |
-| Threshold | 0.584 / 0.826 | | | | |
+| Peak score, paper features | 0.626 | **0.559** | 0.652 | 0.595 | 0.729 |
+| Peak score, band features | 0.949 | 0.930 | 0.944 | 0.913 | 0.923 |
+| Threshold | 0.557 / 0.737 | | | | |
 
-Under the paper's features the missed event peaks at 0.550 against a
-fitted threshold of 0.584 — a marginal miss, which is consistent with the
-paper finding it the one source its classifier could not reach. Under
-band features the same event peaks at 0.892 against a threshold of 0.826
-and is recovered with room to spare.
+Under the paper's features the loudest event peaks at 0.559 against a
+fitted threshold of 0.557: the raw periodogram moments saturate hardest
+where the signal is strongest, and without whitening the feature scaler
+clamps them. Under band features the same event peaks at 0.930 against a
+threshold of 0.737. (Under the full-period encoding the parity run missed
+the quietest event instead, which is where the paper's own miss lies;
+the encoding moved the marginal case from the quiet end to the loud end.)
 
 What the reproduction adds is the cost the paper does not report. It
 publishes no false-alarm rate, so "five of six" has no operating point
 attached to it. Fitted here by the same criterion as every other run in
-this document, the paper's feature set delivers **17.7 false-alarm
-episodes per 30 days** — 215 episodes over the blind year, an alarm every
-1.7 days — against 2.47 for `q8_b6`. Its calibration also fails to
-transfer: the fit predicted 0.275 per 30 days and the blind year returned
-17.7, a factor of 64, on a held-out block whose AUC is 0.535, barely above
-chance.
+this document, the paper's feature set delivers **31.7 false-alarm
+episodes per 30 days** — 385 episodes over the blind year, an alarm
+almost every day — against 1.57 for `q8_b6_pi`. Its calibration also
+fails to transfer: the fit predicted 1.38 per 30 days and the blind year
+returned 31.7, a factor of 23, on a held-out block whose AUC is 0.561,
+barely above chance.
 
-| | Paper features, 4 × 4 | Band features, 8 × 4 (`q8_b6`) |
+| | Paper features, 4 × 4 | Band features, 8 × 4 (`q8_b6_pi`) |
 |---|---|---|
 | Trainable parameters | 32 | 64 |
-| Events | 4 / 5 spans (misses the lowest-SNR merger) | **5 / 5** |
-| False alarms / 30 d | 17.73 | **2.47** |
-| Blind AUC | 0.635 | 0.793 |
-| Held-out AUC | 0.535 | 0.682 |
+| Events | 5 / 5 spans (one at a margin of 0.002) | **5 / 5** |
+| False alarms / 30 d | 31.7 | **1.57** |
+| Blind AUC | 0.666 | 0.807 |
+| Held-out AUC | 0.561 | 0.702 |
 
 So the conclusion is not that the quantum classifier was improved: the
 register and the ansatz are doing what they did before. **The conditioning
 is what buys the operating point.** Whitening the record and partitioning
-the milliHertz decade into six bands recovers the event the published
-method misses and cuts the false-alarm rate by a factor of seven, at the
-same parameter budget the paper reports for its own circuit.
+the milliHertz decade into six bands cuts the false-alarm rate by a factor
+of twenty and takes the loudest event from the edge of the threshold to
+well above it, at twice the parameter budget the paper reports for its
+own circuit.
 
 ## Against a classical baseline
 
@@ -327,19 +356,19 @@ What the shipped artifacts do establish, by inspection:
 That last point has to be weighed symmetrically. The operating-point
 result above says the two observation years differ enough that a
 threshold carried between them lands in a shoulder where their noise
-distributions disagree threefold — that year-to-year shift is the hard
-part of this problem. Refitting the scaler on the blind year absorbs part
-of that shift, and so does the whitening of the variational classifier:
-its band powers are normalised by the blind year's own Welch estimate,
-band by band, which is likewise a label-free statistic of the record
-under evaluation, and whitening it with the training year's estimate
-instead detects nothing (see the telemetry section). Both classifiers
-are therefore evaluated on a record renormalised towards the one they
-trained on, by different means; the feature scaler of the variational
-classifier, fitted on the training year, is the one statistic carried
-across unchanged. How much of the zero false-alarm rate the refit buys
-cannot be settled from the shipped files; it is a reason to read the
-comparison as indicative rather than decided.
+distributions disagree twofold — that year-to-year shift is the hard part
+of this problem. Refitting the scaler on the blind year absorbs part of
+that shift, and so does the whitening of the variational classifier: its
+band powers are normalised by the blind year's own Welch estimate, band
+by band, which is likewise a label-free statistic of the record under
+evaluation, and whitening it with the training year's estimate instead
+detects nothing (see the telemetry section). Both classifiers are
+therefore evaluated on a record renormalised towards the one they trained
+on, by different means; the feature scaler of the variational classifier,
+fitted on the training year, is the one statistic carried across
+unchanged. How much of the zero false-alarm rate the refit buys cannot be
+settled from the shipped files; it is a reason to read the comparison as
+indicative rather than decided.
 
 The VQC carries 8 qubits and 4 re-uploading layers, 64 parameters against
 the perceptron's 29,569 — a ratio of 460 — on one projection against five
@@ -347,10 +376,10 @@ and four features against ten.
 
 ![Window-level receiver operating characteristic](assets/benchmark_roc_curve.png)
 
-The window-level ROC of `q8_b6` on the blind year is shown for
-completeness and should be read with the warning above: at 0.793 it is the
-*fifth* best of the seven models and the one that transfers. The operating
-point lives at a false-positive rate of ``5 \times 10^{-4}``, in the corner
+The window-level ROC of `q8_b6_pi` on the blind year is shown for
+completeness and should be read with the warning above: at 0.807 it is the
+*ninth* best of the ten runs and the one that transfers. The operating
+point lives at a false-positive rate of a few ``10^{-4}``, in the corner
 of this plot where the curve carries almost no resolution — which is
 precisely why the area under it is the wrong summary.
 
@@ -385,138 +414,141 @@ modulated foreground makes the two records' noise genuinely different.
 A streamed mission therefore has to estimate the PSD of the record it is
 scoring from the part of it that has reached the ground. The replay
 quoted here does so (`psd_mode = "trailing"`, the setting of
-`configs/sangria.toml`): each window is whitened by the Welch median of the last
-30 days of delivered record behind its conditioning stretch, redone once
-a day, and by the training year's PSD until one 65,536-sample segment is
-on the ground (the first 446 windows). The estimate the batch benchmark
-uses instead — `psd_sidecar`, the year-median Welch spectrum of the whole
-blind year — is an oracle for a streamed mission: at the first event, on
-day 78, it contains nine months of data still in flight. The same mission
-was replayed under it as well, and that replay is reported beside the
-causal one as the bound a detector would reach if it knew the year's
-noise in advance.
+`configs/sangria.toml`): each window is whitened by the Welch median of
+the last 30 days of delivered record behind its conditioning stretch,
+redone once a day, and by the training year's PSD until one 65,536-sample
+segment is on the ground (the first 446 windows). The estimate the batch
+benchmark uses instead — `psd_sidecar`, the year-median Welch spectrum of
+the whole blind year — is an oracle for a streamed mission: at the first
+event, on day 78, it contains nine months of data still in flight. The
+same mission was replayed under it as well, and that replay is reported
+beside the causal one as the bound a detector would reach if it knew the
+year's noise in advance.
 
 With both settled, a full year of the blind record was replayed through a
 simulated mission: 63,043 batches of 500 s, a 12-hour daily pass, 1 %
 packet loss with retransmission, no permanent gaps. Under ground-causal
-whitening the consumer scored 62,834 windows and alarmed 214 of them;
-under the oracle PSD, 169.
+whitening the consumer scored 62,834 windows and alarmed 629 of them;
+under the oracle PSD, 572. The retrained model alarms about three times
+as many windows as the full-period one did, in longer runs: the same
+inspiral excess that lifts the merger bins keeps the score above the
+threshold for hours around each coalescence.
 
 ![Replay of the blind year under ground-causal whitening, with alert latencies](assets/benchmark_telemetry_alerts_causal.png)
 
 What counts as an alert has to be stated, because it decides the
-latencies. The first version of this page credited each event with the
-earliest alarmed window overlapping its label span, whatever came after
-it. Read that way, the causal replay alarms three coalescences 1.9 to 2.7
-days before their merger, on runs of one or two windows, at 3.71
-false-alarm episodes per 30 days — a rate at which about 2.5 chance
-episodes are expected inside the five 96-hour label spans, so three early
-alarms are what chance gives (Poisson ``p \approx 0.45``). The oracle
-replay read the same way is where the first version found its lead
-times: five isolated early alarms where 1.7 are expected
-(``p \approx 0.03``), suggestive, but each of them a single window, one
-at a score margin of 0.008 over the threshold, individually
-indistinguishable from the false-alarm population and impossible to act
-on. The alert protocol therefore requires persistence: an alert is raised
-by the arrival that completes `alert_persistence` consecutive alarmed
-windows, and shorter runs are neither alerts nor charged as false alarms.
+latencies. The first release credited each event with the earliest
+alarmed window overlapping its label span, whatever came after it. Read
+that way, the causal replay alarms four coalescences 1.1 to 1.9 days
+before their merger, on runs of one window, at 6.35 false-alarm episodes
+per 30 days — a rate at which about four chance episodes are expected
+inside the five 96-hour label spans, so the early alarms are what chance
+gives. Each of them is a single window, individually indistinguishable
+from the false-alarm population and impossible to act on. The alert
+protocol therefore requires persistence: an alert is raised by the
+arrival that completes `alert_persistence` consecutive alarmed windows,
+and shorter runs are neither alerts nor charged as false alarms.
 
-The value is fixed on the training year, not on this replay. On the
-calibration block of the shipped model (validation and test, 109 days)
-the classifier charges eight alarm episodes of one to four windows, 2.20
-per 30 days, and alarms its four events for 4, 5, 7 and 14 consecutive
-windows. Three consecutive windows is the smallest persistence that brings
-the block under one false alert per 30 days — the rate below which the
-LIGO–Virgo–KAGRA public alerts count as significant (Chaudhary et al.
-2024), taken as the standard because the Definition Study sets none for
-its low-latency alert pipelines — and the largest that keeps every
-calibration event alerted with a window of margin; the 1000 s of data it
-waits for at a 500-s step also leave most of the Definition Study's
-one-hour processing budget. Both replays, read at that persistence and at
-the first alarmed window:
+The value is fixed on the training year, not on this replay, by a rule
+written down with the selection: the smallest persistence that brings the
+calibration block under one false alert per 30 days — the rate below
+which the LIGO–Virgo–KAGRA public alerts count as significant (Chaudhary
+et al. 2024), taken as the standard because the Definition Study sets
+none for its low-latency alert pipelines — that keeps every calibration
+event alerted with a window of margin, and whose wait stays inside half
+of the Definition Study's one-hour processing budget. On the calibration
+block of the retrained model (validation and test, 109 days) the
+classifier charges five alarm episodes of one to seven windows, 1.38 per
+30 days, and alarms its four events for 3, 7, 13 and 46 consecutive
+windows. Two consecutive windows is the value that satisfies all three
+conditions: it brings the block to 0.83 per 30 days, and three would leave
+the shortest event run without margin. The first release, whose model
+alarmed its calibration events for at least four windows, shipped with
+three. Both replays, read at that persistence and at the first alarmed
+window:
 
-| Event | Merger (mission time) | Causal PSD, three consecutive: alert − merger [h] | Causal PSD, first alarmed window | Oracle PSD, three consecutive | Oracle PSD, first alarmed window | Alert of its own |
+| Event | Merger (mission time) | Causal PSD, two consecutive: alert − merger [h] | Causal PSD, first alarmed window | Oracle PSD, two consecutive | Oracle PSD, first alarmed window | Alert of its own |
 |---|---|---|---|---|---|---|
-| 1 | 2035-03-19T16:27 | **+22.4** | −46.3 | +2.2 | −46.3 | yes |
-| 2 | 2035-03-20T21:59 | −7.1 | −27.6 | −27.3 | −55.2 | no: event 1's |
-| 3 | 2035-08-12T15:40 | **−0.3** | −48.4 | −0.3 | −0.3 | yes |
-| 4 | 2035-09-17T07:48 | **+7.5** | −64.4 | +7.5 | −64.4 | yes |
-| 5 | 2035-09-21T21:39 | **+41.7** | +19.3 | +17.9 | −51.3 | yes |
+| 1 | 2035-03-19T16:27 | **+1.9** | −25.6 | +1.9 | −25.6 | yes |
+| 2 | 2035-03-20T21:59 | −27.6 | −27.7 | −27.6 | −27.7 | no: event 1's |
+| 3 | 2035-08-12T15:40 | **−0.3** | −46.0 | −0.3 | −0.3 | yes |
+| 4 | 2035-09-17T07:48 | **+7.5** | −40.5 | −64.4 | −64.4 | yes |
+| 5 | 2035-09-21T21:39 | **+41.7** | +41.7 | −51.3 | −54.5 | yes |
 | 6 | 2035-11-10T00:11 | **+15.1** | +15.1 | +15.1 | +15.1 | yes |
-| False alarms / 30 d | | **1.16** | 3.71 | 0.74 | 2.56 | |
+| False alarms / 30 d | | **1.40** | 6.35 | 1.32 | 1.65 | |
 
 The data latencies exclude the one-hour processing budget, which
-`latency_total_h` of the table adds. Under the persistence criterion no
-alert precedes its merger by more than twenty minutes, and the sustained
-alarms follow it by 7 to 42 hours: the 1.16-day conditioning lag and the
-delivery latency of the lower panel, less the hours by which the inspiral
-was already alarmed. Event 2 has no alert of its own under either
-whitening. Its merger follows event 1's by 29.5 hours, the two label spans
-overlap, and every alarmed window in its span belongs to one of event 1's
-episodes. The replay therefore detects five coalescences, not six, and
-the batch metric's "5 of 5 label spans" is unaffected only because the
-two spans merge into one.
+`latency_total_h` of the table adds. Under the persistence criterion and
+causal whitening no alert precedes its merger by more than twenty
+minutes, and the sustained alarms follow it by 2 to 42 hours: the 1.16-day
+conditioning lag and the delivery latency of the lower panel, less the
+hours by which the inspiral was already alarmed. Event 2 has no alert of
+its own under either whitening. Its merger follows event 1's by 29.5
+hours, the two label spans overlap, and every alarmed window in its span
+belongs to one of event 1's episodes. The replay therefore detects five
+coalescences, not six, and the batch metric's "5 of 5 label spans" is
+unaffected only because the two spans merge into one.
 
-The oracle PSD buys 20 and 24 hours on events 1 and 5 and 0.42 false
-alarms per 30 days; events 3, 4 and 6 are alerted at the same hour under
-both. The window scores of the two replays correlate at only 0.57, so the
-operating point survives the loss of the year-long look-ahead while the
-scores themselves do not reproduce it. At a persistence of four the
-causal replay would charge 0.17 episodes per 30 days at the same
-latencies, but the shortest alarm run of a calibration event is exactly
-four windows, so four leaves no margin and the protocol keeps three.
+The oracle PSD changes two alerts: events 4 and 5 are alerted 64 and 51
+hours *before* their mergers, on runs of two windows in the inspiral that
+the causal whitening does not produce, and 0.08 false alarms per 30 days
+are saved. Two early alerts where 0.9 chance episodes are expected inside
+the spans is not evidence of anything (Poisson ``p \approx 0.2``); the
+year-long look-ahead sharpens the inspiral excess, and a mission does not
+have it. At a persistence of three the causal replay would charge 0.74
+episodes per 30 days at the same latencies, but the shortest alarm run of
+a calibration event is exactly three windows, so three leaves no margin
+and the protocol keeps two.
 
 ![Replay of the blind year under the oracle year-median PSD](assets/benchmark_telemetry_alerts.png)
 
-Why the classifier fires on the inspiral rather than on the coalescence
-is the encoding section above: at every merger the band powers exceed the
-scaler bound by two to three orders of magnitude and are folded back onto
-the floor, while the inspiral, at 0.4 to 0.8 of the bound, sits where the
-response peaks. The early sensitivity is real to the extent the Poisson
-excess says, but it is a property of the encoding rather than of the
-signal, and the encoding has been changed.
-
 The alarm tails after each merger and the record-edge transients have
 one cause: the conditioning kernel of the record high-pass followed by
-whitening decays as a power law rather than
-exponentially, because the Welch estimate resolves sharp spectral features
-such as the TDI transfer nulls. Its envelope is still 7 % of the peak
-eight window lengths from the impulse and 99.9 % of its energy needs
-thirty-two. The same kernel produces the record-edge transients that force
-`edge_margin` and the post-merger alarm tails that account for every
-charged false alarm at the operating point. Smoothing the PSD would
-shorten it and is the natural next step.
+whitening decays as a power law rather than exponentially, because the
+Welch estimate resolves sharp spectral features such as the TDI transfer
+nulls. Its envelope is still 7 % of the peak eight window lengths from
+the impulse and 99.9 % of its energy needs thirty-two. The same kernel
+produces the record-edge transients that force `edge_margin` and the
+post-merger alarm tails that account for most of the charged false alarms
+at the operating point. Smoothing the PSD would shorten it and is the
+natural next step.
 
 ## The spread under re-initialisation
 
-The shipped configuration was retrained at three further seeds, each
-refitting its own threshold on the pooled held-out block and applying it
-to the blind year without adjustment:
+The shipped configuration was trained at three further seeds inside the
+same grid, each refitting its own threshold on the pooled held-out block
+and applying it to the blind year without adjustment:
 
 | Seed | Fitted threshold | Fit predicted | Delivered FA / 30 d | Events | AUC |
 |---|---|---|---|---|---|
-| 1009 | 0.7941 | 2.750 | 2.969 | 5 of 5 | 0.7981 |
-| 2027 | 0.8430 | 1.650 | 2.309 | 5 of 5 | 0.7949 |
-| 3041 | 0.8134 | 1.375 | 1.484 | 5 of 5 | 0.7960 |
-| 9999 (shipped) | 0.8256 | 2.200 | 2.474 | 5 of 5 | 0.7933 |
+| 1009 | 0.7398 | 2.750 | 2.062 | 5 of 5 | 0.8110 |
+| 2027 | 0.6432 | 2.750 | 8.741 | 5 of 5 | 0.8274 |
+| 3041 | 0.7637 | 2.475 | 3.299 | 5 of 5 | 0.8129 |
+| 9999 (shipped) | 0.7366 | 1.375 | 1.567 | 5 of 5 | 0.8065 |
 
 ![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](assets/benchmark_seed_spread.png)
 
-**Every realisation recovers all five events, and every one lands under
+**Every realisation recovers all five events; two of the four land under
 the three per 30 days the criterion asked for.** What moves is the
-false-alarm rate, by a factor of two across 1.48 to 2.97, while the ROC
-area barely moves at all — 0.7933 to 0.7981, a spread of half a per cent.
-That is the same lesson the model grid taught, now measured within one
-configuration rather than across several: the area under the curve is
-nearly blind to what the operating point delivers, because the threshold
-sits in the tail and the area is dominated by the bulk.
+false-alarm rate, by a factor of five and a half across 1.57 to 8.74,
+while the ROC area moves by two and a half per cent — and in the opposite
+direction: the seed with the highest area has the worst operating point.
+The outlier is the seed whose threshold fitted lowest, 0.643, in the
+shoulder where the two years' noise tails disagree. That is the same
+lesson the model grid taught, now measured within one configuration
+rather than across several: the area under the curve is nearly blind to
+what the operating point delivers, because the threshold sits in the tail
+and the area is dominated by the bulk.
 
 So the headline should be read as an event recall that is stable and a
-false-alarm rate that carries a factor-of-two uncertainty from
+false-alarm rate that carries a factor-of-several uncertainty from
 initialisation alone — on top of the Poisson uncertainty of the episodes
-themselves. Four realisations do not measure a distribution either; they
-bound the scatter well enough to say the result is not an artefact of one
-lucky initialisation.
+themselves. The shipped seed was chosen on the training year, where it is
+also the best of the four (four validation episodes against seven and
+ten); that the ranking held on the blind year is worth exactly one
+observation. Four realisations do not measure a distribution; they bound
+the scatter well enough to say that a threshold fitted in the shoulder
+does not transfer, whichever seed produced it.
 
 ## What a lossy link costs
 
@@ -527,11 +559,11 @@ which carries coalescences 1 and 2 — and the same pass schedule, with a
 channel that drops a fraction of transfers for good rather than
 retransmitting them.
 
-| Permanent batch loss | Batches lost | Windows scored | Alarm episodes | Events |
+| Permanent batch loss | Batches lost | Windows scored | Alarmed windows | Events |
 |---|---|---|---|---|
-| none | 0 of 5155 | 4946 | 38 | 2 of 2 |
-| 0.14 % | 7 | 2653 | 10 | 2 of 2 |
-| 0.45 % | 23 | 563 | 2 | 0 of 2 |
+| none | 0 of 5155 | 4946 | 307 | 2 of 2 |
+| 0.14 % | 7 | 2653 | 113 | 2 of 2 |
+| 0.45 % | 23 | 563 | 14 | 2 of 2 |
 | 1.01 % | 52 | 0 | 0 | 0 of 2 |
 | 2.99 % | 154 | 0 | 0 | 0 of 2 |
 
@@ -550,14 +582,19 @@ falls below it as they are not, because the expectation stops being the
 right summary: surviving windows exist only inside a clean run of 410
 batches, the mean spacing of losses is `1/p` batches, and once `p`
 exceeds `1/410 ≈ 0.24 %` such a run is a rare event rather than a typical
-one. The whole of the sweep is that one number. A link losing half a per
-cent of its batches permanently delivers a detector that sees nothing,
-while the same link losing them *temporarily* — retransmitted, as in the
-year-long mission, where 648 retries cost nothing — is harmless.
+one. The whole of the sweep is that one number. At half a per cent the
+replay scores a tenth of the windows and, with the retrained model's
+longer alarm runs, still raises an alert on both coalescences; at one per
+cent it scores none. A link losing one per cent of its batches
+permanently delivers a detector that sees nothing, while the same link
+losing them *temporarily* — retransmitted, as in the year-long mission,
+where 648 retries cost nothing — is harmless.
 
 Two consequences worth stating plainly. The operating requirement is on
-**permanent** loss, and it is strict: about 0.2 %. And the smoothed
-whitening PSD deferred to v1.1, which would shorten the conditioning
+**permanent** loss, and it is strict: about half a per cent for an alert
+on a loud pair of coalescences, a fifth of a per cent for scoring most of
+the record. And the smoothed
+whitening PSD deferred to v1.2, which would shorten the conditioning
 kernel, is not a refinement of this result but the precondition for
 running on a link that loses anything at all; every reduction of the
 stretch raises the tolerable loss rate in proportion.
@@ -567,10 +604,12 @@ stretch raises the tolerable loss rate in proportion.
 - **One blind realisation of five events.** The event recall is 5 of 5 and
   the false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Treat the recall as a result, not a rate.
-- **One initialisation per model.** Every configuration in the grid runs
-  at `seed = 9999`, so the differences between models are differences
-  between single training runs. The shipped configuration has since been
-  repeated at three further seeds (below); the grid has not.
+- **One initialisation per configuration, four for the shipped one.** The
+  grid runs at `seed = 9999`; the shipped configuration was repeated at
+  three further seeds, whose blind rates span 1.57 to 8.74 per 30 days.
+  Every other configuration's single seed lies inside the seed spread of
+  the shipped one on the selection statistic, so the configuration
+  ranking is not established.
 - **Single channel.** Only A is used; E and T carry independent
   information and would also permit a null-channel veto.
 - **No gaps in the headline.** The Sangria products are gapless, and the
@@ -582,16 +621,10 @@ stretch raises the tolerable loss rate in proportion.
 - **The threshold is fitted on the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here is over one year, in one direction.
-- **The encoding folds saturated features onto the floor.** Every model
-  here maps its features onto ``[0, 2\pi]``; five of the six blind
-  coalescences score below the threshold at the merger itself (the
-  encoding section). The package default is now ``[0, \pi]``; nothing on
-  this page has been retrained on it.
-- **The shipped model is the best of seven blind evaluations.** The grid
-  was scored on the blind year and the best operating point ships, so the
-  headline rate carries a selection effect of the order of the seed
-  spread. The next round selects on the validation block and scores the
-  blind year once per model.
+- **The encoding is mitigated, not solved.** On ``[0, \pi]`` four of the
+  six coalescences clear the threshold in their merger bin; the two most
+  saturated do not, and every alert still rests on the inspiral excess of
+  the hours before the merger.
 - **The oracle replay is a bound, not a result.** The year-median Welch
   estimate of the blind year whitens every window of the comparison
   replay, including at the first event the nine months not yet delivered;
@@ -619,14 +652,22 @@ julia scripts/preprocess_ldc.jl configs/experiments/q8_b6.toml \
     --label-file data/inputs/sangria_blind_points_labels.csv \
     --output-prefix sangria_b6_blind
 
-# Train and evaluate
-julia scripts/train.jl configs/experiments/q8_b6.toml --run-id q8_b6
-julia scripts/infer.jl configs/experiments/q8_b6.toml --run-id q8_b6
+# Train and evaluate the shipped run; the seeds add --seed 1009 | 2027 | 3041
+julia scripts/train.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
+julia scripts/infer.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
+
+# Replay a producer mission of the blind year: causal as configured, oracle
+# with psd_mode = "sidecar" in [telemetry]
+julia scripts/infer_telemetry.jl configs/sangria.toml --run-dir <DeepSpaceTelemetry run> \
+    --model models/run_q8_b6_pi/gw_model.jld2 \
+    --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_pi
 ```
 
-Training takes about 35 epochs at roughly half a minute each on 22 threads;
-inference over the blind year takes a minute. The other six configurations
-are in `configs/experiments/`. The runs on this page were trained before
-the encoding span was a configuration key and load with the full period;
-the experiment configurations now ship with `phase_span = 1.0`, so
-reproducing the numbers above needs `phase_span = 2.0` in `[training]`.
+Training runs to early stopping in 20 to 50 epochs at roughly a minute
+and a half each on 16 threads; inference over the blind year takes a
+minute. The other configurations are in `configs/experiments/` and
+`configs/sangria.toml`; every run on this page was trained with the
+committed `phase_span = 1.0`. The batch gradient is chunked at a fixed
+size and reduced in chunk order, so the thread count does not enter the
+result: runs of the same seed at 8 and 16 threads reproduced each other
+bit for bit.
