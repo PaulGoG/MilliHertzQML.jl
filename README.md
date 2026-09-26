@@ -1,5 +1,10 @@
 # MilliHertzQML.jl
 
+[![CI](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml)
+[![Documentation, stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/stable/)
+[![Documentation, dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/dev/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
 ## File structure
@@ -24,19 +29,24 @@ The full tree is at the end of this page.
 
 Julia 1.13 is the development release. `Manifest.toml` files are not
 tracked; the environments resolve from `Project.toml` and its `[compat]`
-bounds. The `[compat]` floor is 1.12, where the suite last passed on
-2026-09-10; the floor is retained until continuous integration exercises
-it again. With [juliaup](https://github.com/JuliaLang/juliaup), `juliaup
-update` keeps the `release` channel current.
+bounds. The `[compat]` floor is 1.12; continuous integration runs the
+suite on the floor and on the current release at every push. With
+[juliaup](https://github.com/JuliaLang/juliaup), `juliaup update` keeps
+the `release` channel current.
 
 The package is not registered in the General registry and is not intended
-to be: it is used from a clone, and a downstream environment consumes it by
-path or by git source — `Pkg.develop(path = ...)`, or a `[sources]` entry
-pinning the URL and a revision — with released states marked by git tags.
-From a clone of this repository:
+to be. A downstream environment adds it by URL, pinned to a release tag,
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v1.1.0")
+```
+
+or consumes a clone by path — `Pkg.develop(path = ...)`, or a `[sources]`
+entry. From a clone of this repository:
 
 ```bash
-git clone git@github.com:PaulGoG/MilliHertzQML.jl.git
+git clone https://github.com/PaulGoG/MilliHertzQML.jl.git
 cd MilliHertzQML.jl
 julia activate.jl
 ```
@@ -52,11 +62,11 @@ package by path and activates itself, so the step above is optional for
 them; the first invocation of each environment resolves and precompiles
 it. The script and test environments also pin the telemetry producer
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl),
-unregistered likewise, as a git source at a release commit; its
+unregistered likewise, as a git source at the commit of a release tag (`v2.0.0`); its
 [manual](https://PaulGoG.github.io/DeepSpaceTelemetry.jl/stable/)
 documents the run directory this package reads. They pin
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
-the same way, for the constellation response of the simulator. On a machine whose git
+the same way (`v2.0.1`), for the constellation response of the simulator. On a machine whose git
 configuration rewrites GitHub URLs to SSH, instantiate them with
 `JULIA_PKG_USE_CLI_GIT=true` so that the package manager uses the
 command-line git client and its agent.
@@ -76,6 +86,11 @@ julia test/runtests.jl                              # static QA, unit tests, pip
 julia bench/benchmarks.jl                           # performance measurements
 julia docs/make.jl                                  # manual, written to docs/build/
 ```
+
+The manual is deployed at
+[PaulGoG.github.io/MilliHertzQML.jl/stable](https://PaulGoG.github.io/MilliHertzQML.jl/stable/)
+from the release tags and at [`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/)
+from `main`.
 
 ## Component status
 
@@ -212,6 +227,8 @@ statistic, so the ranking between configurations is not established. And
 the blind year is whitened by its own year-median PSD, which is
 legitimate for a finished record and an oracle for a streamed one.
 
+![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
+
 Every run encodes its features on the half period ``[0, π]`` of the
 ``R_z`` gate. The first release used the full period, under which a
 feature saturated above the training range was encoded as one at the
@@ -236,7 +253,7 @@ whitening does not produce; that is the bound, not the result. The
 mission lost no data, and the coupling excludes delivery holes from
 scoring rather than handling them.
 
-![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
+![Classifier output and alarms over the year-long replay under ground-causal whitening, with the alert time of every coalescence against the delivery latency of the link](docs/src/assets/benchmark_telemetry_alerts_causal.png)
 
 The replay animates: four panels sweep the year in the order the ground
 received the windows, the dotted rule marking how far the delivery lags
@@ -388,10 +405,14 @@ MilliHertzQML/
 │   ├── inputs/             # Generated telemetry and feature CSVs (not tracked)
 │   └── outputs/            # Per-run plots and results (not tracked)
 ├── models/                 # Per-run model checkpoints (not tracked)
-├── .github/workflows/CI.yml # Test matrix, formatting check, documentation build (manual dispatch until the repository is public)
+├── .github/
+│   ├── workflows/CI.yml    # Test suite on the compat floor and the current release, formatting check, coverage
+│   ├── workflows/Documentation.yml  # Manual built on every push and deployed to GitHub Pages
+│   └── dependabot.yml      # Weekly updates of the Julia and GitHub Actions dependencies
 ├── .JuliaFormatter.toml    # Committed formatter configuration
 ├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
 ├── CITATION.cff            # Citation metadata
+├── LICENSE                 # MIT
 ├── configs/
 │   ├── default.toml        # Pipeline defaults (simulator)
 │   ├── sangria.toml        # Sangria benchmark: Welch-whitened features, truth-stream labels

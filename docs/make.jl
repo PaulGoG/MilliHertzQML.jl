@@ -8,8 +8,12 @@ bibliography = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style
 
 makedocs(
     sitename = "MilliHertzQML",
-    remotes = nothing,
-    format = Documenter.HTML(prettyurls = false, size_threshold_ignore = ["api.md"]),
+    repo = Remotes.GitHub("PaulGoG", "MilliHertzQML.jl"),
+    format = Documenter.HTML(
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://PaulGoG.github.io/MilliHertzQML.jl",
+        size_threshold_ignore = ["api.md"],
+    ),
     modules = [MilliHertzQML],
     plugins = [bibliography],
     pages = [
@@ -21,4 +25,12 @@ makedocs(
         "API Reference" => "api.md",
         "References" => "references.md",
     ],
+)
+
+# Deployment to the gh-pages branch: `main` under dev/, release tags under
+# their version and stable/. Outside GitHub Actions this is a no-op.
+deploydocs(
+    repo = "github.com/PaulGoG/MilliHertzQML.jl.git",
+    devbranch = "main",
+    push_preview = false,
 )

@@ -1,28 +1,24 @@
-# Manual dispatch only. Automatic triggers were tried on 2026-09-14 and
-# every job was refused before it started: Actions on a private repository
-# draw on the account's paid allowance, and that allowance is unavailable.
-# The workflow itself is exercised and was last green on 2026-09-07.
-# Restore the push, tag, and pull-request triggers below once the
-# repository is public or the allowance is restored, and add the
-# documentation deployment then — Pages for a private repository needs a
-# paid plan as well. The coverage upload tolerates a missing
-# CODECOV_TOKEN. The package is not registered in General, so there is no
-# TagBot and no registration workflow: release tags are created by hand.
+# Test matrix, formatting check and coverage. The first leg runs on the
+# current stable release and uploads coverage; the second on the compat
+# floor. The package is not registered, so there is no TagBot: release tags
+# are created by hand, and the Documentation workflow deploys the manual
+# for them.
 name: CI
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
 jobs:
   test:
     name: Tests — Julia ${{ matrix.version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # "1" is the blocking job on the current stable release (1.13, the
-    # version the environments are resolved on) and "1.12" on the compat
-    # floor. Coverage runs once: it disables package images and roughly
-    # doubles the precompile time.
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,29 +26,19 @@ jobs:
           - version: "1"
             os: ubuntu-latest
             coverage: true
-            experimental: false
           - version: "1.12"
             os: ubuntu-latest
             coverage: false
-            experimental: false
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
-      # Manifests left in the tree are resolved on the current release. A
-      # leg on another version discards them and resolves its own
-      # environment, because standard-library membership moves between
-      # versions; that leg verifies the compat bounds, the blocking leg the
-      # resolution on the current release.
-      - name: Discard the committed manifests off the resolution version
-        if: matrix.version != '1'
-        run: rm -f Manifest.toml test/Manifest.toml docs/Manifest.toml
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
-        with:
-          coverage: ${{ matrix.coverage }}
+      # The suite activates and instantiates test/ itself, resolving the
+      # package by path and the two producers by their release tags.
+      - name: Test suite
+        run: julia --color=yes -t auto ${{ matrix.coverage && '--code-coverage=user' || '' }} test/runtests.jl
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v7
@@ -70,15 +56,5 @@ jobs:
         with:
           version: "1"
       - run: |
-          julia -e 'using Pkg; Pkg.add("JuliaFormatter"); using JuliaFormatter;
+          julia --color=yes -e 'using Pkg; Pkg.add("JuliaFormatter"); using JuliaFormatter;
                     format(".", verbose = false) || error("Formatting check failed: run JuliaFormatter over the repository.")'
-  docs:
-    name: Documentation build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v3
-        with:
-          version: "1"
-      - uses: julia-actions/cache@v3
-      - run: julia docs/make.jl

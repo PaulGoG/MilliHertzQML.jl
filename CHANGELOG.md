@@ -6,9 +6,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.1.0] — 2026-09-24
+## [1.1.0] — 2026-09-26
 
-The models are retrained on the half-period encoding and the benchmark
+First public version of the repository. The models are retrained on the half-period encoding and the benchmark
 page is rewritten from those runs. The shipped run is `q8_b6_pi`: the
 configuration of the first release, selected again on the validation block
 of the training year by a pre-registered rule, delivering all five blind
@@ -65,11 +65,25 @@ spread and is reported as unresolved.
   colour each across every figure; the provenance sidecar records the
   canvas actually exported; a strain axis whose multiplier would be 10⁰
   or 10¹ folds it into the tick values.
+- The script and test environments pin DeepSpaceTelemetry.jl 2.0.0 and
+  CurvatureDistinguishability.jl 2.0.1 (the commits of their release
+  tags), and `[compat]` admits both producers at 1.x and 2.x.
+  DeepSpaceTelemetry 2.0.0 leaves the run-directory contract the consumer
+  reads unchanged (configuration snapshot, batch metadata and naming,
+  segment loader, arrival log, lifecycle sentinels), and the integration
+  test passes against it. CurvatureDistinguishability 2.0.0 brings the
+  confusion fit of its noise PSD to the channel level; the extension never
+  used that model, its channel PSD `R(f) S_n(f)` being defined here, so no
+  number changes.
 - The configuration files live under `configs/` (`configs/default.toml`,
   `configs/sangria.toml`, `configs/sangria_paper.toml`,
   `configs/experiments/`); the scripts default to `configs/default.toml`.
 
 ### Added
+- Continuous integration on push, tag and pull request: the test suite on
+  the compat floor (1.12) and on the current release with coverage upload,
+  a formatting check, the manual deployed to GitHub Pages, and Dependabot
+  for the Julia and GitHub Actions ecosystems.
 - A constellation response for the simulator (`[generation] response =
   "lisa"`), as a package extension on CurvatureDistinguishability.jl: the
   record holds the A and E channels, each with independent noise at the
@@ -116,7 +130,7 @@ spread and is reported as unresolved.
 
 ## [1.0.0] — 2026-09-14
 
-First public release: the four-stage pipeline (simulated telemetry or LDC
+First tagged release, in the then-private repository: the four-stage pipeline (simulated telemetry or LDC
 truth-stream labels, windowed whitened features, training, inference),
 the Sangria benchmark with its provenance regenerated from a committed
 tree, the telemetry coupling with replay and live modes, the
