@@ -89,8 +89,9 @@ end
     git_provenance() -> Dict{String, Any}
 
 Git description of the package tree (`DrWatson.gitdescribe`), whether the
-tree is dirty, and the package version; `"unknown"` values outside a git
-repository.
+tree is dirty, and the package version; `"unknown"` for the commit and
+`true` for the dirty flag when the tree's state cannot be established
+(outside a git repository, or without git).
 """
 function git_provenance()
     root = project_root()
@@ -100,13 +101,16 @@ function git_provenance()
         with_logger(NullLogger()) do
             something(DrWatson.gitdescribe(root), "unknown")
         end
-    catch
+    catch e
+        e isa InterruptException && rethrow()
         "unknown"
     end
-    dirty = try
+    # A tree whose state cannot be established is not recorded as clean.
+    dirty = commit == "unknown" ? true : try
         DrWatson.isdirty(root)
-    catch
-        false
+    catch e
+        e isa InterruptException && rethrow()
+        true
     end
     return Dict{String,Any}(
         "git_commit" => commit,

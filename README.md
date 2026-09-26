@@ -5,7 +5,7 @@
 [![Documentation, dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimization uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
+Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimisation uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
 ## File structure
 
@@ -27,7 +27,7 @@ The full tree is at the end of this page.
 
 ## Environment
 
-Julia 1.13 is the development release. `Manifest.toml` files are not
+The package is developed on Julia 1.13, the current stable release. `Manifest.toml` files are not
 tracked; the environments resolve from `Project.toml` and its `[compat]`
 bounds. The `[compat]` floor is 1.12; continuous integration runs the
 suite on the floor and on the current release at every push. With
@@ -98,13 +98,13 @@ from `main`.
 |---|---|
 | Core library (`src/`) | Functional; unit tests pass; fail-fast input validation on public interfaces |
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
-| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; optionally the A and E channels of the constellation through the CurvatureDistinguishability extension (antenna patterns on the orbits, Doppler phase, transfer roll-off, injections at physical amplitude for a drawn distance); no spins or higher modes |
+| Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019, DOI 10.1088/1361-6382/ab1101) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008, DOI 10.1103/PhysRevD.77.104017) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; optionally the A and E channels of the constellation through the CurvatureDistinguishability extension (antenna patterns on the orbits, Doppler phase, transfer roll-off, injections at physical amplitude for a drawn distance); no spins or higher modes |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model together with the phase-encoding span (`[0, π]` by default; earlier artifacts load on `[0, 2π]`) |
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
-| Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one tape per sample, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
+| Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one Zygote tape per chunk of samples, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
 | Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static or ground-causal trailing-PSD whitening, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
-| Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; remediation of the remaining defects is planned |
+| Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; the remaining deficiencies are listed on the physics and architecture pages |
 
 The remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md`.
 
@@ -160,11 +160,11 @@ as GIFs beside the static figures.
 
 ![Training and validation loss and the validation accuracy, epoch by epoch, with the checkpoint the run ships](docs/src/assets/training_history.gif)
 
-`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialization-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
+`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialisation-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
 Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
 
-Figures are built on one layout (a 900 × 600 pt single panel that grows by 350 pt per stacked panel) under one theme (Computer Modern, 26 pt type, boxed axes, legend above the axes, Okabe–Ito colors, one colour per quantity) and exported by the scripts as vector PDF plus a 4× PNG with a provenance sidecar per figure (`<plots>/run_<id>/<figure>.{pdf,png,toml}`): the simulated trace with its whitened panel, the training history, the mission trace with the labeled spans and the threshold, the ROC curve, the detection sensitivity versus SNR, and the score distributions. The figure functions live in the package as a CairoMakie extension (`using CairoMakie` activates them), so the core library carries no plotting dependency.
+Figures are built on one layout (a 900 × 600 pt single panel that grows by 350 pt per stacked panel) under one theme (Computer Modern, 26 pt type, boxed axes, legend above the axes, Okabe–Ito colours, one colour per quantity) and exported by the scripts as vector PDF plus a 4× PNG with a provenance sidecar per figure (`<plots>/run_<id>/<figure>.{pdf,png,toml}`): the simulated trace with its whitened panel, the training history, the mission trace with the labelled spans and the threshold, the ROC curve, the detection sensitivity versus SNR, and the score distributions. The figure functions live in the package as a CairoMakie extension (`using CairoMakie` activates them), so the core library carries no plotting dependency.
 
 For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`). `configs/sangria.toml` holds the benchmark settings (`configs/sangria_paper.toml` the paper-parity variant); the HDF5 products are passed on the command line:
 
@@ -206,7 +206,7 @@ The simulator records, by default, one strain referred to the sky-averaged sensi
 
 `infer_telemetry.jl` writes `telemetry_windows.csv` (one row per scored window with its completion time and inference wall time), `alert_latency.csv` (per event: first alarmed window, data latency, total latency with the ground processing budget, false-alarm episodes per 30 days), a snapshot, and the alert figure. The `[telemetry]` section of the configuration holds the geometry, the coverage and erosion policy, the accepted producer version, and the processing budget.
 
-Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the calibration block of `threshold_block` by `threshold_criterion`: `far`, at most `target_far_per_30d` false-alarm episodes per 30 days and an alarm duty cycle of at most `target_fpr` on unlabeled windows, scanned from the highest threshold down so that the operating point stays on the branch of short, isolated episodes; `fpr`; or `youden`), `threshold_sweep.csv` (event and window recall and false-alarm rate of the calibration block at every candidate threshold, drawn as the `threshold_sweep` figure), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` and the post-hoc `threshold_sweep.csv` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
+Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the calibration block of `threshold_block` by `threshold_criterion`: `far`, at most `target_far_per_30d` false-alarm episodes per 30 days and an alarm duty cycle of at most `target_fpr` on unlabelled windows, scanned from the highest threshold down so that the operating point stays on the branch of short, isolated episodes; `fpr`; or `youden`), `threshold_sweep.csv` (event and window recall and false-alarm rate of the calibration block at every candidate threshold, drawn as the `threshold_sweep` figure), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` and the post-hoc `threshold_sweep.csv` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
 ## Results
 
@@ -229,13 +229,7 @@ legitimate for a finished record and an oracle for a streamed one.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
-Every run encodes its features on the half period ``[0, π]`` of the
-``R_z`` gate. The first release used the full period, under which a
-feature saturated above the training range was encoded as one at the
-floor and five of the six blind coalescences scored below the threshold
-at the merger itself; the retrained model clears the threshold in the
-merger bin of four of the six, and the two most saturated still rely on
-the inspiral excess of the hours before.
+Every run encodes its features on the half period ``[0, π]`` of the ``R_z`` gate, so that a feature saturated above the training range is encoded as a state distinct from the noise floor. The shipped model clears the threshold in the merger bin of four of the six blind coalescences; the two most saturated still rely on the inspiral excess of the hours before.
 
 Replayed through a simulated year-long telemetry mission with daily
 ground-station passes and whitened causally — the PSD estimated from the
@@ -346,7 +340,7 @@ noise-model scope, the single evaluation record — are listed in
 <summary>Full file tree</summary>
 
 ```text
-MilliHertzQML/
+MilliHertzQML.jl/
 ├── activate.jl             # Activates and instantiates the root environment
 ├── src/
 │   ├── MilliHertzQML.jl    # Module definition and exports
@@ -364,6 +358,7 @@ MilliHertzQML/
 │   ├── evaluation.jl       # Chronological block split, ROC, calibration-block threshold, event-level metrics
 │   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
 │   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
+│   ├── response.jl         # Detector-response interface of the simulator: sky-averaged response and the constellation hook the extension implements
 │   ├── data.jl             # Window features (whitened set, paper set), train-fitted feature scaler, CSV loading
 │   ├── ldc.jl              # LDC TDI noise PSD, compound HDF5 readers, A/E/T, Welch PSD, truth-stream labeling
 │   ├── visualization.jl    # Figure interface (theme, export with provenance, one function per figure)
@@ -374,7 +369,7 @@ MilliHertzQML/
 │   ├── MilliHertzQMLCurvatureDistinguishabilityExt.jl # Constellation response of the simulator (loads with CurvatureDistinguishability)
 │   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API (loads with DeepSpaceTelemetry)
 ├── scripts/
-│   ├── Project.toml        # Script environment (package consumed by path)
+│   ├── Project.toml        # Script environment (package by path, the two producers by git)
 │   ├── activate.jl         # Activates and instantiates this environment
 │   ├── common.jl           # Activation of the script environment
 │   ├── generate_data.jl    # Dispatcher of generate_telemetry plus the trace figure
@@ -386,11 +381,12 @@ MilliHertzQML/
 │   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert latencies, figure
 │   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
 ├── test/
-│   ├── Project.toml        # Test environment (package and producer consumed by path/git)
+│   ├── Project.toml        # Test environment (package by path, the two producers by git)
 │   ├── activate.jl         # Activates and instantiates this environment
 │   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, pipeline smoke test
 │   ├── telemetry_tests.jl  # Coupling core on an in-memory run
 │   ├── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed through the extension
+│   ├── response_tests.jl   # Constellation response extension: patterns, channel PSD, catalog, A/E record
 │   └── export_payload_tests.jl         # Payload export stage
 ├── bench/
 │   ├── Project.toml        # Benchmark environment (package consumed by path)

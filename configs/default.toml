@@ -1,18 +1,18 @@
 # Paths are resolved relative to the project root unless absolute.
 
 [paths]
-inputs = "data/inputs"              # generated telemetry and feature CSVs
+inputs = "data/inputs"              # telemetry records, feature, label and PSD CSVs
 models = "models"                   # per-run model checkpoints, logs, thresholds
 plots = "data/outputs/plots"        # per-run figures
 results = "data/outputs/results"    # per-run inference tables and snapshots
 
 [generation]
 days = 60.0     # simulated mission duration [days]; > 0
-fs = 0.2        # sampling frequency [Hz]
+fs = 0.2        # sampling frequency [Hz]; > 0
 n_mbhb = 15     # number of injected MBHB events; >= 0
 n_gbs = 150     # number of background galactic binaries; >= 0
 n_emris = 15    # number of background EMRIs; >= 0
-seed = 9999     # RNG seed for the simulation
+seed = 9999     # RNG seed for the simulation; non-negative integer
 output = "data/inputs/simulated_telemetry_complex.h5"   # output HDF5 path
 observation_years = 1.0     # confusion-foreground fit of Robson et al. (2019); one of: 0.5 | 1.0 | 2.0 | 4.0
 snr_min = 8.0               # MBHB matched-filter SNR, lower bound; > 0
@@ -42,13 +42,14 @@ constellation_phase = 0.0   # cartwheel phase of the constellation at the record
 
 [preprocessing]
 tdi_group = "obs/tdi"   # HDF5 group or compound dataset holding t, X, Y, Z
+h5_file = "data/inputs/simulated_telemetry_complex.h5"   # HDF5 record; overridden by --h5-file
 window_size = 1000   # sliding-window length [samples]; >= 2
 step_size = 100      # sliding-window step [samples]; in [1, window_size]
-sample_rate = 0.2    # expected sampling frequency [Hz]; must agree with the file
+sample_rate = 0.2    # expected sampling frequency [Hz]; must agree with the file; > 0
 psd = "model"        # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
 observation_years = 1.0        # confusion fit of the "model" PSD; one of: 0.5 | 1.0 | 2.0 | 4.0
 ldc_model = "sangria"          # noise levels of the "ldc" PSD; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
-ldc_tdi2 = false               # second-generation TDI factor of the "ldc" PSD
+ldc_tdi2 = false               # second-generation TDI factor of the "ldc" PSD; one of: true | false
 ldc_observation_years = 0.0    # confusion term of the "ldc" PSD [yr]; 0 disables, else in [0.25, 10]
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
 feature_set = "whitened"       # per-window features; one of: "whitened" | "paper" | "bands"
@@ -85,21 +86,21 @@ min_fit_episodes = 5       # false-alarm episodes on the calibration block below
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 20      # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
-seed = 9999                # RNG seed for the data split and initialization
+seed = 9999                # RNG seed for the data split and initialisation; non-negative integer
 
 [inference]
 features = "data/inputs/telemetry_complex_features.csv"   # inference feature CSV
 labels = "data/inputs/telemetry_complex_labels.csv"       # inference label CSV; "" for blind mode
 block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
 step_size = 100      # window step [samples], used only without a feature sidecar; >= 1
-sample_rate = 0.2    # sampling frequency [Hz], used only without a feature sidecar
+sample_rate = 0.2    # sampling frequency [Hz], used only without a feature sidecar; > 0
 
 [ldc]
 h5_file = ""                    # LDC training product with truth stream and catalog (or pass --h5-file / --truth-csv)
 truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
 catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalog
 psd_model = "sangria"           # analytic TDI PSD of the labeling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
-tdi2 = false                    # second-generation TDI factor of the labeling PSD
+tdi2 = false                    # second-generation TDI factor of the labeling PSD; one of: true | false
 observation_years = 0.0         # confusion term of the labeling PSD [yr]; 0 disables, else in [0.25, 10]
 label_span = "fixed"            # positive span per merger; one of: "fixed" | "detectable"
 label_before_sec = 345600.0     # fixed span before the merger [s]; >= 0
@@ -128,7 +129,7 @@ tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch
 context_windows = 4             # window lengths of delivered context on each side used for whitening; >= 0
 psd_sidecar = ""                # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
-producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver)
+producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
 alert_persistence = 3           # consecutive alarmed windows that raise an alert; >= 1
 psd_mode = "sidecar"            # whitening PSD of the replay; one of: "sidecar" (psd_sidecar, else the training run's) | "trailing" (median Welch estimate of the delivered record behind each window)

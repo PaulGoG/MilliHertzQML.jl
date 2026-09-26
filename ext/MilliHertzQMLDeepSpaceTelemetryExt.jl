@@ -123,7 +123,8 @@ function list_batches(run::DeepSpaceTelemetryRun)
             isdir(batch_dir) || continue
             k, live = try
                 parse_batch_name(name)
-            catch
+            catch e
+                e isa ArgumentError || rethrow()
                 continue      # a foreign directory
             end
             meta = TelemetryCore.read_batch_metadata(batch_dir)

@@ -10,7 +10,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 First public version of the repository. The models are retrained on the half-period encoding and the benchmark
 page is rewritten from those runs. The shipped run is `q8_b6_pi`: the
-configuration of the first release, selected again on the validation block
+configuration of the 1.0.0 tag, selected again on the validation block
 of the training year by a pre-registered rule, delivering all five blind
 label spans at 1.57 false-alarm episodes per 30 days (fit 1.38, ROC area
 0.807) against 2.47 (fit 2.20, 0.793) before. Every model of the grid, the
@@ -26,11 +26,9 @@ spread and is reported as unresolved.
   the Sangria blind year five of the six coalescences fell below the
   threshold at the merger itself. The span is a configuration key
   (`[training] phase_span`, in units of π) persisted with the scaler;
-  artifacts written before it existed load with `2π` and a warning. Every
-  result on the benchmark page was produced under the old encoding and is
-  labelled so. The retrained grid ships with this release; the
-  full-period runs of the first release remain only in the page's
-  history.
+  artifacts written before it existed load with `2π` and a warning. The
+  retrained grid ships with this release; the full-period runs of the
+  1.0.0 tag remain only in the page's history.
 - The decision threshold is fitted on the validation block by default
   (`threshold_block = "validation"`); pooling validation and test is an
   opt-in that the Sangria configurations declare. The pooled block never
@@ -42,7 +40,7 @@ spread and is reported as unresolved.
   `[telemetry] alert_persistence` consecutive alarmed windows (three by
   default; two in the Sangria configuration, fitted on the retrained
   model's calibration block), and shorter runs are neither alerts nor
-  charged as false-alarm episodes. The lead times of the first release rested on isolated one-
+  charged as false-alarm episodes. The lead times of the 1.0.0 tag rested on isolated one-
   or two-window alarms up to four days before the merger; under the
   persistence criterion no alert precedes its merger by more than twenty
   minutes, and the false-alarm rate of the year replay falls from 3.71 to
@@ -128,12 +126,5 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-## [1.0.0] — 2026-09-14
-
-First tagged release, in the then-private repository: the four-stage pipeline (simulated telemetry or LDC
-truth-stream labels, windowed whitened features, training, inference),
-the Sangria benchmark with its provenance regenerated from a committed
-tree, the telemetry coupling with replay and live modes, the
-loss-tolerance and seed-spread studies, and the Documenter manual.
-Distribution is by clone, `Pkg.develop`, or a `[sources]` entry pinned to
-the tag; the package is not registered.
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.1.0

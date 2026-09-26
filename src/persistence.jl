@@ -10,7 +10,7 @@ when absent), and an arbitrary `metadata` dictionary (run identifier, seed,
 configuration snapshot).
 
 The circuit itself is not serialized; `load_model` rebuilds it from the
-hyperparameters, keeping artifacts robust across package versions.
+hyperparameters, keeping artifacts loadable across package versions.
 """
 function save_model(
     path::AbstractString,

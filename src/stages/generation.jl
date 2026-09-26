@@ -557,7 +557,7 @@ end
 
 Noise and sources of one record on the sample times `t` [s] for the
 sensitivity `psd(f)`: with [`SkyAveragedResponse`](@ref) one strain
-against the sensitivity itself (the draw order of the first release);
+against the sensitivity itself;
 with a constellation response two channels, A and E, each of independent
 noise against [`channel_noise_psd`](@ref), the background sources and the
 MBHB injections projected by the response. Returns `(; channels, labels,

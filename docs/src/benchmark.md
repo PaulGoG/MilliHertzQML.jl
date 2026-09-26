@@ -2,8 +2,7 @@
 
 This page reports what the classifier does on the LISA Data Challenge 2a
 "Sangria" data set: one year of simulated LISA telemetry for training and a
-second, blind year for evaluation. It is the honest result, including the
-respects in which a small classical network does better.
+second, blind year for evaluation.
 
 Headline: on the blind year the eight-qubit model detects **all five
 labelled MBHB events at 1.57 false-alarm episodes per 30 mission days**
@@ -12,7 +11,7 @@ data of the *training* year and applied without adjustment. The
 threshold's own prediction for that rate was 1.38, so the operating point
 transfers. The model was chosen on the validation block of the training
 year before the blind year was scored, and it is the same configuration
-and seed that shipped with the first release, retrained on the
+and seed that shipped with the 1.0.0 tag, retrained on the
 half-period encoding.
 
 Three qualifications belong next to the headline rather than among the
@@ -116,7 +115,7 @@ operating point.
 
 **Encoding.** Every run on this page maps its features onto ``[0, \pi]``
 before the ``R_z`` encoding gate (`[training] phase_span = 1.0`). The
-first release used the full period ``[0, 2\pi]``: ``R_z(2\pi) = -I`` is a
+1.0.0 tag used the full period ``[0, 2\pi]``: ``R_z(2\pi) = -I`` is a
 global phase, so a feature clamped at the upper scaler bound was encoded
 exactly as one at the lower bound, and by continuity the response
 returned to its floor value as a feature approached the bound. At the
@@ -262,7 +261,7 @@ agree, and no amount of ROC area substitutes for verifying that.
 ## Against the published method
 
 Everything above uses whitened sub-mHz band powers, which the paper this
-pipeline follows does not: Isfan et al. take the spectral entropy and the
+pipeline follows does not: Isfan et al. [IsfanEtAl2025](@cite) take the spectral entropy and the
 mean, standard deviation and maximum of the raw window periodogram, with
 no filtering and no whitening, on a four-qubit register. That
 configuration ships as `configs/sangria_paper.toml` and was retrained on
@@ -270,7 +269,7 @@ the same two years and the same encoding (`sangria_paper_pi`), so the
 published result can be compared against a reproduction of its own method
 rather than only against a different one.
 
-Isfan et al. report five of six blind mergers, the missed one being the
+Isfan et al. [IsfanEtAl2025](@cite) report five of six blind mergers, the missed one being the
 lowest-SNR source. The retrained parity run reaches all five label spans,
 one of them by a margin of 0.002 in score — and that span holds **event
 3, the loudest merger of the blind year**, at a merger-window SNR of 1312
@@ -318,7 +317,7 @@ own circuit.
 
 ## Against a classical baseline
 
-The GWEEP multilayer perceptron shipped with the same challenge material
+The GWEEP multilayer perceptron shipped with the same challenge material (https://lisa-ldc.lal.in2p3.fr/)
 detects **all five blind label spans — all six coalescences — with no
 false-alarm episode at all**, alarming on 698 of 6,307,190 samples
 (0.011 %) at a threshold of 0.5. It is a stronger result than this
@@ -328,7 +327,7 @@ classifier achieves, and it should be stated that way.
 predictions shipped with the material through this project's event
 protocol; the model was never retrained here. Reproducing it is out of
 proportion to what it would settle: the preprocessing is a rolling Welch
-spectral entropy at unit stride (`gweep_preproc.py`, window 1000), which
+spectral entropy at unit stride (`gweep_preproc.py` of the challenge material, https://lisa-ldc.lal.in2p3.fr/; window 1000), which
 is 6.3 million transforms per channel-year and ten of them, and the
 spectral-entropy series for X, Y and Z are not among the shipped files.
 
@@ -372,7 +371,7 @@ indicative rather than decided.
 
 The VQC carries 8 qubits and 4 re-uploading layers, 64 parameters against
 the perceptron's 29,569 — a ratio of 460 — on one projection against five
-and four features against ten.
+and eight features against ten.
 
 ![Window-level receiver operating characteristic](assets/benchmark_roc_curve.png)
 
@@ -437,7 +436,7 @@ threshold for hours around each coalescence.
 ![Replay of the blind year under ground-causal whitening, with alert latencies](assets/benchmark_telemetry_alerts_causal.png)
 
 What counts as an alert has to be stated, because it decides the
-latencies. The first release credited each event with the earliest
+latencies. The 1.0.0 tag credited each event with the earliest
 alarmed window overlapping its label span, whatever came after it. Read
 that way, the causal replay alarms four coalescences 1.1 to 1.9 days
 before their merger, on runs of one window, at 6.35 false-alarm episodes
@@ -453,7 +452,7 @@ The value is fixed on the training year, not on this replay, by a rule
 written down with the selection: the smallest persistence that brings the
 calibration block under one false alert per 30 days — the rate below
 which the LIGO–Virgo–KAGRA public alerts count as significant (Chaudhary
-et al. 2024), taken as the standard because the Definition Study sets
+et al. 2024) [ChaudharyEtAl2024](@cite), taken as the standard because the Definition Study [ColpiEtAl2024](@cite) sets
 none for its low-latency alert pipelines — that keeps every calibration
 event alerted with a window of margin, and whose wait stays inside half
 of the Definition Study's one-hour processing budget. On the calibration
@@ -462,7 +461,7 @@ classifier charges five alarm episodes of one to seven windows, 1.38 per
 30 days, and alarms its four events for 3, 7, 13 and 46 consecutive
 windows. Two consecutive windows is the value that satisfies all three
 conditions: it brings the block to 0.83 per 30 days, and three would leave
-the shortest event run without margin. The first release, whose model
+the shortest event run without margin. The 1.0.0 tag, whose model
 alarmed its calibration events for at least four windows, shipped with
 three. Both replays, read at that persistence and at the first alarmed
 window:
@@ -593,8 +592,8 @@ where 648 retries cost nothing — is harmless.
 Two consequences worth stating plainly. The operating requirement is on
 **permanent** loss, and it is strict: about half a per cent for an alert
 on a loud pair of coalescences, a fifth of a per cent for scoring most of
-the record. And the smoothed
-whitening PSD deferred to v1.2, which would shorten the conditioning
+the record. And a smoothed
+whitening PSD, which would shorten the conditioning
 kernel, is not a refinement of this result but the precondition for
 running on a link that loses anything at all; every reduction of the
 stretch raises the tolerable loss rate in proportion.

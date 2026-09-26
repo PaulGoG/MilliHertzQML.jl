@@ -183,7 +183,12 @@ function generation_settings(config::AbstractDict)
         n_gbs = cfgget(g, "n_gbs", 50; type = Int, min = 0),
         n_emris = cfgget(g, "n_emris", 5; type = Int, min = 0),
         output = resolvepath(
-            cfgget(g, "output", "data/inputs/simulated_telemetry.h5"; type = String),
+            cfgget(
+                g,
+                "output",
+                "data/inputs/simulated_telemetry_complex.h5";
+                type = String,
+            ),
         ),
         seed = cfgget(g, "seed", 42; type = Int),
         observation_years = cfgget(
@@ -296,7 +301,12 @@ function preprocessing_settings(config::AbstractDict)
         throw(ArgumentError("step_size = $step_size exceeds window_size = $window_size."))
     return (
         h5_file = resolvepath(
-            cfgget(p, "h5_file", "data/inputs/simulated_telemetry.h5"; type = String),
+            cfgget(
+                p,
+                "h5_file",
+                "data/inputs/simulated_telemetry_complex.h5";
+                type = String,
+            ),
         ),
         tdi_group = cfgget(p, "tdi_group", "obs/tdi"; type = String),
         window_size = window_size,

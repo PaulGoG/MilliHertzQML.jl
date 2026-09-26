@@ -4,80 +4,83 @@ using MilliHertzQML
 using Yao
 using Flux
 using Zygote
-using Statistics
 using Random
 
 Random.seed!(42)
 
-# Configuration
-n_qubits = 4
-n_layers = 4
-model = VariationalQuantumClassifier(n_qubits, n_layers)
-opt_state = Flux.setup(Adam(0.01), model.params)
+function run_benchmarks()
+    # Configuration
+    n_qubits = 4
+    n_layers = 4
+    model = VariationalQuantumClassifier(n_qubits, n_layers)
+    opt_state = Flux.setup(Adam(0.01), model.params)
 
-# Batch data (10 samples, 4 features)
-X_batch = rand(Float32, 10, 4)
-y_batch = rand(0:1, 10)
+    # Batch data (10 samples, 4 features)
+    X_batch = rand(Float32, 10, 4)
+    y_batch = rand(0:1, 10)
 
-println("\n--- Quantum Classifier (4 Features, 4 Qubits, 4 Layers) Benchmarks ---")
+    println("\n--- Quantum Classifier (4 Features, 4 Qubits, 4 Layers) Benchmarks ---")
 
-println("\n1. Forward Pass (Single Sample):")
-@btime predict_probability($model, $(X_batch[1, :]))
+    println("\n1. Forward Pass (Single Sample):")
+    @btime predict_probability($model, $(X_batch[1, :]))
 
-println("\n2. Loss Evaluation (Batch size 10):")
-@btime loss_function($model, $X_batch, $y_batch)
+    println("\n2. Loss Evaluation (Batch size 10):")
+    @btime loss_function($model, $X_batch, $y_batch)
 
-println("\n3. Gradient Calculation (Batch size 10):")
-@btime Zygote.gradient($model) do m
-    loss_function(m, $X_batch, $y_batch)
-end
-
-println("\n4. Full Training Step (Batch size 10):")
-@btime train_step!($model, $opt_state, $X_batch, $y_batch)
-
-println("\n--- EXPANDED SCIENTIFIC BENCHMARKS ---")
-
-println("\n5. Feature Extraction (1024 sample time-series):")
-sample_data = randn(Float32, 1024)
-@btime extract_features($sample_data)
-
-println("\n6. Model Scaling (Forward Pass):")
-for q in [2, 4, 6]
-    for l in [2, 4]
-        m_scale = VariationalQuantumClassifier(q, l)
-        x_scale = rand(Float32, q)
-        t = @belapsed predict_probability($m_scale, $x_scale)
-        println("  Qubits: $q, Layers: $l | Time: $(round(t*1e6, digits=2)) μs")
+    println("\n3. Gradient Calculation (Batch size 10):")
+    @btime Zygote.gradient($model) do m
+        loss_function(m, $X_batch, $y_batch)
     end
-end
 
-println("\n7. Batch Throughput (Gradients):")
-for bs in [16, 32, 64]
-    X_bs = rand(Float32, bs, 4)
-    y_bs = rand(0:1, bs)
-    t = @belapsed Zygote.gradient(m -> loss_function(m, $X_bs, $y_bs), $model)
-    println("  Batch Size: $bs | Samples/sec: $(round(bs/t, digits=2))")
-end
+    println("\n4. Full Training Step (Batch size 10):")
+    @btime train_step!($model, $opt_state, $X_batch, $y_batch)
 
-println("\n8. Batch gradient, serial versus threaded ($(Threads.nthreads()) threads):")
-for bs in [16, 64]
-    X_bs = rand(Float32, bs, 4)
-    y_bs = rand(0:1, bs)
-    t_serial = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = false)
-    t_threads = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = true)
+    println("\n--- Feature extraction, scaling and throughput ---")
+
+    println("\n5. Feature Extraction (1024 sample time-series):")
+    sample_data = randn(Float32, 1024)
+    @btime extract_features($sample_data)
+
+    println("\n6. Model Scaling (Forward Pass):")
+    for q in [2, 4, 6, 8]
+        for l in [2, 4]
+            m_scale = VariationalQuantumClassifier(q, l)
+            x_scale = rand(Float32, q)
+            t = @belapsed predict_probability($m_scale, $x_scale)
+            println("  Qubits: $q, Layers: $l | Time: $(round(t*1e6, digits=2)) μs")
+        end
+    end
+
+    println("\n7. Batch Throughput (Gradients):")
+    for bs in [16, 32, 64]
+        X_bs = rand(Float32, bs, 4)
+        y_bs = rand(0:1, bs)
+        t = @belapsed Zygote.gradient(m -> loss_function(m, $X_bs, $y_bs), $model)
+        println("  Batch Size: $bs | Samples/sec: $(round(bs/t, digits=2))")
+    end
+
+    println("\n8. Batch gradient, serial versus threaded ($(Threads.nthreads()) threads):")
+    for bs in [16, 64]
+        X_bs = rand(Float32, bs, 4)
+        y_bs = rand(0:1, bs)
+        t_serial = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = false)
+        t_threads = @belapsed batch_gradient($model, $X_bs, $y_bs; threaded = true)
+        println(
+            "  Batch size: $bs | Serial: $(round(bs / t_serial; digits = 1)) samples/s | " *
+            "Threaded: $(round(bs / t_threads; digits = 1)) samples/s | " *
+            "Speed-up: $(round(t_serial / t_threads; digits = 2))",
+        )
+    end
+
+    println("\n9. Forward pass over a block, serial versus threaded (4096 windows):")
+    X_block = rand(Float32, 4096, 4)
+    t_serial = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = false)
+    t_threads = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = true)
     println(
-        "  Batch size: $bs | Serial: $(round(bs / t_serial; digits = 1)) samples/s | " *
-        "Threaded: $(round(bs / t_threads; digits = 1)) samples/s | " *
+        "  Serial: $(round(4096 / t_serial; digits = 1)) windows/s | " *
+        "Threaded: $(round(4096 / t_threads; digits = 1)) windows/s | " *
         "Speed-up: $(round(t_serial / t_threads; digits = 2))",
     )
 end
 
-println("\n9. Forward pass over a block, serial versus threaded (4096 windows):")
-X_block = rand(Float32, 4096, 4)
-t_serial = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = false)
-t_threads = @belapsed MilliHertzQML.predict_all($model, $X_block; threaded = true)
-println(
-    "  Serial: $(round(4096 / t_serial; digits = 1)) windows/s | " *
-    "Threaded: $(round(4096 / t_threads; digits = 1)) windows/s | " *
-    "Speed-up: $(round(t_serial / t_threads; digits = 2))",
-)
+run_benchmarks()
