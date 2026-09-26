@@ -38,9 +38,9 @@ MilliHertzQMLCurvatureDistinguishabilityExt = "CurvatureDistinguishability"
 MilliHertzQMLDeepSpaceTelemetryExt = "DeepSpaceTelemetry"
 
 [compat]
-DeepSpaceTelemetry = "1.0"
+DeepSpaceTelemetry = "1, 2"
 CairoMakie = "0.15"
-CurvatureDistinguishability = "1"
+CurvatureDistinguishability = "1, 2"
 CSV = "0.10"
 DataFrames = "1"
 Dates = "1"
