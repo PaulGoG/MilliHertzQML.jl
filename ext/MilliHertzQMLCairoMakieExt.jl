@@ -1442,16 +1442,17 @@ function figure_seed_spread(
             )
         end
         # Every run recovered the same events, so the count is stated once
-        # rather than repeated over each marker.
+        # rather than repeated over each marker; it sits in the headroom
+        # above the highest rate, clear of the markers.
         recovered =
             all(==(n_events), events_detected) ? "$n_events of $n_events events" :
             "$(minimum(events_detected))–$(maximum(events_detected)) of $n_events events"
         text!(
             ax_far,
             0.5 + 0.05 * n,
-            far_low;
+            far_top + 0.20 * (far_top - far_low);
             text = recovered,
-            align = (:left, :bottom),
+            align = (:left, :top),
             fontsize = ANNOTATION_FONTSIZE,
             color = FIGURE_COLORS.signal,
         )
