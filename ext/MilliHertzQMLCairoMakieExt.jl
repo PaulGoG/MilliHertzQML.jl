@@ -28,8 +28,9 @@ using MilliHertzQML: contiguous_runs
 using CairoMakie.Makie: scatter!, stairs!, Observable, @lift, Point2f, record
 using CairoMakie.Makie: rowsize!, Auto, LinearTicks
 using CairoMakie.Makie: widths
-using CairoMakie.Makie: linkyaxes!, hideydecorations!, colgap!
+using CairoMakie.Makie: linkyaxes!, hideydecorations!, colgap!, hspan!
 using DataFrames: DataFrame, nrow
+using Statistics: median
 using Dates: Dates, DateTime
 import MilliHertzQML:
     figure_theme,
@@ -48,7 +49,8 @@ import MilliHertzQML:
     animate_mission_replay,
     figure_loss_survival,
     figure_seed_spread,
-    figure_gap_study
+    figure_gap_study,
+    figure_grid_seeds
 
 """
     LEGEND_STYLE
@@ -1711,6 +1713,166 @@ function figure_gap_study(
             )
         end
         colgap!(figure.layout, 12)
+        figure
+    end
+end
+
+function figure_grid_seeds(
+    names::AbstractVector{<:AbstractString},
+    validation_episodes::AbstractMatrix{<:Real},
+    blind_far_per_30d::AbstractMatrix{<:Real},
+    events_detected::AbstractMatrix{<:Real},
+    n_events::Integer;
+    seeds::AbstractVector{<:Integer} = collect(1:size(validation_episodes, 2)),
+    selected::Union{Nothing,AbstractString} = nothing,
+    target_far::Union{Nothing,Real} = nothing,
+)
+    n, m = size(validation_episodes)
+    size(blind_far_per_30d) == (n, m) && size(events_detected) == (n, m) || throw(
+        DimensionMismatch(
+            "the validation, false-alarm and detection matrices differ in size.",
+        ),
+    )
+    length(names) == n ||
+        throw(DimensionMismatch("one name per row of the matrices is required."))
+    length(seeds) == m ||
+        throw(DimensionMismatch("one seed per column of the matrices is required."))
+    n >= 1 && m >= 1 || throw(ArgumentError("the grid is empty."))
+    n_events >= 1 || throw(ArgumentError("n_events must be at least 1."))
+    present = isfinite.(blind_far_per_30d) .& isfinite.(validation_episodes)
+    any(present) || throw(ArgumentError("no run of the grid has results."))
+    all(e -> 0 <= e <= n_events, events_detected[present]) ||
+        throw(ArgumentError("events detected exceed n_events."))
+    all(>=(0), blind_far_per_30d[present]) ||
+        throw(ArgumentError("a false-alarm rate is negative."))
+    selected === nothing ||
+        selected in names ||
+        throw(ArgumentError("the selected configuration $selected is not a row."))
+
+    y = collect(n:-1:1)      # the first configuration at the top
+    jitter = m == 1 ? [0.0] : collect(range(-0.24, 0.24; length = m))
+    markers = (:circle, :rect, :diamond, :utriangle, :dtriangle, :star5)
+    rates = Float64.(blind_far_per_30d[present])
+    logscale = all(>(0), rates)
+    return with_theme(figure_theme(; size = (1200, max(600, 260 + 52 * n)))) do
+        figure = Figure()
+        ax_val = Axis(
+            figure[1, 1];
+            xlabel = "Validation false-alarm episodes",
+            yticks = (y, String.(names)),
+        )
+        ax_far = if logscale
+            lo, hi = extrema(rates)
+            lo, hi = lo / 1.4, hi * 1.4
+            Axis(
+                figure[1, 2];
+                xlabel = "Blind false alarms per 30 d",
+                xscale = log10,
+                xticks = log_ticks(lo, hi),
+                yticks = y,
+            )
+        else
+            Axis(figure[1, 2]; xlabel = "Blind false alarms per 30 d", yticks = y)
+        end
+        linkyaxes!(ax_val, ax_far)
+        hideydecorations!(ax_far; grid = false, ticks = false)
+        ylims!(ax_val, 0.4, n + 0.6)
+        logscale && xlims!(ax_far, lo, hi)
+        v_hi = maximum(validation_episodes[present])
+        xlims!(ax_val, -0.05 * max(v_hi, 1), 1.08 * max(v_hi, 1))
+
+        if selected !== nothing
+            r = y[findfirst(==(selected), names)]
+            for ax in (ax_val, ax_far)
+                hspan!(ax, r - 0.46, r + 0.46; color = (:grey, 0.15))
+            end
+        end
+        target_handle = nothing
+        if target_far !== nothing
+            target_handle = vlines!(
+                ax_far,
+                [target_far];
+                color = FIGURE_COLORS.target,
+                linestyle = :dash,
+                linewidth = 1.5,
+            )
+        end
+        seed_handles = Any[]
+        missed_handle = nothing
+        for j in 1:m
+            rows = findall(present[:, j])
+            isempty(rows) && continue
+            marker = markers[mod1(j, length(markers))]
+            yj = y[rows] .+ jitter[j]
+            h = scatter!(
+                ax_val,
+                Float64.(validation_episodes[rows, j]),
+                yj;
+                marker = marker,
+                color = FIGURE_COLORS.false_alarm,
+                strokewidth = 1.5,
+                strokecolor = FIGURE_STROKES.false_alarm,
+            )
+            push!(seed_handles, (h, "Seed $(seeds[j])"))
+            # A run that missed a blind event is drawn open in the blind panel
+            complete = [events_detected[i, j] == n_events for i in rows]
+            scatter!(
+                ax_far,
+                Float64.(blind_far_per_30d[rows[complete], j]),
+                yj[complete];
+                marker = marker,
+                color = FIGURE_COLORS.false_alarm,
+                strokewidth = 1.5,
+                strokecolor = FIGURE_STROKES.false_alarm,
+            )
+            if !all(complete)
+                p = scatter!(
+                    ax_far,
+                    Float64.(blind_far_per_30d[rows[.!complete], j]),
+                    yj[.!complete];
+                    marker = marker,
+                    color = :white,
+                    strokewidth = 1.5,
+                    strokecolor = FIGURE_STROKES.false_alarm,
+                )
+                missed_handle === nothing && (missed_handle = p)
+            end
+        end
+        # The median over the seeds of every configuration
+        median_handle = nothing
+        for (ax, values) in ((ax_val, validation_episodes), (ax_far, blind_far_per_30d))
+            xs = Float64[]
+            ys = Float64[]
+            for i in 1:n
+                v = Float64.(values[i, present[i, :]])
+                isempty(v) && continue
+                push!(xs, median(v))
+                push!(ys, y[i])
+            end
+            median_handle = scatter!(
+                ax,
+                xs,
+                ys;
+                marker = :vline,
+                markersize = 30,
+                color = FIGURE_COLORS.threshold,
+            )
+        end
+        handles = Any[first.(seed_handles)...]
+        labels = String[last.(seed_handles)...]
+        push!(handles, median_handle)
+        push!(labels, "Median")
+        if missed_handle !== nothing
+            push!(handles, missed_handle)
+            push!(labels, "Blind event missed")
+        end
+        if target_handle !== nothing
+            push!(handles, target_handle)
+            push!(labels, "Requested rate")
+        end
+        Legend(figure[0, 1:2], handles, labels; LEGEND_STYLE..., nbanks = 2)
+        colgap!(figure.layout, 12)
+        rowgap!(figure.layout, 10)
         figure
     end
 end

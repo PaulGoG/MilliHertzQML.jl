@@ -84,7 +84,7 @@ export figure_theme, save_figure
 export figure_training_history, figure_mission_trace, figure_roc, figure_sensitivity
 export figure_threshold_sweep
 export figure_score_distribution, figure_telemetry_trace, figure_telemetry_alerts
-export figure_loss_survival, figure_seed_spread, figure_gap_study
+export figure_loss_survival, figure_seed_spread, figure_gap_study, figure_grid_seeds
 export animation_theme, save_animation
 export animate_training_history, animate_mission_replay
 export RunGeometry, BatchRecord, ArrivalEvent, WindowRecord, parse_batch_name, batch_rows

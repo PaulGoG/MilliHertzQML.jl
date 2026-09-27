@@ -327,6 +327,24 @@ labelled guide. Requires CairoMakie.
 function figure_gap_study end
 
 """
+    figure_grid_seeds(names, validation_episodes, blind_far_per_30d, events_detected,
+                      n_events; seeds, selected = nothing, target_far = nothing) -> Figure
+
+Two panels side by side over the configurations of a model grid trained
+at several initialisation seeds, one row per configuration (`names`, the
+first on top) and one column of the matrices per seed (`seeds`): the
+false-alarm episodes of every run on its validation block, the selection
+statistic, and its false-alarm rate per 30 days on the blind record, on a
+logarithmic axis when every rate is positive. Seeds are told apart by
+marker shape; a run that missed a blind event of `n_events` is drawn open;
+a vertical bar marks the median of every configuration. `selected` shades
+the row of the selected configuration and `target_far` draws the requested
+rate. Entries that are not finite (a run without results) are left out.
+Requires CairoMakie.
+"""
+function figure_grid_seeds end
+
+"""
     figure_telemetry_trace(t_days, strain, labels; max_points = 5000, whitened = nothing) -> Figure
 
 Simulated strain record against mission time with the labelled spans as

@@ -1419,6 +1419,43 @@ end
             [1.0],
         )
         @test_throws ArgumentError figure_gap_study(["a"], ["f"], [1.0], [3], 2, [1.0])
+        # Grid over seeds: a missing run (NaN) is left out, a run that
+        # missed a blind event is drawn open, and the rates of a positive
+        # grid go on a logarithmic axis.
+        grid = figure_grid_seeds(
+            ["q8", "q6", "q4"],
+            [4 10 NaN; 8 7 9; 9 10 12],
+            [1.57 2.06 NaN; 5.5 9.8 4.0; 2.6 1.98 3.3],
+            [5 5 0; 5 5 5; 5 4 5],
+            5;
+            seeds = [9999, 1009, 2027],
+            selected = "q8",
+            target_far = 3.0,
+        )
+        save_figure(grid, joinpath(dir, "grid"))
+        @test TOML.parsefile(joinpath(dir, "grid.toml"))["figure"]["size_pt"] == [1200, 600]
+        @test_throws DimensionMismatch figure_grid_seeds(
+            ["a"],
+            ones(1, 2),
+            ones(1, 3),
+            ones(Int, 1, 2),
+            5,
+        )
+        @test_throws ArgumentError figure_grid_seeds(
+            ["a"],
+            ones(1, 1),
+            ones(1, 1),
+            fill(6, 1, 1),
+            5,
+        )
+        @test_throws ArgumentError figure_grid_seeds(
+            ["a"],
+            ones(1, 1),
+            ones(1, 1),
+            ones(Int, 1, 1),
+            5;
+            selected = "b",
+        )
         save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
         @test isfile(joinpath(dir, "roc_curve_#1.pdf"))
         @test_throws ArgumentError save_figure(

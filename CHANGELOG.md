@@ -34,6 +34,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
   now includes the stages run by the scripts of the smoke test and the
   three package extensions.
 
+- `figure_grid_seeds`: the configurations of a model grid trained at
+  several seeds, one row each, with the validation false-alarm episodes
+  (the selection statistic) and the blind false-alarm rate of every run,
+  the median of every configuration, and runs that missed a blind event
+  drawn open.
 - `configs/experiments/q8_b6_s001.toml`: the selected configuration with the
   Welch whitening estimate smoothed by 0.01 dex, two window lengths of
   conditioning context (from a scan of streamed against batch scores) and
