@@ -1,15 +1,14 @@
-written_at = "2026-09-27T19:08:36.032"
-
-[animation]
-bytes = 1899565
-files = ["mission_replay.gif"]
-frame_px = [1800, 2620]
-run_id = "telemetry_year_pi_pooled"
-px_per_unit = 2
+written_at = "2026-09-27T19:04:07.634"
 
 [environment]
-manifest_sha256 = "eaaf9be79928ba191d391c1be89596010e55d1c7252b9498c9ff53f3d93973df"
-active_project = "scripts/Project.toml"
+manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
+active_project = "test/Project.toml"
+
+[figure]
+files = ["telemetry_alerts.pdf", "telemetry_alerts.png"]
+run_id = "telemetry_year_s001_pi"
+size_pt = [900, 950]
+px_per_unit = 4
 
 [hardware]
 total_memory_gib = 30.76
