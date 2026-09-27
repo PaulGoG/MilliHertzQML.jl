@@ -945,6 +945,13 @@ end
     @test_throws ArgumentError welch_psd(white, fs; segment_length = 1)
     @test_throws ArgumentError welch_psd(white, fs; segment_length = 1024, overlap = 1.0)
     @test_throws ArgumentError welch_psd(white, fs; segment_length = 1024, average = :max)
+    # Pooling the segments of several records: two copies of one record give
+    # the record's own estimate, a record shorter than a segment is skipped,
+    # and no record holding a segment is an error
+    fp, sp = welch_psd([white, white], fs; segment_length = 1024)
+    @test fp == fw && sp == sw
+    @test welch_psd([white, white[1:100]], fs; segment_length = 1024)[2] == sw
+    @test_throws ArgumentError welch_psd([white[1:100]], fs; segment_length = 1024)
 
     # Log-log interpolation: exact at the knots, geometric in between, flat outside
     S = interpolated_psd([1e-3, 1e-2, 1e-1], [1.0, 100.0, 1.0])

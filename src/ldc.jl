@@ -297,6 +297,8 @@ end
 """
     welch_psd(x, fs; segment_length, overlap = 0.5, taper = :hann, average = :median)
         -> (freqs, psd)
+    welch_psd(records, fs; segment_length, overlap = 0.5, taper = :hann, average = :median)
+        -> (freqs, psd)
 
 One-sided PSD estimate [Hz⁻¹] of the record `x` sampled at `fs` [Hz] from
 tapered periodograms ([`tapered_periodogram`](@ref)) of segments of
@@ -304,6 +306,11 @@ tapered periodograms ([`tapered_periodogram`](@ref)) of segments of
 is `:mean` (Welch) or `:median` (robust to transients; the median of the
 exponentially distributed periodogram is corrected by ``1/\\ln 2``). The DC
 bin is dropped, so `freqs` starts at ``f_s / \\texttt{segment\\_length}``.
+
+Given a vector of `records` — the delivered runs of a record with holes —
+the segments of every record long enough to hold one are pooled into a
+single estimate, so that no segment spans a hole; a record shorter than a
+segment is skipped, and `ArgumentError` is thrown when none holds one.
 """
 function welch_psd(
     x::AbstractVector{<:Real},
@@ -313,23 +320,45 @@ function welch_psd(
     taper::Symbol = :hann,
     average::Symbol = :median,
 )
-    fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
     2 <= segment_length <= length(x) || throw(
         ArgumentError(
             "segment_length = $segment_length; must lie in [2, $(length(x))] for this record.",
         ),
     )
+    return welch_psd([x], fs; segment_length, overlap, taper, average)
+end
+
+function welch_psd(
+    records::AbstractVector{<:AbstractVector{<:Real}},
+    fs::Real;
+    segment_length::Integer,
+    overlap::Real = 0.5,
+    taper::Symbol = :hann,
+    average::Symbol = :median,
+)
+    fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
+    segment_length >= 2 ||
+        throw(ArgumentError("segment_length = $segment_length; must be at least 2."))
     0 <= overlap < 1 || throw(ArgumentError("overlap = $overlap; must lie in [0, 1)."))
     average in (:mean, :median) ||
         throw(ArgumentError("average = $average; expected :mean or :median."))
+    long = filter(x -> length(x) >= segment_length, records)
+    isempty(long) &&
+        throw(ArgumentError("no record holds a segment of $segment_length samples."))
     hop = max(1, round(Int, segment_length * (1 - overlap)))
-    n_segments = div(length(x) - segment_length, hop) + 1
     n_freqs = div(segment_length, 2) + 1
-    P = Matrix{Float64}(undef, n_freqs, n_segments)
-    for s in 1:n_segments
-        lo = (s - 1) * hop + 1
-        P[:, s] = tapered_periodogram(view(x, lo:(lo+segment_length-1)); taper = taper)
+    columns = Vector{Vector{Float64}}()
+    for x in long
+        n_segments = div(length(x) - segment_length, hop) + 1
+        for s in 1:n_segments
+            lo = (s - 1) * hop + 1
+            push!(
+                columns,
+                tapered_periodogram(view(x, lo:(lo+segment_length-1)); taper = taper),
+            )
+        end
     end
+    P = reduce(hcat, columns)
     psd = Vector{Float64}(undef, n_freqs - 1)
     for k in 2:n_freqs
         row = view(P, k, :)

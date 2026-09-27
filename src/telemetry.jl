@@ -697,18 +697,18 @@ end
 
 Ground-causal whitening of a replay. Each window is whitened by the median
 Welch estimate ([`welch_psd`](@ref), segments of `segment_length` samples)
-of the delivered record behind it: the covered interval holding the
-window's conditioning stretch, cut to the last `span_rows` rows before the
-stretch's end, high-passed as the detector high-passes every stretch — the
-order in which the batch pre-processor estimates its `"welch"` PSD.
+of the delivered record behind it: every delivered run inside the last
+`span_rows` rows before the end of the window's conditioning stretch, each
+run high-passed as the detector high-passes every stretch — the order in
+which the batch pre-processor estimates its `"welch"` PSD — and the
+segments of all runs pooled, so that no segment spans a delivery hole.
 Nothing that has not reached the ground enters the estimate, unlike a
 PSD of the whole record, which at every window of a streamed mission
 contains data still to be delivered. The estimate is redone once the end
 of that record has moved by `refresh_rows` rows since the previous one.
-While fewer than `segment_length` contiguous rows are on the ground behind
-a window — at the start of a mission, or behind a delivery hole — the
-window is whitened by the previous estimate, and by the detector's own
-static PSD only before any estimate exists.
+While no delivered run behind a window holds a segment — at the start of
+a mission — the window is whitened by the previous estimate, and by the
+detector's own static PSD only before any estimate exists.
 """
 struct TrailingWelch
     span_rows::Int
@@ -848,20 +848,28 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
     isempty(span) && return state.detector.psd, 0
     d = state.detector
     hi = min(last(span), last(window) + d.context_windows * d.window_size)
-    lo = max(first(span), hi - tw.span_rows + 1)
-    # Behind a delivery hole the contiguous record can be shorter than one
-    # segment; the previous estimate of the delivered record is then kept
-    # rather than the detector's static PSD, which belongs to another record.
-    if hi - lo + 1 < tw.segment_length
+    lo = hi - tw.span_rows + 1
+    # Every delivered run inside the span that holds at least one segment
+    # contributes its segments: a hole bounds the runs, never a segment.
+    # While no run holds a segment, the previous estimate of the delivered
+    # record is kept rather than the detector's static PSD, which belongs to
+    # another record.
+    runs = UnitRange{Int}[]
+    for r in state.coverage.intervals
+        a, b = max(first(r), lo), min(last(r), hi)
+        b - a + 1 >= tw.segment_length && push!(runs, a:b)
+    end
+    if isempty(runs)
         state.trailing_psd === nothing && return d.psd, 0
         return state.trailing_psd, state.trailing_row
     end
     if state.trailing_psd !== nothing && abs(hi - state.trailing_row) < tw.refresh_rows
         return state.trailing_psd, state.trailing_row
     end
-    record = Float64.(delivered_rows(state, lo:hi))
-    if d.highpass_cutoff_hz > 0
-        record = highpass_record(
+    records = map(runs) do r
+        record = Float64.(delivered_rows(state, r))
+        d.highpass_cutoff_hz > 0 || return record
+        highpass_record(
             record,
             d.sample_rate;
             cutoff = d.highpass_cutoff_hz,
@@ -869,7 +877,7 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
         )
     end
     freqs, table = welch_psd(
-        record,
+        records,
         d.sample_rate;
         segment_length = tw.segment_length,
         average = :median,
