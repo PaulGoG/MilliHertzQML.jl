@@ -418,11 +418,11 @@ end
     @test isapprox(p_low_win, 1.0; atol = 0.7)
     # A strong in-band sinusoid raises the low-band power and lowers the entropy
     t = (0:39999) ./ fs
-    loud = long .+ cos.(2π * 2e-3 .* t)
-    p_low_loud, p_high_loud, ent_loud, _ = extract_features(loud, fs)
-    @test p_low_loud > 5 * p_low_long
-    @test isapprox(p_high_loud, p_high_long; atol = 0.3)
-    @test ent_loud < ent_long
+    strong = long .+ cos.(2π * 2e-3 .* t)
+    p_low_strong, p_high_strong, ent_strong, _ = extract_features(strong, fs)
+    @test p_low_strong > 5 * p_low_long
+    @test isapprox(p_high_strong, p_high_long; atol = 0.3)
+    @test ent_strong < ent_long
     @test_throws ArgumentError extract_features(long, 0.0)
 
     # The bands set with the default edges reproduces the whitened set exactly

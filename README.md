@@ -276,8 +276,9 @@ coupling excludes delivery holes from scoring rather than handling them.
 ![Classifier output and alarms over the year-long replay under causal whitening, with the alert time of every coalescence against the delivery latency of the link](docs/src/assets/benchmark_telemetry_alerts_causal.png)
 
 The replay is also rendered as an animation: four panels traverse the year
-in the order in which the ground station received the windows, and the
-dotted line marks the delay of the delivery relative to the measurement.
+in the order in which the ground station received the windows. The dotted
+line is the ground-station clock; its distance from the edge of the
+received data is the delivery latency.
 
 ![A year of telemetry replay under causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
 
@@ -447,7 +448,7 @@ MilliHertzQML.jl/
 │   ├── default.toml        # Pipeline defaults (simulator)
 │   ├── sangria.toml        # Sangria benchmark: Welch-whitened features, truth-stream labels
 │   ├── sangria_paper.toml  # Sangria paper-parity run: raw-window feature set of Isfan et al. (2025)
-│   └── experiments/        # Sangria capacity experiments: one configuration per model width, depth, and band partition
+│   └── experiments/        # Sangria capacity experiments: one configuration per model width, depth, band partition, and whitening variant
 └── Project.toml            # Package metadata: only the dependencies of src/
 ```
 
