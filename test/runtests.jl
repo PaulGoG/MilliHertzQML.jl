@@ -1447,6 +1447,7 @@ end
 include("export_payload_tests.jl")
 include("telemetry_tests.jl")
 include("telemetry_integration_tests.jl")
+include("labeling_tests.jl")
 
 # Validation anchors on the LDC Sangria training product. They run only when
 # MILLIHERTZQML_LDC_DIR names a directory holding LDC2_sangria_training_v2.h5
@@ -1533,7 +1534,9 @@ include("response_tests.jl")
     # whose [paths] section points into a temporary directory; nothing is
     # written into the project tree. Each script activates the scripts
     # environment itself.
-    julia = joinpath(Sys.BINDIR, Base.julia_exename())
+    # The command of this process, so that the stages run by the scripts
+    # inherit its code-coverage setting
+    julia = Base.julia_cmd()
     scripts = joinpath(PROJECT_ROOT, "scripts")
     mktempdir() do dir
         cfg = TOML.parsefile(joinpath(PROJECT_ROOT, "configs", "default.toml"))
