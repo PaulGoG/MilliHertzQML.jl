@@ -584,7 +584,7 @@ end
 Classifier probability of the window starting at `offset` (1-based) of the
 contiguous delivered `stretch`, conditioned as described for
 [`StreamingDetector`](@ref). `psd` replaces the detector's whitening PSD
-for this window — the ground-causal estimate of a replay under
+for this window — the causal estimate of a replay under
 [`TrailingWelch`](@ref) — or `nothing` for no whitening.
 """
 function score_window(
@@ -674,7 +674,7 @@ One scored window of a replay: `window` index, payload `row_start` and
 arrival time `complete_at` of the `completing_batch`, the window's
 `coverage`, the classifier `score`, the `decision`, the inference wall
 time `inference_wall_ms`, and `psd_row`, the last delivered row behind
-the ground-causal whitening estimate ([`TrailingWelch`](@ref)) the window
+the causal whitening estimate ([`TrailingWelch`](@ref)) the window
 was whitened with, 0 when the detector's static PSD was used.
 """
 struct WindowRecord
@@ -695,7 +695,7 @@ end
 """
     TrailingWelch(span_rows, refresh_rows, segment_length)
 
-Ground-causal whitening of a replay. Each window is whitened by the median
+Causal whitening of a replay. Each window is whitened by the median
 Welch estimate ([`welch_psd`](@ref), segments of `segment_length` samples)
 of the delivered record behind it: the covered interval holding the
 window's conditioning stretch, cut to the last `span_rows` rows before the
@@ -735,7 +735,7 @@ end
 Consumer state of a replay: the batches of the run, the [`Coverage`](@ref)
 of delivered rows, the [`WindowScheduler`](@ref), the delivered payload
 per batch, the scored windows, the number of arrival events consumed, and,
-under `trailing_psd::`[`TrailingWelch`](@ref), the current ground-causal
+under `trailing_psd::`[`TrailingWelch`](@ref), the current causal
 whitening estimate with the last delivered row it was made on. Fed one
 event at a time by [`process_event!`](@ref).
 """
@@ -817,7 +817,7 @@ end
     whitening_psd!(state, window) -> (psd, psd_row)
 
 Whitening PSD of `window` in a replay: the detector's static PSD with
-`psd_row = 0`, or, under [`TrailingWelch`](@ref), the ground-causal
+`psd_row = 0`, or, under [`TrailingWelch`](@ref), the causal
 estimate over the delivered record behind the window's conditioning
 stretch and the last row it was made on — reused while that end has moved
 by less than `refresh_rows`, redone otherwise, and replaced by the static
@@ -970,7 +970,7 @@ Replay the arrival feed of `run` in mission-time order through
 per scored window with `window`, `row_start`, `row_end`, `content_start`,
 `content_end`, `complete_at`, `completing_batch`, `coverage`, `score`,
 `decision`, `inference_wall_ms`, `psd_row`. `trailing_psd`, a
-[`TrailingWelch`](@ref), whitens every window by a ground-causal estimate
+[`TrailingWelch`](@ref), whitens every window by a causal estimate
 instead of the detector's static PSD.
 """
 function replay_run(
@@ -1052,7 +1052,7 @@ end
                       psd_sidecar = "", context_windows = 4) -> StreamingDetector
 
 The [`StreamingDetector`](@ref) of a training run: model and scaler from
-the artifact, the fitted threshold from `threshold.toml`, and the
+the artefact, the fitted threshold from `threshold.toml`, and the
 conditioning — window geometry, whitening PSD, analysis bands, record
 high-pass, feature set — from the sidecar of the feature table the run was
 trained on (recorded in its `config.toml` snapshot).
@@ -1147,7 +1147,7 @@ function open_telemetry_run end
     event_merger_times(events) -> Vector{Float64}
 
 Merger times [s after the mission epoch] of an event table: the column
-`merger_time_s` (LDC event tables) or `t_c_sec` (the simulator catalog).
+`merger_time_s` (LDC event tables) or `t_c_sec` (the simulator catalogue).
 """
 function event_merger_times(events::DataFrame)
     "merger_time_s" in names(events) && return Float64.(events.merger_time_s)

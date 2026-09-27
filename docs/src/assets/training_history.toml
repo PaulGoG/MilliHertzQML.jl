@@ -1,4 +1,4 @@
-written_at = "2026-09-24T17:05:23.281"
+written_at = "2026-09-27T13:21:38.937"
 
 [animation]
 bytes = 167938
@@ -8,7 +8,7 @@ run_id = "q8_b6_pi"
 px_per_unit = 2
 
 [environment]
-manifest_sha256 = "c45aafa25c09da8d25c4e10ed90dc3c24ed4627c04a6ebeb3b0f2eeedb671dd7"
+manifest_sha256 = "eaaf9be79928ba191d391c1be89596010e55d1c7252b9498c9ff53f3d93973df"
 active_project = "scripts/Project.toml"
 
 [hardware]
@@ -18,12 +18,12 @@ blas_threads = 6
 distributed_workers = 1
 machine_id = "10f031174590"
 kernel = "Linux"
-versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
+versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_PKG_USE_CLI_GIT = true\n  JULIA_NUM_THREADS = 12\n"""
 julia_threads = 12
 cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.0.0-20-g6195fcf"
+git_commit = "v1.1.0-17-g36ff669"
 git_dirty = false
 package_version = "1.1.0"
