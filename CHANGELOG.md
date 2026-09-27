@@ -6,6 +6,42 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `figure_gap_study`: the levels of a delivery-gap study on the vertical
+  axis, three panels beside them (windows scored of the reference, events
+  detected, false alarms per 30 days), families separated.
+- `welch_psd` accepts a vector of records and pools the segments of every
+  record long enough to hold one, so that an estimate of a record with
+  holes never spans a hole.
+- The benchmark page's lossy-link section is rewritten from a
+  seventeen-mission study on DeepSpaceTelemetry.jl 2.0.0 (scattered,
+  bursty and retransmitted loss, link outages, generation gaps, recorder
+  overflow, partial conditioning), replayed under the ground-causal
+  whitening and under the oracle PSD.
+
+### Changed
+- The trailing whitening estimate of a replay pools the Welch segments of
+  every delivered run inside its span instead of using the last contiguous
+  run only, trims `[telemetry] psd_edge_periods` cutoff periods of the
+  record high-pass from both ends of every run before segmenting it (the
+  high-pass rings at the ends of a run as it does at the ends of the batch
+  record), and keeps its previous estimate while no run holds a segment
+  beyond the trim. Behind a few permanent holes the contiguous record held
+  one or two segments and the estimate was close to a raw periodogram: on
+  30-day missions the false-alarm rate rose several-fold and at 0.3 % loss
+  both coalescences went undetected, while the oracle PSD kept the
+  reference rate. `TrailingWelch` takes `edge_rows`.
+
+### Fixed
+- A replay of a producer that discarded production (a generation gap, a
+  recorder overflow) raised a `KeyError` on the first window after the
+  gap: the delivered payload was indexed by batch index, which no longer
+  tracks the payload rows after such a gap. It is keyed by the first row
+  a batch holds, and a stretch is assembled from the blocks that cover it.
+- The physics page states the ecliptic-frame sky and polarization
+  conventions of the constellation response with the equations of the
+  conventions document they follow.
+
 ## [1.1.0] — 2026-09-26
 
 First public version of the repository. The models are retrained on the half-period encoding and the benchmark

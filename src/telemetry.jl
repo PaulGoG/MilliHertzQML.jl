@@ -693,7 +693,7 @@ struct WindowRecord
 end
 
 """
-    TrailingWelch(span_rows, refresh_rows, segment_length)
+    TrailingWelch(span_rows, refresh_rows, segment_length; edge_rows = 0)
 
 Ground-causal whitening of a replay. Each window is whitened by the median
 Welch estimate ([`welch_psd`](@ref), segments of `segment_length` samples)
@@ -702,7 +702,11 @@ of the delivered record behind it: every delivered run inside the last
 run high-passed as the detector high-passes every stretch — the order in
 which the batch pre-processor estimates its `"welch"` PSD — and the
 segments of all runs pooled, so that no segment spans a delivery hole.
-Nothing that has not reached the ground enters the estimate, unlike a
+The high-pass rings at both ends of a run (the ends of the record in the
+batch pipeline, whose edge windows are dropped), so `edge_rows` rows are
+trimmed from each end of a high-passed run before it is segmented, and a
+run must hold a segment beyond that trim. Nothing that has not reached
+the ground enters the estimate, unlike a
 PSD of the whole record, which at every window of a streamed mission
 contains data still to be delivered. The estimate is redone once the end
 of that record has moved by `refresh_rows` rows since the previous one.
@@ -714,10 +718,12 @@ struct TrailingWelch
     span_rows::Int
     refresh_rows::Int
     segment_length::Int
+    edge_rows::Int
     function TrailingWelch(
         span_rows::Integer,
         refresh_rows::Integer,
-        segment_length::Integer,
+        segment_length::Integer;
+        edge_rows::Integer = 0,
     )
         segment_length >= 2 || throw(ArgumentError("segment_length must be at least 2."))
         span_rows >= segment_length || throw(
@@ -726,7 +732,8 @@ struct TrailingWelch
             ),
         )
         refresh_rows >= 1 || throw(ArgumentError("refresh_rows must be at least 1."))
-        return new(Int(span_rows), Int(refresh_rows), Int(segment_length))
+        edge_rows >= 0 || throw(ArgumentError("edge_rows must be non-negative."))
+        return new(Int(span_rows), Int(refresh_rows), Int(segment_length), Int(edge_rows))
     end
 end
 
@@ -854,10 +861,14 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
     # While no run holds a segment, the previous estimate of the delivered
     # record is kept rather than the detector's static PSD, which belongs to
     # another record.
+    # The high-pass rings at both ends of a run, so `edge_rows` are trimmed
+    # from each end of a high-passed run before it is segmented, and a run
+    # must hold a segment beyond that trim.
+    edge = d.highpass_cutoff_hz > 0 ? tw.edge_rows : 0
     runs = UnitRange{Int}[]
     for r in state.coverage.intervals
         a, b = max(first(r), lo), min(last(r), hi)
-        b - a + 1 >= tw.segment_length && push!(runs, a:b)
+        b - a + 1 >= tw.segment_length + 2 * edge && push!(runs, a:b)
     end
     if isempty(runs)
         state.trailing_psd === nothing && return d.psd, 0
@@ -869,12 +880,13 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
     records = map(runs) do r
         record = Float64.(delivered_rows(state, r))
         d.highpass_cutoff_hz > 0 || return record
-        highpass_record(
+        filtered = highpass_record(
             record,
             d.sample_rate;
             cutoff = d.highpass_cutoff_hz,
             order = d.highpass_order,
         )
+        filtered[(edge+1):(end-edge)]
     end
     freqs, table = welch_psd(
         records,

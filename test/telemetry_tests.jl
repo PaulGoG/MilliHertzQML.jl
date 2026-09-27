@@ -476,9 +476,24 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         # Under the trailing estimate, the windows just after the hole have
         # fewer contiguous rows behind them than one segment and keep the
         # previous estimate of the delivered record instead of the static PSD
+        # Under the trailing estimate the runs on both sides of the hole are
+        # pooled, so the windows after the hole carry an estimate made
+        # behind them, never the static PSD
         trailing = replay_run(run, detector; trailing_psd = TrailingWelch(3000, 500, 1024))
         rows_after = trailing.row_start .- 1000 .> last(hole)
-        @test any(rows_after) && all(trailing.psd_row[rows_after] .> 0)
-        @test all(trailing.psd_row[rows_after] .<= trailing.row_end[rows_after] .+ 1000)
+        estimated = trailing.psd_row[rows_after]
+        @test any(rows_after) && all(estimated .> last(hole))
+        @test all(estimated .<= trailing.row_end[rows_after] .+ 1000)
+        # With an edge trim of 300 rows the run before the hole (2000 rows)
+        # no longer holds a segment beyond the trim, the run after it does
+        # once 1624 rows are delivered, and the estimate is kept meanwhile
+        trimmed = replay_run(
+            run,
+            detector;
+            trailing_psd = TrailingWelch(3000, 500, 1024; edge_rows = 300),
+        )
+        @test trimmed.psd_row[rows_after][end] > last(hole)
+        @test all(r -> r == 0 || r > last(hole), trimmed.psd_row[rows_after])
+        @test_throws ArgumentError TrailingWelch(3000, 500, 1024; edge_rows = -1)
     end
 end

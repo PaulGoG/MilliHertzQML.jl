@@ -136,4 +136,5 @@ psd_mode = "sidecar"            # whitening PSD of the replay; one of: "sidecar"
 psd_trailing_days = 30.0        # delivered record behind a window used by the "trailing" estimate [days]; > 0
 psd_refresh_days = 1.0          # advance of the delivered record after which the "trailing" estimate is redone [days]; > 0
 psd_segment_length = 65536      # segment of the "trailing" estimate [samples]; >= 2
+psd_edge_periods = 3.0          # cutoff periods of the record high-pass trimmed from each end of a delivered run before the "trailing" estimate; >= 0
 events_csv = ""                 # event table (merger_time_s, label spans) for the alert-latency table; "" disables

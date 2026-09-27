@@ -86,7 +86,6 @@ function main()
 
     run = open_telemetry_run(run_dir; producer_compat = settings.producer_compat)
     geometry = run_geometry(run)
-    trailing = nothing
     psd_sidecar = settings.psd_sidecar
     if settings.psd_mode == "trailing"
         # Ground-causal whitening: the estimate follows the delivered record,
@@ -94,18 +93,31 @@ function main()
         isempty(psd_sidecar) ||
             @warn "psd_sidecar is ignored under psd_mode = \"trailing\"" psd_sidecar
         psd_sidecar = ""
-        rows_per_day = 86400 * geometry.sample_rate
-        trailing = TrailingWelch(
-            round(Int, settings.psd_trailing_days * rows_per_day),
-            round(Int, settings.psd_refresh_days * rows_per_day),
-            settings.psd_segment_length,
-        )
     end
     detector = detector_from_run(
         resolvepath(args["model"]);
         context_windows = settings.context_windows,
         psd_sidecar = psd_sidecar,
     )
+    trailing = nothing
+    if settings.psd_mode == "trailing"
+        rows_per_day = 86400 * geometry.sample_rate
+        # The high-pass rings at the ends of every delivered run; the
+        # transient is trimmed over a few cutoff periods
+        edge_rows =
+            detector.highpass_cutoff_hz > 0 ?
+            round(
+                Int,
+                settings.psd_edge_periods * geometry.sample_rate /
+                detector.highpass_cutoff_hz,
+            ) : 0
+        trailing = TrailingWelch(
+            round(Int, settings.psd_trailing_days * rows_per_day),
+            round(Int, settings.psd_refresh_days * rows_per_day),
+            settings.psd_segment_length;
+            edge_rows = edge_rows,
+        )
+    end
     @info "telemetry run opened" run_dir state = run_state(run) sample_rate =
         geometry.sample_rate points_per_batch = geometry.points_per_batch producer =
         geometry.package_version

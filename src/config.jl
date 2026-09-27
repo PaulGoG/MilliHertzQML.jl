@@ -570,7 +570,7 @@ run: the exported scenario geometry (`segment_duration_sec`, `batch_size`,
 `start_sim_time`, `output_prefix`) and the consumer's replay settings
 (`run_dir`, `mode`, `min_coverage`, `tdi_gap_dilation_sec`,
 `context_windows`, `psd_sidecar`, `psd_mode`, `psd_trailing_days`,
-`psd_refresh_days`, `psd_segment_length`, `poll_interval_sec`,
+`psd_refresh_days`, `psd_segment_length`, `psd_edge_periods`, `poll_interval_sec`,
 `producer_compat`, `processing_latency_hours`, `alert_persistence`,
 `events_csv`). `phase_span` of `[training]` is in units of ``\\pi``.
 """
@@ -642,6 +642,7 @@ function telemetry_settings(config::AbstractDict)
         ),
         psd_refresh_days = cfgget(t, "psd_refresh_days", 1.0; type = Float64, min = 1e-6),
         psd_segment_length = cfgget(t, "psd_segment_length", 65536; type = Int, min = 2),
+        psd_edge_periods = cfgget(t, "psd_edge_periods", 3.0; type = Float64, min = 0.0),
         events_csv = isempty(events_csv) ? "" : resolvepath(events_csv),
     )
 end
