@@ -89,6 +89,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   gap: the delivered payload was indexed by batch index, which no longer
   tracks the payload rows after such a gap. It is keyed by the first row
   a batch holds, and a stretch is assembled from the blocks that cover it.
+- The held-out block of the training year spans 109 days, not 110 as the
+  README and the benchmark page stated; the conditioning lag is not
+  irreducible, as the benchmark page called it.
 - The benchmark page and the README placed the early alerts of the causal
   year replay in data time and stated that they reach the ground after the
   merger. The alert time is the ground arrival of the batch that completes

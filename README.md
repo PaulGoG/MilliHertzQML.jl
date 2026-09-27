@@ -330,7 +330,7 @@ The selected model (`configs/experiments/q8_b6.toml`: 8 qubits, 4
 re-uploading layers, six sub-mHz band powers, run `q8_b6_pi`) detects
 **all five labelled MBHB events at 1.57 false-alarm episodes per 30
 mission days**, from a threshold fitted on the pooled held-out block of
-the training year, 110 days of validation and test, where the fit
+the training year, 109 days of validation and test, where the fit
 predicted 1.38. The configuration and seed were chosen on the validation
 block of the training year by a rule fixed before the blind year was
 scored, and the benchmark page reports every run of the grid beside it.

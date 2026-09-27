@@ -81,7 +81,7 @@ chronologically into training (70 %), validation (15 %) and test (15 %)
 blocks separated by one window length (`chronological_split`). The feature
 scaler is fitted on the training block alone, early stopping runs on the
 validation block, and the **decision threshold is fitted on validation and
-test pooled** — the held-out block, 110 days (`threshold_block = "held_out"`,
+test pooled** — the held-out block, 109 days (`threshold_block = "held_out"`,
 the opt-in the Sangria configurations declare; the package default is the
 validation block). The blind year enters twice: label-free, through the
 Welch estimate that whitens it, and at evaluation, where every model is
@@ -464,8 +464,9 @@ by *centring* the window in the stretch that is whitened around it, its
 conditioning stretch: twenty window lengths on each side reproduce the
 batch scores at a rank correlation of 0.997, whereas thirty-two before and
 twenty after reach 0.860. An alert therefore
-carries an irreducible conditioning lag of twenty window lengths, 1.16
-days at these settings, before any ground-segment latency.
+carries a conditioning lag of twenty window lengths, 1.16
+days at these settings, before any ground-segment latency; the smoothed
+whitening of the section below shortens it to 2.8 hours.
 
 **The whitening PSD calibrates a record, not a model.** Whitening the
 blind year with the PSD persisted from the training year removes every
