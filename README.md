@@ -103,7 +103,7 @@ from `main`.
 | LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against a reference matched-filter SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one Zygote tape per chunk of samples, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
-| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static or ground-causal trailing-PSD whitening, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
+| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static or ground-causal trailing-PSD whitening, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; delivery holes excluded from scoring, outages, retransmission and generation gaps handled, the ground-causal whitening estimate pooled over the delivered runs |
 | Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; the remaining deficiencies are listed on the physics and architecture pages |
 
 The remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md`.
@@ -269,16 +269,20 @@ whose threshold fitted lowest is the one that does not transfer.
 
 ### What a lossy link costs
 
-Five 30-day missions over the same payload window, with a channel that
-drops a fraction of its transfers for good: a window is scored only once
-its whole conditioning stretch of 410 consecutive batches has reached the
-ground, so the scorable fraction falls as `(1 − p)^410` and collapses
-once the loss rate exceeds about 0.2 %. At half a per cent the replay
-scores a tenth of the windows and still alerts on both coalescences of
-the window; at one per cent it scores nothing. The requirement is on
-permanent loss; retransmitted batches cost nothing.
+Seventeen 30-day missions over the same payload window, each differing
+from a lossless reference in one property of the channel or of the
+spacecraft, replayed by the shipped model. Scattered permanent loss is
+the property that hurts: a window is scored only once its whole
+conditioning stretch of 410 consecutive batches has reached the ground,
+so the scorable fraction falls as `(1 − p)^410` and collapses beyond
+about 0.2 %, and above that whether a coalescence survives depends on
+where the holes fall. The same losses clustered in bursts spare most of
+the record, three retransmission attempts on a 3 % channel leave no hole
+at all, a link outage of up to three days costs latency and not a single
+window, and a gap in the data itself costs the stretch around it and the
+event inside it.
 
-![Windows a replay can score, and the events it still detects, against the permanent batch loss of the link](docs/src/assets/benchmark_loss_survival.png)
+![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, and false-alarm episodes per 30 days](docs/src/assets/benchmark_gap_study.png)
 
 Against the published method, reproduced on the same years and encoding
 with its own raw-periodogram features and four-qubit register
@@ -309,15 +313,14 @@ PSD.
   spread.
 - **Single channel.** Only A is used. E and T carry independent
   information and would allow a null-channel veto.
-- **The link must be near-lossless.** The Sangria products are gapless and
-  the year-long mission lost no data. The coupling discards windows that
-  cross a delivery hole instead of scoring them, and because a window
-  needs its whole conditioning stretch, the scorable record collapses
-  above about 0.2 % of permanently lost batches; at half a per cent a
-  tenth of the windows survive and the two coalescences of the 30-day
-  study are still alerted, at 1 % nothing is scorable. The classifier has
-  also never been trained on gapped data. Gap-tolerant conditioning is
-  planned, not implemented.
+- **Scattered permanent loss must stay below about 0.2 %.** The coupling
+  discards windows that cross a delivery hole instead of scoring them, and
+  because a window needs its whole conditioning stretch of 410 batches,
+  the scorable record collapses above that rate; outages, retransmitted
+  loss, bursty loss and gaps in the data itself cost far less, and the
+  ground-causal whitening estimate pools the delivered runs around the
+  holes. The classifier has never been trained on gapped data, and a
+  smoothed whitening PSD, which would shorten the stretch, is planned.
 - **The threshold comes from the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here spans one year, in one direction.

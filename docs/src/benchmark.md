@@ -550,52 +550,124 @@ does not transfer, whichever seed produced it.
 
 ## What a lossy link costs
 
-The mission above delivered everything, so the hole handling was never
-put under load. Five 30-day missions answer what it costs when the link
-does not: the same payload window — days 65 to 95 of the blind year,
-which carries coalescences 1 and 2 — and the same pass schedule, with a
-channel that drops a fraction of transfers for good rather than
-retransmitting them.
+The year-long mission delivered everything, so the hole handling was never
+put under load. Seventeen 30-day missions on DeepSpaceTelemetry.jl 2.0.0
+answer what it costs when the link does not: the same payload window —
+days 65 to 95 of the blind year, which carries coalescences 1 and 2 — and
+the same pass schedule, each mission differing from a lossless reference
+in one property of the channel or of the spacecraft, replayed once by the
+shipped model under the ground-causal whitening of `configs/sangria.toml`
+(persistence 2, `context_windows = 20`) and, for five of them, under the
+oracle PSD of the whole blind year. The reference replay scores 4,945
+windows, alerts on both coalescences and charges 11.5 false-alarm episodes
+per 30 days; under the oracle PSD it charges 3.1. The difference is the
+cold start of the trailing estimate on a 30-day record (over the year the
+causal replay delivers 1.40 against the oracle's 1.32), and it is the
+scale against which the rows below are read.
 
-| Permanent batch loss | Batches lost | Windows scored | Alarmed windows | Events |
-|---|---|---|---|---|
-| none | 0 of 5155 | 4946 | 307 | 2 of 2 |
-| 0.14 % | 7 | 2653 | 113 | 2 of 2 |
-| 0.45 % | 23 | 563 | 14 | 2 of 2 |
-| 1.01 % | 52 | 0 | 0 | 0 of 2 |
-| 2.99 % | 154 | 0 | 0 | 0 of 2 |
+![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, false-alarm episodes per 30 days under the ground-causal whitening](assets/benchmark_gap_study.png)
 
-![Windows a replay can score, and the events it still detects, against the permanent batch loss of the link](assets/benchmark_loss_survival.png)
+| Channel or spacecraft | Batches lost | Windows scored | Events | False alarms per 30 d | Oracle PSD |
+|---|---|---|---|---|---|
+| lossless reference | 0 | 4945 | 2 of 2 | 11.5 | 3.1 |
+| scattered permanent loss, 0.04 % realised | 2 | 4285 | 2 of 2 | 19.4 | |
+| scattered permanent loss, 0.08 % | 4 | 3772 | 2 of 2 | 15.1 | 2.7, 2 of 2 |
+| scattered permanent loss, 0.19 % | 10 | 2120 | 0 of 2 | 12.2 | 2.4, 2 of 2 |
+| scattered permanent loss, 0.43 % | 22 | 426 | 2 of 2 | 12.2 | |
+| bursty loss, mean 0.3 %, bursts of 4 | 21 | 3485 | 2 of 2 | 16.4 | 3.0, 2 of 2 |
+| bursty loss, mean 0.3 %, bursts of 20 | 9 | 4475 | 2 of 2 | 12.7 | |
+| bursty loss, mean 0.3 %, bursts of 50 | 0 | 4945 | 2 of 2 | 11.5 | |
+| 3 % loss, one retransmission | 6 | 2475 | 1 of 2 | 10.5 | 4.2, 2 of 2 |
+| 3 % loss, three retransmissions | 0 | 4946 | 2 of 2 | 11.5 | |
+| link outage 6 h, day 3 | 0 | 4946 | 2 of 2 | 11.5 | |
+| link outage 24 h, day 3 | 0 | 4946 | 2 of 2 | 11.5 | |
+| link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 6.3 | |
+| link outage 24 h astride merger 1 | 0 | 4946 | 2 of 2 | 11.5 | |
+| no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 14.9 | |
+| no data produced for 2 h astride merger 1 | 0 | 4521 | 1 of 2 | 13.8 | |
+| two-day recorder with a 72 h outage | 0 | 4277 | 2 of 2 | 6.1 | |
+| 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5028 | 2 of 2 | 5.2 | |
+| 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5030 | 2 of 2 | 10.3 | |
 
-The collapse is not proportional to the loss, and it is not a defect of
-the hole handling. A window is scored only once its **entire conditioning
-stretch** has reached the ground: `context_windows = 20` window lengths
-on each side of a 1000-sample window, and one batch carries one window
-step of 100 samples, so 410 consecutive batches must survive. Under an
-independent per-batch loss `p` a given window therefore survives with
-probability `(1 - p)^410`, drawn as the dashed curve.
+**Scattered permanent loss is the property that hurts, and its cost is
+not proportional to the loss.** A window is scored only once its **entire
+conditioning stretch** has reached the ground: `context_windows = 20`
+window lengths on each side of a 1000-sample window, and one batch
+carries one window step of 100 samples, so 410 consecutive batches must
+survive. Under an independent per-batch loss `p` a window therefore
+survives with probability `(1 - p)^410`, drawn as the dashed curve below
+against the loss the channel realised; the measured survival tracks it
+while losses are sparse and falls below it once the mean spacing of
+losses, `1/p` batches, approaches the stretch — above `1/410 ≈ 0.24 %` a
+clean run of 410 batches is a rare event, not a typical one. Whether a
+coalescence survives depends on where the holes fall, not on the rate
+alone: both are alerted at 0.04, 0.08 and 0.43 % and neither at 0.19 %,
+where the oracle PSD still alerts both, a day after each merger, on the
+few windows left around them.
 
-The measured survival tracks that estimate while losses are sparse and
-falls below it as they are not, because the expectation stops being the
-right summary: surviving windows exist only inside a clean run of 410
-batches, the mean spacing of losses is `1/p` batches, and once `p`
-exceeds `1/410 ≈ 0.24 %` such a run is a rare event rather than a typical
-one. The whole of the sweep is that one number. At half a per cent the
-replay scores a tenth of the windows and, with the retrained model's
-longer alarm runs, still raises an alert on both coalescences; at one per
-cent it scores none. A link losing one per cent of its batches
-permanently delivers a detector that sees nothing, while the same link
-losing them *temporarily* — retransmitted, as in the year-long mission,
-where 648 retries cost nothing — is harmless.
+![Windows a replay can score, and the events it still detects, against the permanent batch loss the channel realised](assets/benchmark_loss_survival.png)
+
+**The same losses clustered are a fraction of the cost.** Twenty-one
+batches lost in bursts of mean length four cost 30 % of the windows;
+twenty-two scattered cost 91 %. One burst of nine costs 10 %. The
+survival is set by the number of holes, each of which kills a stretch,
+and not by the number of batches.
+
+**Retransmission removes the cost.** A 3 % channel with one retry leaves
+six permanent holes, half the windows and one coalescence; with three
+retries it leaves none, and the replay is the reference to the window.
+
+**A link outage costs latency and not a single window.** The recorder
+holds the backlog, and every window is scored once its stretch lands.
+An outage of 24 h astride merger 1 delays its alert to 73 h after the
+merger — the data reached the ground after the outage and its backlog —
+and shifts the second alert to 20 h after merger 2, which then stands on
+its own. The delivery order after an outage does change the ground-causal
+estimate, which is a function of what has been delivered: the 72 h outage
+replay differs from the reference in every score (6.3 false alarms per
+30 days, an alarm run 50 h before merger 1), although it received the same
+batches.
+
+**A generation gap costs the stretch around it, and the event inside
+it.** Fifteen minutes without data cost 412 windows, the stretch around
+the hole, and nothing else; two hours without data astride merger 1 cost
+the same 425 windows and the coalescence itself, which fell in the gap.
+A two-day recorder that overflows during a 72 h outage discards 260
+batches of production and 668 windows, and keeps both events.
+
+**Admitting a partially delivered stretch scores every window at a
+price that this replay cannot itemise.** With the stretch admitted at 75
+or 50 % delivered the replay scores 5,028 and 5,030 windows (more than
+the reference, whose edge windows now qualify) at 5.2 and 10.3 false
+alarms per 30 days, and both coalescences; but the alerts move to 53 and
+76 h before merger 1, on windows conditioned on a partial stretch. Those
+alarms fall inside the label spans and count as detections; whether they
+are the inspiral or the conditioning, this replay cannot tell.
+
+Two defects surfaced on the way and are fixed in this version. A replay
+of a producer that discarded production crashed on the first window
+after the gap, because the delivered payload was indexed by batch index,
+which no longer tracks the payload rows after such a gap. And the
+ground-causal estimate was fragile to holes: it was made on the last
+contiguous delivered run only, which behind a hole held one or two
+3.8-day segments, and once pooled over every delivered run it carried the
+high-pass transient of each run's ends; before the two changes the same
+missions charged 63, 88 and 151 false alarms per 30 days at 0.08 %,
+0.19 % and 3 %-with-one-retry, against 15, 12 and 10 now.
 
 Two consequences worth stating plainly. The operating requirement is on
-**permanent** loss, and it is strict: about half a per cent for an alert
-on a loud pair of coalescences, a fifth of a per cent for scoring most of
-the record. And a smoothed
-whitening PSD, which would shorten the conditioning
-kernel, is not a refinement of this result but the precondition for
-running on a link that loses anything at all; every reduction of the
-stretch raises the tolerable loss rate in proportion.
+**scattered permanent** loss, and it is strict: about a fifth of a per
+cent for scoring most of the record, with the survival of a given
+coalescence a matter of where the holes fall above that. And every
+reduction of the conditioning stretch raises the tolerable loss rate in
+proportion: on the shipped Welch PSD the impulse response of the
+high-pass followed by whitening keeps 99.9 % of its energy only within
+55 window lengths, whereas the same PSD smoothed by 0.01 dex in
+log-frequency keeps it within half a window — the estimator's line
+structure and the exact TDI notch, not the spectrum's shape, set the
+kernel. A smoothed whitening PSD is therefore not a refinement of this
+result but the precondition for running on a link that loses anything at
+all; it is planned, with the retraining it requires.
 
 ## Caveats
 
