@@ -1,6 +1,47 @@
 # Unit tests of the consumer side of the telemetry coupling (src/telemetry.jl)
 # on an in-memory run; included by runtests.jl.
 
+# An in-memory run whose producer discarded production: after `gap_after`
+# batches a hole of `gap_rows` payload rows opens, and every later batch
+# holds the rows its content epoch says, so its rows no longer follow its
+# index. Exercises the consumer's handling of index drift.
+struct DriftedTelemetryRun <: MilliHertzQML.AbstractTelemetryRun
+    geometry::RunGeometry
+    payload::Vector{Float32}
+    events::Vector{ArrivalEvent}
+    gap_after::Int
+    gap_rows::Int
+end
+
+function drifted_rows(run::DriftedTelemetryRun, k::Integer)
+    P = run.geometry.points_per_batch
+    shift = k > run.gap_after ? run.gap_rows : 0
+    return ((k-1)*P+1+shift):(k*P+shift)
+end
+
+MilliHertzQML.run_geometry(run::DriftedTelemetryRun) = run.geometry
+
+function MilliHertzQML.list_batches(run::DriftedTelemetryRun)
+    n = div(length(run.payload) - run.gap_rows, run.geometry.points_per_batch)
+    return [
+        BatchRecord(
+            "LIVE_batch_$k",
+            k,
+            true,
+            drifted_rows(run, k),
+            row_time(run.geometry, first(drifted_rows(run, k))),
+            :ground,
+        ) for k in 1:n
+    ]
+end
+
+function MilliHertzQML.read_batch(run::DriftedTelemetryRun, name::AbstractString)
+    return run.payload[drifted_rows(run, parse_batch_name(name)[1])]
+end
+
+MilliHertzQML.arrival_events(run::DriftedTelemetryRun) = run.events
+MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
+
 @testset "Telemetry coupling (core)" begin
     epoch = Dates.DateTime(2035, 1, 1)
     geometry = RunGeometry(0.2, 50.0, 10, epoch, "1.0.0")
@@ -382,5 +423,55 @@
         @test_throws ArgumentError detector_from_run(joinpath(dir, "absent.jld2"))
         @test whitening_psd_from_sidecar(joinpath(dir, "feat_features.toml"))(1e-3) ==
               lisa_noise_psd(1e-3)
+    end
+
+    @testset "Index drift" begin
+        # After batch 20 the producer discarded 37 rows of production; the
+        # hole is never delivered, the later batches hold the rows of their
+        # content epoch, and the consumer scores from those rows.
+        rng = StableRNG(37)
+        fs = 0.2
+        gap_after, gap_rows = 20, 37
+        n_batches = 60
+        payload =
+            Float32.(synthesize_noise(rng, n_batches * 100 + gap_rows, fs; f_min = 1e-5))
+        drift_geometry =
+            RunGeometry(fs, 50.0, 10, epoch, "2.0.0"; payload_rows = length(payload))
+        events = [
+            ArrivalEvent(epoch + Dates.Second(600 * k), "LIVE_batch_$k", :ingested, 0)
+            for k in 1:n_batches
+        ]
+        run = DriftedTelemetryRun(drift_geometry, payload, events, gap_after, gap_rows)
+        records = list_batches(run)
+        @test records[gap_after].rows == 1901:2000
+        @test records[gap_after+1].rows == (2001+gap_rows):(2100+gap_rows)
+        @test read_batch(run, "LIVE_batch_21") == payload[(2001+gap_rows):(2100+gap_rows)]
+        model = VariationalQuantumClassifier(4, 2; rng = rng)
+        scaler = FeatureScaler([0.0, 0.0, 0.0, -1.0], [3.0, 3.0, 1.0, 1.0])
+        detector = StreamingDetector(
+            model,
+            scaler,
+            0.5;
+            sample_rate = fs,
+            window_size = 1000,
+            step_size = 100,
+            psd = lisa_noise_psd,
+            context_windows = 1,
+        )
+        windows = replay_run(run, detector)
+        hole = 2001:(2000+gap_rows)
+        # Windows are scored on both sides of the hole and none whose
+        # conditioning stretch touches it
+        before = filter(r -> r.row_end + 1000 < first(hole), eachrow(windows))
+        after = filter(r -> r.row_start - 1000 > last(hole), eachrow(windows))
+        @test !isempty(before) && !isempty(after)
+        @test length(before) + length(after) == nrow(windows)
+        @test all(windows.coverage .== 1.0)
+        # A window after the hole equals a direct evaluation on the rows its
+        # batches actually hold
+        w = after[1]
+        stretch = payload[(w.row_start-1000):(w.row_end+1000)]
+        @test isapprox(w.score, score_window(detector, stretch, 1001); atol = 1e-6)
+        @test replay_run(run, detector).score == windows.score
     end
 end

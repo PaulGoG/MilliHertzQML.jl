@@ -745,7 +745,12 @@ mutable struct ReplayState
     batches::Dict{String,BatchRecord}
     coverage::Coverage
     scheduler::WindowScheduler
+    # Delivered payload keyed by the first row a batch holds, with those
+    # first rows kept sorted: a producer that discarded production keeps
+    # numbering the batches it stores, so a batch's rows follow its content
+    # epoch and not its index.
     payload::Dict{Int,Vector{Float32}}
+    starts::Vector{Int}
     windows::Vector{WindowRecord}
     excluded::Vector{UnitRange{Int}}
     erosion::Int
@@ -782,6 +787,7 @@ mutable struct ReplayState
                 payload_rows = max(0, geometry.payload_rows),
             ),
             Dict{Int,Vector{Float32}}(),
+            Int[],
             WindowRecord[],
             UnitRange{Int}[],
             round(Int, tdi_gap_dilation_sec * geometry.sample_rate),
@@ -797,19 +803,29 @@ end
     delivered_rows(state, rows) -> Vector{Float32}
 
 The payload of the delivered rows `rows`, assembled from the batches on the
-ground; every row must be covered.
+ground by the rows they hold (`ArgumentError` when a row is not covered).
 """
 function delivered_rows(state::ReplayState, rows::UnitRange{Int})
-    P = state.geometry.points_per_batch
     lo, hi = first(rows), last(rows)
     samples = Vector{Float32}(undef, hi - lo + 1)
-    for k in (div(lo-1, P)+1):(div(hi-1, P)+1)
-        data = state.payload[k]
-        r = batch_rows(k, P)
-        a = max(lo, first(r))
-        b = min(hi, last(r))
-        samples[(a-lo+1):(b-lo+1)] = view(data, (a-first(r)+1):(b-first(r)+1))
+    covered = falses(hi - lo + 1)
+    i = max(1, searchsortedlast(state.starts, lo))
+    while i <= length(state.starts) && state.starts[i] <= hi
+        s = state.starts[i]
+        data = state.payload[s]
+        a = max(lo, s)
+        b = min(hi, s + length(data) - 1)
+        if a <= b
+            samples[(a-lo+1):(b-lo+1)] = view(data, (a-s+1):(b-s+1))
+            covered[(a-lo+1):(b-lo+1)] .= true
+        end
+        i += 1
     end
+    all(covered) || throw(
+        ArgumentError(
+            "rows $rows are not all on the ground ($(count(covered)) delivered).",
+        ),
+    )
     return samples
 end
 
@@ -893,7 +909,10 @@ function process_event!(
     haskey(state.batches, event.batch) || return scored
     batch = state.batches[event.batch]
     if event.event == :ingested
-        state.payload[batch.index] = read_batch(run, batch.name)
+        start = first(batch.rows)
+        haskey(state.payload, start) ||
+            insert!(state.starts, searchsortedfirst(state.starts, start), start)
+        state.payload[start] = read_batch(run, batch.name)
         add!(state.coverage, batch.rows)
         # Permanent holes (lost or pruned batches with their erosion) stay
         # excluded whatever arrives later around them.
@@ -932,7 +951,11 @@ function process_event!(
         hi = last(batch.rows) + state.erosion
         push!(state.excluded, lo:hi)
         remove!(state.coverage, lo:hi)
-        delete!(state.payload, batch.index)
+        start = first(batch.rows)
+        if haskey(state.payload, start)
+            delete!(state.payload, start)
+            deleteat!(state.starts, searchsortedfirst(state.starts, start))
+        end
     end
     return scored
 end
