@@ -317,21 +317,20 @@ own circuit.
 
 ## Against a classical baseline
 
-The GWEEP multilayer perceptron shipped with the same challenge material (https://lisa-ldc.lal.in2p3.fr/)
-detects **all five blind label spans — all six coalescences — with no
+A classical multilayer perceptron trained on the same challenge data, whose
+blind-year predictions I could score, detects **all five blind label spans — all six coalescences — with no
 false-alarm episode at all**, alarming on 698 of 6,307,190 samples
 (0.011 %) at a threshold of 0.5. It is a stronger result than this
 classifier achieves, and it should be stated that way.
 
-**It is quoted, not reproduced.** The numbers above come from scoring the
-predictions shipped with the material through this project's event
-protocol; the model was never retrained here. Reproducing it is out of
+**It is quoted, not reproduced.** The numbers above come from scoring those
+predictions through this project's event protocol; the model was never retrained here. Reproducing it is out of
 proportion to what it would settle: the preprocessing is a rolling Welch
-spectral entropy at unit stride (`gweep_preproc.py` of the challenge material, https://lisa-ldc.lal.in2p3.fr/; window 1000), which
+spectral entropy at unit stride (its preprocessing script; window 1000), which
 is 6.3 million transforms per channel-year and ten of them, and the
-spectral-entropy series for X, Y and Z are not among the shipped files.
+spectral-entropy series for X, Y and Z were not available.
 
-What the shipped artifacts do establish, by inspection:
+What its artifacts establish, by inspection:
 
 - **The model.** `Flatten → Dense(128, relu) → Dense(128, relu) →
   Dropout(0.2) → Dense(1, sigmoid)` over a 10 × 10 input — ten timesteps
@@ -345,7 +344,7 @@ What the shipped artifacts do establish, by inspection:
   redundant by construction rather than wrong. The null channel
   `T = (X + Y + Z)/√3`, the standard instrumental-artifact monitor, is
   written as a comment and never used.
-- **The scaling is not blind.** `gweep_preds.py` fits a fresh
+- **The scaling is not blind.** Its prediction script fits a fresh
   `StandardScaler` on the blind set rather than reusing the one fitted in
   training. It touches no labels and acts on the five raw projections
   only, but it is not cosmetic: between the two years the per-column means

@@ -1436,7 +1436,7 @@ if isfile(SANGRIA_FILE)
         @test nrow(catalog) == 15
         @test isapprox(catalog.CoalescenceTime[5], 11526944.9; atol = 1.0)
 
-        # The LISA Data Challenge School notebook quotes an optimal A-channel
+        # A reference evaluation quotes an optimal A-channel
         # SNR of 1885.7 for catalog row 4 (0-based) against the SciRDv1 noise
         # model. Its neighbour (row 3, merging 3.1 d earlier) is excluded by a
         # segment starting 3 d before the merger; the segment ends are tapered.

@@ -1,8 +1,8 @@
 # MilliHertzQML.jl
 
 [![CI](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/PaulGoG/MilliHertzQML.jl/actions/workflows/CI.yml)
-[![Documentation, stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/stable/)
-[![Documentation, dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/dev/)
+[![Coverage](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/PaulGoG/MilliHertzQML.jl)
+[![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://PaulGoG.github.io/MilliHertzQML.jl/stable/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimisation uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
@@ -100,7 +100,7 @@ from `main`.
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019, DOI 10.1088/1361-6382/ab1101) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008, DOI 10.1103/PhysRevD.77.104017) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; optionally the A and E channels of the constellation through the CurvatureDistinguishability extension (antenna patterns on the orbits, Doppler phase, transfer roll-off, injections at physical amplitude for a drawn distance); no spins or higher modes |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model together with the phase-encoding span (`[0, π]` by default; earlier artifacts load on `[0, 2π]`) |
-| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against the School-notebook SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
+| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against a reference matched-filter SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one Zygote tape per chunk of samples, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
 | Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static or ground-causal trailing-PSD whitening, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; gap-less delivery only (holes are excluded, not scored) |
@@ -285,8 +285,8 @@ with its own raw-periodogram features and four-qubit register
 (`configs/sangria_paper.toml`), the band features cut the false-alarm
 rate from 31.7 to 1.57 episodes per 30 days and take the loudest merger
 from a margin of 0.002 above the threshold to well clear of it. The paper
-reports no false-alarm rate. Against the classical multilayer perceptron
-shipped with the challenge material, which detects all six coalescences
+reports no false-alarm rate. Against a classical multilayer perceptron
+trained on the same challenge data, which detects all six coalescences
 with no false alarm at all on 29,569 parameters, the 64-parameter circuit
 does not win, and the benchmark page says so, together with the reasons
 the comparison is indicative rather than decided: the baseline is quoted

@@ -36,9 +36,11 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
       # The suite activates and instantiates test/ itself, resolving the
-      # package by path and the two producers by their release tags.
+      # package by path and the two producers by their release tags. The
+      # package is loaded by path, outside the active project, so coverage
+      # names its source directory rather than the "user" set.
       - name: Test suite
-        run: julia --color=yes -t auto ${{ matrix.coverage && '--code-coverage=user' || '' }} test/runtests.jl
+        run: julia --color=yes -t auto ${{ matrix.coverage && format('--code-coverage=@{0}/src', github.workspace) || '' }} test/runtests.jl
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v7
