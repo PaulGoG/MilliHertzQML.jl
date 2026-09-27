@@ -37,7 +37,8 @@ simulator's constellation-response products), `"ldc"` (analytic A-channel TDI PS
 fractional-frequency units — `ldc_model`, `ldc_tdi2`,
 `ldc_observation_years` — for LDC products), `"welch"` (median-averaged
 estimate from the record itself over segments of `welch_segment_length`
-samples), or `"none"` (no whitening; `psd` is `nothing`). `description` is
+samples, smoothed in log-frequency by `psd_smoothing_dex` dex when that is
+positive; [`smooth_psd`](@ref)), or `"none"` (no whitening; `psd` is `nothing`). `description` is
 the human-readable account persisted in the sidecar; `table` is the
 estimated PSD as a `DataFrame` (`frequency_hz`, `psd`) for `"welch"` and
 `nothing` otherwise.
@@ -83,8 +84,14 @@ function whitening_psd(settings::NamedTuple, A::AbstractVector{<:Real}, fs::Real
             ),
         )
         freqs, table = welch_psd(A, fs; segment_length = segment, average = :median)
+        smoothing = settings.psd_smoothing_dex
+        description = "median Welch estimate of the record, segment $segment samples"
+        if smoothing > 0
+            table = smooth_psd(freqs, table, smoothing)
+            description *= ", smoothed by $smoothing dex in log-frequency"
+        end
         return interpolated_psd(freqs, table),
-        "median Welch estimate of the record, segment $segment samples",
+        description,
         DataFrame(frequency_hz = freqs, psd = table)
     elseif mode == "none"
         return nothing, "none", nothing
@@ -244,6 +251,10 @@ function preprocessing_parameters(
         parameters["ldc_observation_years"] = settings.ldc_observation_years
     elseif settings.psd == "welch"
         parameters["welch_segment_length"] = settings.welch_segment_length
+        # Recorded only when set, so that products made before the key
+        # existed keep their identity
+        settings.psd_smoothing_dex > 0 &&
+            (parameters["psd_smoothing_dex"] = settings.psd_smoothing_dex)
     end
     if !isempty(label_path)
         parameters["label_file"] = provenance_path(label_path)
@@ -485,6 +496,7 @@ function preprocess_record(
                         "feature_names" => String.(names),
                         "psd" => settings.psd,
                         "psd_description" => psd_description,
+                        "psd_smoothing_dex" => settings.psd_smoothing_dex,
                         "low_band_hz" => collect(settings.low_band_hz),
                         "high_band_hz" => collect(settings.high_band_hz),
                         "band_edges_hz" => collect(settings.band_edges_hz),

@@ -693,7 +693,7 @@ struct WindowRecord
 end
 
 """
-    TrailingWelch(span_rows, refresh_rows, segment_length; edge_rows = 0)
+    TrailingWelch(span_rows, refresh_rows, segment_length; edge_rows = 0, smoothing_dex = 0)
 
 Ground-causal whitening of a replay. Each window is whitened by the median
 Welch estimate ([`welch_psd`](@ref), segments of `segment_length` samples)
@@ -705,8 +705,11 @@ segments of all runs pooled, so that no segment spans a delivery hole.
 The high-pass rings at both ends of a run (the ends of the record in the
 batch pipeline, whose edge windows are dropped), so `edge_rows` rows are
 trimmed from each end of a high-passed run before it is segmented, and a
-run must hold a segment beyond that trim. Nothing that has not reached
-the ground enters the estimate, unlike a
+run must hold a segment beyond that trim. A positive `smoothing_dex`
+smooths the estimate in log-frequency ([`smooth_psd`](@ref)), as
+`[preprocessing] psd_smoothing_dex` smooths the batch estimate the model's
+features were whitened with. Nothing that has not reached the ground
+enters the estimate, unlike a
 PSD of the whole record, which at every window of a streamed mission
 contains data still to be delivered. The estimate is redone once the end
 of that record has moved by `refresh_rows` rows since the previous one.
@@ -719,11 +722,13 @@ struct TrailingWelch
     refresh_rows::Int
     segment_length::Int
     edge_rows::Int
+    smoothing_dex::Float64
     function TrailingWelch(
         span_rows::Integer,
         refresh_rows::Integer,
         segment_length::Integer;
         edge_rows::Integer = 0,
+        smoothing_dex::Real = 0.0,
     )
         segment_length >= 2 || throw(ArgumentError("segment_length must be at least 2."))
         span_rows >= segment_length || throw(
@@ -733,7 +738,14 @@ struct TrailingWelch
         )
         refresh_rows >= 1 || throw(ArgumentError("refresh_rows must be at least 1."))
         edge_rows >= 0 || throw(ArgumentError("edge_rows must be non-negative."))
-        return new(Int(span_rows), Int(refresh_rows), Int(segment_length), Int(edge_rows))
+        smoothing_dex >= 0 || throw(ArgumentError("smoothing_dex must be non-negative."))
+        return new(
+            Int(span_rows),
+            Int(refresh_rows),
+            Int(segment_length),
+            Int(edge_rows),
+            Float64(smoothing_dex),
+        )
     end
 end
 
@@ -894,6 +906,7 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
         segment_length = tw.segment_length,
         average = :median,
     )
+    tw.smoothing_dex > 0 && (table = smooth_psd(freqs, table, tw.smoothing_dex))
     state.trailing_psd = interpolated_psd(freqs, table)
     state.trailing_row = hi
     return state.trailing_psd, hi

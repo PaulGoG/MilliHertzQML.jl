@@ -116,6 +116,8 @@ function main()
             round(Int, settings.psd_refresh_days * rows_per_day),
             settings.psd_segment_length;
             edge_rows = edge_rows,
+            # Smoothed as the batch estimate that whitened the model's features
+            smoothing_dex = preprocessing_settings(config).psd_smoothing_dex,
         )
     end
     @info "telemetry run opened" run_dir state = run_state(run) sample_rate =

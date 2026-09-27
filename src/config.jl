@@ -342,6 +342,7 @@ function preprocessing_settings(config::AbstractDict)
             type = Int,
             min = 2,
         ),
+        psd_smoothing_dex = cfgget(p, "psd_smoothing_dex", 0.0; type = Float64, min = 0.0),
         feature_set = Symbol(
             cfgget(
                 p,

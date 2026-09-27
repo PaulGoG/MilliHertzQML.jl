@@ -58,7 +58,7 @@ export AbstractDetectorResponse, SkyAveragedResponse, channel_count, GIGAPARSEC_
 export sky_averaged_response, channel_noise_psd, draw_extrinsic, lisa_response
 export source_frame, project_spectrum, project_series, detector_response
 export ldc_tdi_psd, ldc_confusion_psd, tdi_to_aet, read_tdi, read_catalog
-export welch_psd, interpolated_psd, windowed_snr, snr_peaks
+export welch_psd, smooth_psd, interpolated_psd, windowed_snr, snr_peaks
 export detectable_spans, fixed_spans, span_labels
 export project_root, resolvepath, rootrelative, provenance_path, load_config
 export cfgget, override, section

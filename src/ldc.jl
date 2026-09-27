@@ -370,6 +370,90 @@ function welch_psd(
 end
 
 """
+    smooth_psd(freqs, psd, sigma_dex) -> Vector{Float64}
+
+The one-sided PSD `psd` tabulated at the strictly increasing positive
+frequencies `freqs`, smoothed in log-frequency: ``\\log_{10} S`` is
+averaged with Gaussian weights of standard deviation `sigma_dex` in
+``\\log_{10} f``, each bin weighted by the log-frequency interval it spans
+(``\\propto 1/f`` on a uniform frequency grid), evaluated on a uniform
+log-frequency grid of step `sigma_dex / 5` with the kernel truncated at
+four standard deviations, and read back at `freqs` by linear
+interpolation. Where the table is coarser than the kernel — its lowest
+bins — the grid interpolates the table instead. `sigma_dex = 0` returns
+the table unchanged.
+
+A Welch estimate carries line-to-line scatter and resolves sharp spectral
+features, the TDI transfer notches among them; the inverse square root of
+such a spectrum has a long, ringing impulse response, so whitening by it
+spreads every sample over many window lengths. Smoothing on scales
+narrower than any analysis band removes that fine structure and shortens
+the kernel accordingly.
+"""
+function smooth_psd(
+    freqs::AbstractVector{<:Real},
+    psd::AbstractVector{<:Real},
+    sigma_dex::Real,
+)
+    n = length(freqs)
+    n == length(psd) ||
+        throw(DimensionMismatch("$n frequencies for $(length(psd)) PSD values."))
+    n >= 2 || throw(ArgumentError("the table holds fewer than two frequencies."))
+    sigma_dex >= 0 || throw(ArgumentError("sigma_dex = $sigma_dex; must be non-negative."))
+    (first(freqs) > 0 && all(>(0), diff(freqs))) ||
+        throw(ArgumentError("the frequencies must be positive and strictly increasing."))
+    all(>(0), psd) || throw(ArgumentError("the PSD must be positive at every frequency."))
+    iszero(sigma_dex) && return Vector{Float64}(psd)
+    f = Vector{Float64}(freqs)
+    lf = log10.(f)
+    ls = log10.(Vector{Float64}(psd))
+    n_grid = max(2, ceil(Int, (lf[end] - lf[1]) / (sigma_dex / 5)) + 1)
+    grid = collect(range(lf[1], lf[end]; length = n_grid))
+    reach = 4 * sigma_dex
+    smooth = similar(grid)
+    lo, hi = 1, 0          # the bins within `reach` of the current grid point
+    for (i, g) in enumerate(grid)
+        while lo <= n && lf[lo] < g - reach
+            lo += 1
+        end
+        while hi < n && lf[hi+1] <= g + reach
+            hi += 1
+        end
+        if lo <= hi
+            acc = 0.0
+            weight = 0.0
+            for j in lo:hi
+                w = exp(-0.5 * ((lf[j] - g) / sigma_dex)^2) / f[j]
+                acc += w * ls[j]
+                weight += w
+            end
+            smooth[i] = acc / weight
+        else
+            smooth[i] = linear_interpolation(lf, ls, g)
+        end
+    end
+    return [exp10(linear_interpolation(grid, smooth, x)) for x in lf]
+end
+
+"""
+    linear_interpolation(x, y, xq) -> Float64
+
+Value at `xq` of the piecewise-linear interpolant of `y` over the strictly
+increasing abscissae `x`, constant beyond the ends.
+"""
+function linear_interpolation(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real},
+    xq::Real,
+)
+    xq <= first(x) && return Float64(first(y))
+    xq >= last(x) && return Float64(last(y))
+    i = searchsortedlast(x, xq)
+    t = (xq - x[i]) / (x[i+1] - x[i])
+    return (1 - t) * y[i] + t * y[i+1]
+end
+
+"""
     interpolated_psd(freqs, psd) -> Function
 
 Callable ``f \\mapsto S(f)`` interpolating the tabulated one-sided PSD

@@ -953,6 +953,25 @@ end
     @test welch_psd([white, white[1:100]], fs; segment_length = 1024)[2] == sw
     @test_throws ArgumentError welch_psd([white[1:100]], fs; segment_length = 1024)
 
+    # Log-frequency smoothing: a power law is left as it is away from the
+    # ends of the table, a one-bin line is diluted by the ≈ 600 bins of a
+    # 0.01-dex kernel at 10 mHz, and zero width is the identity
+    fg = collect(rfftfreq(65536, fs)[2:end])
+    power_law = 1e-40 .* (fg ./ 1e-2) .^ -2
+    smoothed = smooth_psd(fg, power_law, 0.01)
+    interior = (fg .>= 1e-4) .& (fg .<= 5e-2)
+    @test maximum(abs.(smoothed[interior] ./ power_law[interior] .- 1)) < 1e-2
+    k0 = searchsortedfirst(fg, 1e-2)
+    line = copy(power_law)
+    line[k0] *= 100
+    diluted = smooth_psd(fg, line, 0.01)
+    @test diluted[k0] / power_law[k0] < 1.1
+    @test smooth_psd(fg, line, 0.0) == line
+    @test_throws ArgumentError smooth_psd(fg, line, -0.01)
+    @test_throws DimensionMismatch smooth_psd(fg, line[1:10], 0.01)
+    @test_throws ArgumentError smooth_psd(reverse(fg), line, 0.01)
+    @test_throws ArgumentError smooth_psd(fg, -line, 0.01)
+
     # Log-log interpolation: exact at the knots, geometric in between, flat outside
     S = interpolated_psd([1e-3, 1e-2, 1e-1], [1.0, 100.0, 1.0])
     @test S(1e-3) == 1.0 && S(1e-2) == 100.0
@@ -1070,6 +1089,10 @@ end
     @test preprocessing_settings(empty).edge_margin == 0.0
     @test_throws ArgumentError preprocessing_settings(
         Dict{String,Any}("preprocessing" => Dict{String,Any}("edge_margin" => -1.0)),
+    )
+    @test preprocessing_settings(empty).psd_smoothing_dex == 0.0
+    @test_throws ArgumentError preprocessing_settings(
+        Dict{String,Any}("preprocessing" => Dict{String,Any}("psd_smoothing_dex" => -0.01)),
     )
     @test feature_geometry(joinpath(tempdir(), "absent_features.csv"), empty).first_window ==
           1

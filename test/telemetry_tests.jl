@@ -230,6 +230,14 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
     # Without one segment of record on the ground the static PSD is used
     static = replay_run(run, detector; trailing_psd = TrailingWelch(7000, 500, 7000))
     @test all(static.psd_row .== 0) && static.score == windows.score
+    # A smoothed trailing estimate changes the whitening and not the schedule
+    smoothed = replay_run(
+        run,
+        detector;
+        trailing_psd = TrailingWelch(3000, 500, 1000; smoothing_dex = 0.01),
+    )
+    @test smoothed.psd_row == trailing.psd_row && smoothed.score != trailing.score
+    @test_throws ArgumentError TrailingWelch(3000, 500, 1000; smoothing_dex = -0.01)
     # Lost batches are removed with erosion and their windows never complete
     lossy = ArrivalEvent[]
     for k in 1:n_batches
