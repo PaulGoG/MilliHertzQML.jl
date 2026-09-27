@@ -413,9 +413,12 @@ A streamed mission therefore has to estimate the PSD of the record it is
 scoring from the part of it that has reached the ground. The replay
 quoted here does so (`psd_mode = "trailing"`, the setting of
 `configs/experiments/q8_b6.toml`): each window is whitened by the Welch median of
-the last 30 days of delivered record behind its conditioning stretch,
-redone once a day, and by the training year's PSD until one 65,536-sample
-segment is on the ground (the first 446 windows). The estimate the batch
+the delivered record in the last 30 days behind its conditioning stretch,
+the segments of every delivered run in that interval pooled after three
+cutoff periods of the record high-pass are trimmed from each end of the
+run, redone once a day, and by the training year's PSD until one
+65,536-sample segment is on the ground beyond that trim (the first 470
+windows). The estimate the batch
 benchmark uses instead — `psd_sidecar`, the year-median Welch spectrum of
 the whole blind year — is an oracle for a streamed mission: at the first
 event, on day 78, it contains nine months of data still in flight. The
@@ -426,7 +429,7 @@ year's noise in advance.
 With both settled, a full year of the blind record was replayed through a
 simulated mission: 63,043 batches of 500 s, a 12-hour daily pass, 1 %
 packet loss with retransmission, no permanent gaps. Under ground-causal
-whitening the consumer scored 62,834 windows and alarmed 629 of them;
+whitening the consumer scored 62,834 windows and alarmed 647 of them;
 under the oracle PSD, 572. The retrained model alarms about three times
 as many windows as the full-period one did, in longer runs: the same
 inspiral excess that lifts the merger bins keeps the score above the
@@ -437,12 +440,12 @@ threshold for hours around each coalescence.
 What counts as an alert has to be stated, because it decides the
 latencies. The 1.0.0 tag credited each event with the earliest
 alarmed window overlapping its label span, whatever came after it. Read
-that way, the causal replay alarms four coalescences 1.1 to 1.9 days
-before their merger, on runs of one window, at 6.35 false-alarm episodes
-per 30 days — a rate at which about four chance episodes are expected
-inside the five 96-hour label spans, so the early alarms are what chance
-gives. Each of them is a single window, individually indistinguishable
-from the false-alarm population and impossible to act on. The alert
+that way, the causal replay alarms three coalescences 1.1 to 1.7 days
+before their merger at 5.94 false-alarm episodes per 30 days, a rate at
+which about four chance episodes are expected inside the five 96-hour
+label spans, so the early alarms are consistent with chance coincidence.
+An isolated alarmed window cannot be distinguished from the false-alarm
+population. The alert
 protocol therefore requires persistence: an alert is raised by the
 arrival that completes `alert_persistence` consecutive alarmed windows,
 and shorter runs are neither alerts nor charged as false alarms.
@@ -467,34 +470,49 @@ window:
 
 | Event | Merger (mission time) | Causal PSD, two consecutive: alert − merger [h] | Causal PSD, first alarmed window | Oracle PSD, two consecutive | Oracle PSD, first alarmed window | Alert of its own |
 |---|---|---|---|---|---|---|
-| 1 | 2035-03-19T16:27 | **+1.9** | −25.6 | +1.9 | −25.6 | yes |
-| 2 | 2035-03-20T21:59 | −27.6 | −27.7 | −27.6 | −27.7 | no: event 1's |
-| 3 | 2035-08-12T15:40 | **−0.3** | −46.0 | −0.3 | −0.3 | yes |
-| 4 | 2035-09-17T07:48 | **+7.5** | −40.5 | −64.4 | −64.4 | yes |
+| 1 | 2035-03-19T16:27 | **−25.6** | −25.6 | +1.9 | −25.6 | yes |
+| 2 | 2035-03-20T21:59 | −27.7 | −27.9 | −27.6 | −27.7 | no: event 1's |
+| 3 | 2035-08-12T15:40 | **−0.3** | −0.3 | −0.3 | −0.3 | yes |
+| 4 | 2035-09-17T07:48 | **−16.1** | −40.5 | −64.4 | −64.4 | yes |
 | 5 | 2035-09-21T21:39 | **+41.7** | +41.7 | −51.3 | −54.5 | yes |
 | 6 | 2035-11-10T00:11 | **+15.1** | +15.1 | +15.1 | +15.1 | yes |
-| False alarms / 30 d | | **1.40** | 6.35 | 1.32 | 1.65 | |
+| False alarms / 30 d | | **1.90** | 5.94 | 1.32 | 1.65 | |
 
 The data latencies exclude the one-hour processing budget, which
 `latency_total_h` of the table adds. Under the persistence criterion and
-causal whitening no alert precedes its merger by more than twenty
-minutes, and the sustained alarms follow it by 2 to 42 hours: the 1.16-day
-conditioning lag and the delivery latency of the lower panel, less the
-hours by which the inspiral was already alarmed. Event 2 has no alert of
+causal whitening the alerts of events 3, 5 and 6 fall between 0.3 hours
+before and 42 hours after the merger in data time. Those of events 1 and
+4 fall 25.6 and 16.1 hours before it: their windows lie within the
+27.8-hour conditioning stretch that reaches past the merger, and an alert
+is available only once its window has reached the ground, 28 to 47 hours
+after its data time (the delivery latency of the lower panel), so neither
+precedes its merger in ground time. At 1.90 false-alarm episodes per 30
+days, 1.3 chance episodes are expected inside the five 96-hour label
+spans (Poisson probability 0.36 of two or more), so the two early alerts
+are not evidence of a detection of the inspiral. Event 2 has no alert of
 its own under either whitening. Its merger follows event 1's by 29.5
 hours, the two label spans overlap, and every alarmed window in its span
-belongs to one of event 1's episodes. The replay therefore detects five
-coalescences, not six, and the batch metric's "5 of 5 label spans" is
-unaffected only because the two spans merge into one.
+lies in the cluster of alarm runs from 27 hours before to 26 hours after
+event 1's merger; none lies within 3.6 hours of its own merger. The
+replay therefore detects five coalescences, not six, and the batch
+metric's "5 of 5 label spans" is unaffected only because the two spans
+merge into one. The estimate pooled over the delivered runs and trimmed
+at their ends replaced, after the gap study below, the estimate of the
+1.1.0 release made on the last contiguous run; on this lossless mission
+that release charged 17 episodes (1.40 per 30 days) against the 23 here,
+a difference within the Poisson uncertainty of either count, and alerted
+events 1 and 4 1.9 and 7.5 hours after their mergers.
 
-The oracle PSD changes two alerts: events 4 and 5 are alerted 64 and 51
-hours *before* their mergers, on runs of two windows in the inspiral that
-the causal whitening does not produce, and 0.08 false alarms per 30 days
-are saved. Two early alerts where 0.9 chance episodes are expected inside
+The oracle PSD changes three alerts: event 1 is alerted 1.9 hours after
+its merger instead of 25.6 hours before it, and events 4 and 5 are
+alerted 64 and 51 hours *before* their mergers, on runs of two windows in
+the inspiral that the causal whitening does not produce; the false-alarm
+rate is 0.58 per 30 days lower. Two early alerts where 0.9 chance episodes are expected inside
 the spans is not evidence of anything (Poisson ``p \approx 0.2``); the
 year-long look-ahead sharpens the inspiral excess, and a mission does not
 have it. At a persistence of three the causal replay would charge 0.74
-episodes per 30 days at the same latencies, but the shortest alarm run of
+episodes per 30 days and alert events 1 and 4 1.9 and 7.5 hours after
+their mergers, but the shortest alarm run of
 a calibration event is exactly three windows, so three leaves no margin
 and the protocol keeps two.
 
@@ -508,8 +526,16 @@ nulls. Its envelope is still 7 % of the peak eight window lengths from
 the impulse and 99.9 % of its energy needs thirty-two. The same kernel
 produces the record-edge transients that force `edge_margin` and the
 post-merger alarm tails that account for most of the charged false alarms
-at the operating point. Smoothing the PSD would shorten it and is the
-natural next step.
+at the operating point. Smoothing the Welch estimate by 0.01 dex in
+log-frequency (`[preprocessing] psd_smoothing_dex`) lowers the envelope
+at one window length from 21 % to 0.1 % of the peak, because the length
+of the kernel is set by the estimator's line-to-line scatter and the
+sharp TDI transfer notch rather than by the shape of the spectrum. Applied
+to the blind year with the selected model and its threshold unchanged, it
+keeps five of five label spans but raises the false-alarm rate from 1.57
+to 4.78 episodes per 30 days (ROC area 0.800 against 0.807): the fitted
+threshold does not transfer to features whitened differently, and the
+shorter kernel can be used only by a model trained on smoothed features.
 
 ## The spread under re-initialisation
 
@@ -562,7 +588,7 @@ oracle PSD of the whole blind year. The reference replay scores 4,945
 windows, alerts on both coalescences and charges 11.5 false-alarm episodes
 per 30 days; under the oracle PSD it charges 3.1. The difference is the
 cold start of the trailing estimate on a 30-day record (over the year the
-causal replay delivers 1.40 against the oracle's 1.32), and it is the
+causal replay delivers 1.90 against the oracle's 1.32), and it is the
 scale against which the rows below are read.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, false-alarm episodes per 30 days under the ground-causal whitening](assets/benchmark_gap_study.png)

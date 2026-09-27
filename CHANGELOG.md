@@ -18,6 +18,18 @@ versioning follows [Semantic Versioning](https://semver.org/).
   bursty and retransmitted loss, link outages, generation gaps, recorder
   overflow, partial conditioning), replayed under the ground-causal
   whitening and under the oracle PSD.
+- `smooth_psd` and `[preprocessing] psd_smoothing_dex` (0, off, by
+  default): the Welch estimate that whitens a record, and the trailing
+  estimate of a replay (`TrailingWelch` `smoothing_dex`), smoothed by a
+  Gaussian in log-frequency. A 0.01-dex smoothing lowers the envelope of
+  the whitening kernel at one window length from 21 % to 0.1 % of its
+  peak; applied to the blind year with the selected model and its
+  threshold unchanged it keeps five of five label spans at 4.78 instead
+  of 1.57 false-alarm episodes per 30 days, so a model trained on
+  smoothed features is required to use it.
+- A test of the labelling stage on a synthetic truth stream; coverage
+  now includes the stages run by the scripts of the smoke test and the
+  three package extensions.
 
 ### Changed
 - The trailing whitening estimate of a replay pools the Welch segments of
@@ -30,7 +42,17 @@ versioning follows [Semantic Versioning](https://semver.org/).
   one or two segments and the estimate was close to a raw periodogram: on
   30-day missions the false-alarm rate rose several-fold and at 0.3 % loss
   both coalescences went undetected, while the oracle PSD kept the
-  reference rate. `TrailingWelch` takes `edge_rows`.
+  reference rate. `TrailingWelch` takes `edge_rows`. The causal year
+  replay of the selected model changes with it: 23 false-alarm episodes
+  (1.90 per 30 days) instead of 17 (1.40), a difference within the
+  Poisson uncertainty of either count; the same five coalescences are
+  detected on their own; the alerts of events 1 and 4 move from 1.9 and
+  7.5 hours after their mergers to 25.6 and 16.1 hours before them in
+  data time, within the conditioning stretch that contains the merger.
+- `configs/experiments/q8_b6.toml` carries the `[telemetry]` section of
+  the replay of its model; `configs/sangria.toml` keeps one for its own
+  model and for the payload export, with the whitening sidecar of its own
+  features.
 
 ### Fixed
 - A replay of a producer that discarded production (a generation gap, a

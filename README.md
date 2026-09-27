@@ -255,11 +255,13 @@ ground-station passes and whitened causally — the PSD estimated from the
 delivered record behind each window, redone daily — the same model raises
 a sustained alert (two consecutive alarmed windows, a persistence fixed on
 the training year's calibration block) for five of the six coalescences,
-event 2 being only ever alarmed by event 1's windows, at 1.40 false-alarm
-episodes per 30 days, between twenty minutes before and 42 hours after
-the merger in data time. Read on isolated alarms instead, the same replay
-alarms four coalescences 1.1 to 1.9 days early at 6.35 per 30 days, which
-is what chance gives at that rate. Whitened by the oracle year-median PSD
+event 2 being only ever alarmed in the cluster of alarms around event 1's
+merger, at 1.90 false-alarm episodes per 30 days, between 26 hours before
+and 42 hours after the merger in data time; the two alerts that precede
+their merger lie within the conditioning stretch that contains it and
+reach the ground after it. Read on isolated alarms instead, the same
+replay alarms three coalescences 1.1 to 1.7 days early at 5.94 per 30
+days, which is what chance gives at that rate. Whitened by the oracle year-median PSD
 of the whole blind year, the replay reaches 1.32 per 30 days with two
 alerts two to three days early on two-window inspiral runs the causal
 whitening does not produce; that is the bound, not the result. The
