@@ -1241,6 +1241,12 @@ end
     @test ext.count_ticks(134) == [0, 50, 100] && ext.count_ticks(23) == [0, 5, 10, 15, 20]
     @test ext.count_ticks(1) == [0, 1] && ext.count_ticks(0) == [0]
     @test_throws ArgumentError ext.count_ticks(-1)
+    # Alert labels: a right-hand label that would cover the next marker moves
+    # to the left, and so does one that would leave the axis
+    @test ext.alert_label_placement([0.5, 0.56], [0.5, 0.52], ["−27.8 h", "−21.1 h"]) ==
+          [:above_left, :above_right]
+    @test ext.alert_label_placement([0.95], [0.5], ["15.1 h"]) == [:above_left]
+    @test_throws DimensionMismatch ext.alert_label_placement([0.1], [0.1, 0.2], ["a"])
     @test_throws ArgumentError ext.decade_label(0, 10)
     values, ticklabels = ext.log_ticks(0.15, 3.0)
     @test values == [0.2, 0.5, 1.0, 2.0]

@@ -188,15 +188,16 @@ on a canvas of `size` [pt], on a shared mission-time axis
 window coverage, classifier score with the decision `threshold` as a dashed
 rule, the alarmed windows marked, and the labelled spans (`label_spans`,
 pairs of `DateTime`) shaded, the count of alarm episodes accumulated along
-mission time, and the ground latency of every window (`complete_at −
-content_end` [h]).
+mission time, and the availability latency of every window (`complete_at −
+content_end` [h]: the wait for its conditioning stretch and the downlink
+delay of the batch that completes it).
 
 The windows are revealed in arrival order, sorted by `complete_at`, not in
 mission-time order: a pass delivers its backlog newest first and a window
 becomes evaluable only once the conditioning stretch around it has landed,
 so the trace fills in wherever windows have become evaluable rather than
 from left to right. A dotted rule marks the ground clock, whose distance to
-the data edge is the delivery latency. The sweep takes about `n_frames`
+the data edge is the availability latency. The sweep takes about `n_frames`
 frames and the traces are decimated to about `max_points` windows, the
 alarmed ones always kept. `windows` is the table of `replay_run`, `path`
 must name a GIF, the only file written. Returns `path`. Requires CairoMakie

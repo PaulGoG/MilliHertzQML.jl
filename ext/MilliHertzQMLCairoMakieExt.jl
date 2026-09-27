@@ -701,6 +701,61 @@ function figure_telemetry_trace(
 end
 
 """
+    alert_label_placement(x, y, labels) -> Vector{Symbol}
+
+Position of each alert label relative to its marker, one of `:above_right`,
+`:above_left`, `:below_right`, `:below_left`, for markers at axis-fraction
+coordinates `x`, `y` (in `[0, 1]`) carrying the texts `labels`. Labels are
+placed in order of `x`; each takes the first position whose box stays
+inside the axis and clear of every marker and of the labels already placed,
+else `:none` (the caller then widens the axis or draws it above and to the
+right). The boxes are estimated from the character count at
+the annotation size over the lower axis of the two-panel layout
+(about 780 × 370 pt); the offsets are those of the drawn labels (9 pt
+horizontally, 6 pt vertically).
+"""
+function alert_label_placement(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real},
+    labels::AbstractVector{<:AbstractString},
+)
+    length(x) == length(y) == length(labels) ||
+        throw(DimensionMismatch("x, y and labels must have equal lengths."))
+    W, H = 780.0, 370.0
+    dx, dy = 9 / W, 6 / H
+    h = (ANNOTATION_FONTSIZE + 2) / H
+    mx, my = 12 / W, 12 / H                     # marker half-extent with its stroke
+    overlaps(a, b) = a[1] < b[2] && b[1] < a[2] && a[3] < b[4] && b[3] < a[4]
+    markers = [(x[j] - mx, x[j] + mx, y[j] - my, y[j] + my) for j in eachindex(x)]
+    placed = Tuple{Float64,Float64,Float64,Float64}[]
+    placement = fill(:none, length(x))
+    for i in sortperm(collect(x))
+        w = 0.55 * ANNOTATION_FONTSIZE * length(labels[i]) / W
+        for p in (:above_right, :above_left, :below_right, :below_left)
+            right = p in (:above_right, :below_right)
+            above = p in (:above_right, :above_left)
+            x0 = right ? x[i] + dx : x[i] - dx - w
+            y0 = above ? y[i] + dy : y[i] - dy - h
+            box = (x0, x0 + w, y0, y0 + h)
+            inside = 0 <= box[1] && box[2] <= 1 && 0 <= box[3] && box[4] <= 1
+            clear =
+                !any(j -> j != i && overlaps(box, markers[j]), eachindex(x)) &&
+                !any(b -> overlaps(box, b), placed)
+            if inside && clear
+                placement[i] = p
+                break
+            end
+        end
+        p = placement[i] == :none ? :above_right : placement[i]
+        w = 0.55 * ANNOTATION_FONTSIZE * length(labels[i]) / W
+        x0 = p in (:above_right, :below_right) ? x[i] + dx : x[i] - dx - w
+        y0 = p in (:above_right, :above_left) ? y[i] + dy : y[i] - dy - h
+        push!(placed, (x0, x0 + w, y0, y0 + h))
+    end
+    return placement
+end
+
+"""
     days_since(epoch, t) -> Float64
 
 Mission time `t` in days after `epoch`.
@@ -764,14 +819,15 @@ function figure_telemetry_alerts(
         )
         ylims!(ax_score, 0, 1)
         # The lower panel carries two different latencies against the same
-        # mission time: the delivery latency of every scored window, and, per
+        # mission time: the availability latency of every scored window (the
+        # wait for its conditioning stretch and the downlink delay), and, per
         # event, the alert time measured from the coalescence — negative when
         # the inspiral is alarmed before the merger.
         ax_lat = Axis(figure[2, 1]; xlabel = "Mission time [days]", ylabel = "Latency [h]")
-        # The delivery latency cycles with the downlink schedule and fills a band
+        # The availability latency cycles with the downlink schedule and fills a band
         # at this scale; it is drawn translucent so that alert labels on it
         # remain legible
-        delivery_handle = lines!(
+        availability_handle = lines!(
             ax_lat,
             t_days,
             latency_h;
@@ -813,36 +869,42 @@ function figure_telemetry_alerts(
         lo, hi = extrema(t_days)
         xlims!(ax_lat, lo, hi == lo ? lo + 1 : hi)
         y_lo, y_hi = extrema(vcat(latency_h, alert_y))
-        x_span = max(hi - lo, 1.0)
+        x_span = hi == lo ? 1.0 : hi - lo
         y_span = max(y_hi - y_lo, 1.0)
-        # Alerts of neighbouring events can lie within a label's extent of each
-        # other; the label of the lower alert of such a pair is set beneath its
-        # marker.
-        below = [
-            any(
-                j != i &&
-                    abs(alert_x[j] - alert_x[i]) < 0.04 * x_span &&
-                    (
-                        0 < alert_y[j] - alert_y[i] < 0.15 * y_span ||
-                        (alert_y[j] == alert_y[i] && j < i)
-                    ) for j in eachindex(alert_x)
-            ) for i in eachindex(alert_x)
-        ]
-        for (x, y, b) in zip(alert_x, alert_y, below)
+        alert_labels = map(alert_y) do y
             r = round(y; digits = 1)
-            label = r < 0 ? "−$(-r) h" : "$(abs(r)) h"
-            placement =
-                b ? (align = (:left, :top), offset = (9, -6)) :
-                (align = (:left, :bottom), offset = (9, 6))
+            r < 0 ? "−$(-r) h" : "$(abs(r)) h"
+        end
+        # Each label takes the first position clear of the other markers and
+        # labels; the lower limit leaves room for a label set beneath its
+        # marker only when one is
+        function placement_for(bottom)
+            limits = (y_lo - bottom * y_span, y_hi + 0.12 * y_span)
+            xf = (alert_x .- lo) ./ x_span
+            yf = (alert_y .- limits[1]) ./ (limits[2] - limits[1])
+            return alert_label_placement(xf, yf, alert_labels), limits
+        end
+        placement, limits = placement_for(0.06)
+        if any(p -> !(p in (:above_right, :above_left)), placement)
+            placement, limits = placement_for(0.14)
+        end
+        placement = replace(placement, :none => :above_right)
+        for (x, y, label, p) in zip(alert_x, alert_y, alert_labels, placement)
+            right = p in (:above_right, :below_right)
+            above = p in (:above_right, :above_left)
+            position = (
+                align = (right ? :left : :right, above ? :bottom : :top),
+                offset = (right ? 9 : -9, above ? 6 : -6),
+            )
             # A white outline beneath the label keeps it legible on the
-            # delivery trace
+            # availability trace
             for (color, strokewidth) in ((:white, 3), (FIGURE_COLORS.signal, 0))
                 text!(
                     ax_lat,
                     x,
                     y;
                     text = label,
-                    placement...,
+                    position...,
                     fontsize = ANNOTATION_FONTSIZE,
                     color = color,
                     strokecolor = :white,
@@ -850,9 +912,7 @@ function figure_telemetry_alerts(
                 )
             end
         end
-        # Room for a marker and its label above the data, and beneath it when
-        # a label is set below its marker
-        ylims!(ax_lat, y_lo - (any(below) ? 0.14 : 0.06) * y_span, y_hi + 0.12 * y_span)
+        ylims!(ax_lat, limits...)
         handles = Any[]
         labels = String[]
         for (h, l) in (
@@ -860,7 +920,7 @@ function figure_telemetry_alerts(
             (score_handle, "Classifier output"),
             (alarm_handle, "Alarm"),
             (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
-            (delivery_handle, "Delivery"),
+            (availability_handle, "Window availability"),
             (alert_handle, "Alert time"),
             (merger_handle, "Merger"),
         )
@@ -1142,7 +1202,7 @@ function animate_mission_replay(
         ax_lat = Axis(
             figure[5, 1];
             xlabel = "Mission time [days]",
-            ylabel = "Ground latency [h]",
+            ylabel = "Window availability [h]",
             xticks = LinearTicks(7),
         )
         panels = (ax_cov, ax_score, ax_episode, ax_lat)

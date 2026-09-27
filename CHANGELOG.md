@@ -72,6 +72,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   The label of the lower of two neighbouring alerts is set beneath its
   marker, where the two overlapped, and the delivery trace is drawn
   translucent so that labels on it remain legible.
+- Alert labels of `figure_telemetry_alerts` are placed by their extent
+  (`alert_label_placement`): each takes the first of four positions around
+  its marker that is clear of the other markers and labels, where the
+  previous rule compared marker distances only and let a label run into the
+  next marker. The lower-panel band, labelled "Delivery", is the
+  availability latency of each window (the wait for its conditioning
+  stretch plus the downlink delay, `complete_at − content_end`) and is now
+  labelled "Window availability", as is the corresponding panel of the
+  replay animation.
 - The alarm-episode panel of the replay animation ticks from zero up to
   the final episode count (`count_ticks`); its top tick lay on the panel
   edge and collided with the zero of the probability panel above.
