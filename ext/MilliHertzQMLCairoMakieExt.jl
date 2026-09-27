@@ -1539,8 +1539,15 @@ function figure_gap_study(
             yticks = (y, String.(levels)),
             xticks = 0:0.25:1,
         )
-        ax_events = Axis(figure[1, 2]; xlabel = "Events detected", xticks = 0:1:n_events)
-        ax_far = Axis(figure[1, 3]; xlabel = "False alarms per 30 d")
+        # The inner panels tick every level as the first does; their labels
+        # are hidden below
+        ax_events = Axis(
+            figure[1, 2];
+            xlabel = "Events detected",
+            xticks = 0:1:n_events,
+            yticks = y,
+        )
+        ax_far = Axis(figure[1, 3]; xlabel = "False alarms per 30 d", yticks = y)
         linkyaxes!(ax_windows, ax_events, ax_far)
         hideydecorations!(ax_events; grid = false, ticks = false)
         hideydecorations!(ax_far; grid = false, ticks = false)
