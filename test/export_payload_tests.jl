@@ -175,7 +175,7 @@
             fractional = deepcopy(config)
             fractional["telemetry"]["segment_duration_sec"] = 52
             @test_throws ArgumentError export_telemetry_payload(fractional)
-            # A coalescence outside the record means the catalog is not this record's
+            # A coalescence outside the record means the catalogue is not this record's
             foreign = joinpath(dir, "foreign_events.csv")
             CSV.write(foreign, DataFrame(event_id = [1], t_c_sec = [1e6]))
             @test_throws ArgumentError export_telemetry_payload(config; catalog = foreign)

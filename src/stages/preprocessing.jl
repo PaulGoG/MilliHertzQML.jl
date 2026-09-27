@@ -158,7 +158,7 @@ end
 Per-window labels of the point-wise `raw_labels` and signal-to-noise
 ratios `raw_snrs` under the sliding-window geometry of
 [`window_features`](@ref): a window is positive (label 1) when any of its
-samples is labeled 1, and carries the largest per-sample SNR inside it.
+samples is labelled 1, and carries the largest per-sample SNR inside it.
 Returns `labels::Vector{Int}` and `snrs::Vector{Float32}`.
 """
 function window_labels(

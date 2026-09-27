@@ -54,7 +54,7 @@ given the `blocks` of [`chronological_split`](@ref):
 
 The pooled block doubles the mission time behind the fitted false-alarm
 rate, whose relative error scales as the inverse square root of the
-episodes it charges; a 55-day block routinely charges fewer than five.
+episodes it counts; a 55-day block routinely counts fewer than five.
 The test block carries no information the fit could leak, being scored
 once after training and entering neither model selection nor early
 stopping, but it ceases to be an independent check of the operating
@@ -147,13 +147,13 @@ against binary `labels` over chronologically ordered windows advanced by
 `step_size` samples at `sample_rate` [Hz]:
 
 - `precision`, `recall`, `fpr` (the false-positive rate, i.e. the alarm
-  duty cycle on unlabeled windows), `f1`, `balanced_accuracy` at window
+  duty cycle on unlabelled windows), `f1`, `balanced_accuracy` at window
   level (`NaN` where undefined);
 - `n_events`: contiguous runs of positive labels; `n_detected`: events
   with at least one alarm inside their run; `event_recall`;
 - `n_false_alarm_episodes`: contiguous runs of alarmed windows outside
-  the labeled spans (an alarm that covers an event and extends beyond it
-  contributes its unlabeled excess, so a permanently raised alarm is not
+  the labelled spans (an alarm that covers an event and extends beyond it
+  contributes its unlabelled excess, so a permanently raised alarm is not
   free of false alarms); `observation_days`; `false_alarms_per_30d`, the
   operational false-alarm rate.
 """
@@ -276,17 +276,17 @@ from the event-level operating characteristic [`threshold_sweep`](@ref);
 - `"far"`: the operating point of an alert trigger. A candidate is
   admissible when its false-alarm episode rate does not exceed
   `target_far_per_30d` and its window false-positive rate (the alarm
-  duty cycle on unlabeled windows) does not exceed `target_fpr`. The
+  duty cycle on unlabelled windows) does not exceed `target_fpr`. The
   candidates are scanned from the highest downwards and the threshold is
   the lowest candidate of the admissible range that starts at the top —
   the highest recall reachable while alarms remain short and isolated.
   The scan direction matters because the episode count is not monotone
   in the threshold: as the threshold falls, spurious episodes first
-  multiply and then merge into a permanently raised alarm charged with a
+  multiply and then merge into a permanently raised alarm counted as a
   few long episodes, which an ascending scan would accept.
 - `"fpr"`: the lowest threshold whose window false-positive rate does not
   exceed `target_fpr` (monotone, so the scan direction is immaterial).
-- `"youden"`: the maximizer of `tpr - fpr` (requires both classes).
+- `"youden"`: the maximiser of `tpr - fpr` (requires both classes).
 
 When the block holds no positive window, `"youden"` falls back to `"fpr"`
 with a warning; the other criteria depend on negatives only. A block

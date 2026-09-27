@@ -3,8 +3,8 @@
 """
     VariationalQuantumClassifier(n_qubits, n_layers, params, ansatz_layers)
 
-A Variational Quantum Classifier (VQC) designed for Gravitational Wave detection.
-Implements Data Re-uploading by interleaving feature maps and variational layers.
+Variational quantum classifier (VQC) for gravitational-wave detection.
+Implements data re-uploading by interleaving feature maps and variational layers.
 """
 mutable struct VariationalQuantumClassifier
     n_qubits::Int
@@ -16,7 +16,7 @@ end
 """
     build_layer(n_qubits)
 
-Constructs a single layer of a Hardware Efficient Ansatz using Ry and Rz rotations
+Constructs a single layer of a hardware-efficient ansatz using Ry and Rz rotations
 followed by a ring of CNOT gates for entanglement.
 """
 function build_layer(n_qubits)
@@ -31,7 +31,7 @@ end
 """
     VariationalQuantumClassifier(n_qubits = 4, n_layers = 2; rng = Random.default_rng())
 
-Constructor for the VQC. Initializes parameters from a zero-mean normal
+Constructor for the VQC. Initialises parameters from a zero-mean normal
 distribution with standard deviation 0.5, drawn from `rng`.
 """
 function VariationalQuantumClassifier(
@@ -51,7 +51,7 @@ function VariationalQuantumClassifier(
     n_params_per_layer = nparameters(layers[1])
     total_params = n_params_per_layer * n_layers
 
-    # Initialize with Float32 for type stability
+    # Initialise with Float32 for type stability
     p = randn(rng, Float32, total_params) * 0.5f0
 
     idx = 1

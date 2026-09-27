@@ -122,9 +122,9 @@ include("stages/inference.jl")
 # Precompilation of the inference path — circuit construction, feature
 # scaling, and the forward pass — which every script and every inference run
 # enters first. The gradient path is left out: its Zygote tape dominates the
-# precompile cost and is compiled once per training run anyway. The feature
-# matrix is a literal, so the workload touches neither the filesystem nor a
-# random stream beyond the seeded parameter initialization.
+# precompilation time and is compiled once per training run in any case. The
+# feature matrix is a literal, so the workload touches neither the filesystem
+# nor a random stream beyond the seeded parameter initialisation.
 @setup_workload begin
     features = Float32[
         0.10 0.90

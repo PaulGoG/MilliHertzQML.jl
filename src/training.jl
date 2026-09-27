@@ -5,7 +5,7 @@
 """
     dispatch_params!(model::VariationalQuantumClassifier)
 
-Synchronizes the ansatz blocks of `model` with its parameter vector
+Synchronises the ansatz blocks of `model` with its parameter vector
 `model.params`, so that the blocks of a loaded model carry the persisted
 values. The forward pass itself reads `model.params` and never mutates
 the blocks.
@@ -213,8 +213,8 @@ end
     train_step!(model, opt_state, X_batch, y_batch; positive_weight = 1,
                 threaded = Threads.nthreads() > 1) -> loss
 
-One optimization step: the batch gradient ([`batch_gradient`](@ref))
-applied to `model.params` in place through the Flux optimizer state
+One optimisation step: the batch gradient ([`batch_gradient`](@ref))
+applied to `model.params` in place through the Flux optimiser state
 `opt_state`. Returns the batch loss before the update.
 """
 function train_step!(

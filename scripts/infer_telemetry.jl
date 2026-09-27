@@ -88,8 +88,10 @@ function main()
     geometry = run_geometry(run)
     psd_sidecar = settings.psd_sidecar
     if settings.psd_mode == "trailing"
-        # Ground-causal whitening: the estimate follows the delivered record,
-        # and a sidecar PSD of the whole record would defeat it.
+        # Causal whitening, with a PSD estimated only from data already
+        # delivered to the ground station: the estimate follows the delivered
+        # record, and a sidecar PSD of the whole record would make it
+        # non-causal.
         isempty(psd_sidecar) ||
             @warn "psd_sidecar is ignored under psd_mode = \"trailing\"" psd_sidecar
         psd_sidecar = ""

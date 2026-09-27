@@ -1,4 +1,4 @@
-# scripts/label_ldc.jl — dispatcher of the labeling stage
+# scripts/label_ldc.jl — dispatcher of the labelling stage
 # (MilliHertzQML.label_truth_stream): point-wise MBHB labels of an LDC
 # product from its truth stream. Every parameter comes from the
 # configuration; the command line names the configuration file and the

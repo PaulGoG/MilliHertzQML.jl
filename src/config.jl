@@ -386,7 +386,7 @@ end
 """
     training_settings(config) -> NamedTuple
 
-Validated `[training]` parameters: inputs, optimizer, chronological blocks,
+Validated `[training]` parameters: inputs, optimiser, chronological blocks,
 class weighting, threshold criterion and fitting block, scaler quantiles and
 phase-encoding span, test-mode caps, threading.
 """
@@ -495,7 +495,7 @@ end
 """
     ldc_settings(config) -> NamedTuple
 
-Validated `[ldc]` parameters of the truth-stream labeling.
+Validated `[ldc]` parameters of the truth-stream labelling.
 """
 function ldc_settings(config::AbstractDict)
     l = section(config, "ldc")

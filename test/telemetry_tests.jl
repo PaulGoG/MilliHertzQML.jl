@@ -189,7 +189,7 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
     direct = score_window(detector, Float32.(payload[1:4000]), 1001)
     @test isapprox(windows.score[11], direct; atol = 1e-6)
 
-    # Ground-causal whitening: every window is whitened by the Welch estimate
+    # Causal whitening: every window is whitened by the Welch estimate
     # of the delivered record behind its conditioning stretch, and the table
     # records the last row of that record
     @test_throws ArgumentError TrailingWelch(500, 100, 1000)
@@ -269,10 +269,10 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
     lossy_windows = replay_run(run_lossy, bare; tdi_gap_dilation_sec = 100.0)
     @test all(w -> w <= 20 || w >= 32, lossy_windows.window)
     @test nrow(lossy_windows) == nrow(windows) - 11
-    # The stretch widens that reach considerably: with two window lengths of
+    # The conditioning stretch widens that reach: with two window lengths of
     # context every window of this 6000-row record needs rows within 2000 of the
-    # hole, so none of them can be conditioned at all. A permanent hole is
-    # expensive in proportion to the context the whitening demands.
+    # hole, so none of them can be conditioned at all. The number of windows a
+    # permanent hole excludes grows with the context the whitening requires.
     @test nrow(replay_run(run_lossy, detector; tdi_gap_dilation_sec = 100.0)) == 0
     # Live mode on a completed run drains the feed once and stops
     followed = follow_run(run, detector; poll_interval_sec = 0.01, max_wall_sec = 30)

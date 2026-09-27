@@ -15,7 +15,7 @@ abstract type AbstractDetectorResponse end
 """
     SkyAveragedResponse()
 
-One strain channel referred to the sky- and polarization-averaged
+One strain channel referred to the sky- and polarisation-averaged
 sensitivity ``S_n(f)`` of [`lisa_noise_psd`](@ref): no antenna pattern, no
 orbital modulation, no transfer roll-off. Sources are placed at a
 matched-filter SNR rather than at a distance.
@@ -41,7 +41,7 @@ const GIGAPARSEC_SEC = 3.0856775814913673e25 / C_LIGHT
     sky_averaged_response(f)
 
 ``R(f) = \\frac{3}{10} \\left[1 + \\frac{6}{10} (f/f_*)^2\\right]^{-1}``
-(Robson, Cornish & Liu 2019, Eq. 9): the sky- and polarization-averaged
+(Robson, Cornish & Liu 2019, Eq. 9): the sky- and polarisation-averaged
 squared antenna pattern of one 60° Michelson channel, ``3/10``, times the
 finite-arm transfer roll-off. The channel noise PSD is ``R(f) S_n(f)`` for
 the sensitivity ``S_n`` of [`lisa_noise_psd`](@ref), so that a face-on
@@ -106,7 +106,7 @@ function lisa_response end
     source_frame(response, longitude, latitude, polarization)
 
 Response constants of one source at ecliptic `longitude` and `latitude`
-with polarization angle `polarization` [rad], consumed by
+with polarisation angle `polarization` [rad], consumed by
 [`project_spectrum`](@ref) and [`project_series`](@ref). Implemented per
 response type by the extension.
 """

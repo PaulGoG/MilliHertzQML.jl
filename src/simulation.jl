@@ -67,7 +67,7 @@ end
 """
     instrument_psd(f)
 
-Sky- and polarization-averaged instrument-noise sensitivity of LISA
+Sky- and polarisation-averaged instrument-noise sensitivity of LISA
 (Robson, Cornish & Liu 2019, Eq. 1) at frequency `f` [Hz], in Hz⁻¹:
 
 ```math
@@ -77,7 +77,7 @@ S_\\mathrm{inst}(f) = \\frac{10}{3 L^2} \\left[ P_\\mathrm{OMS}(f)
 ```
 
 with the optical-metrology and acceleration terms of Eqs. 10–11. Returns
-`Inf` for `f ≤ 0`, so that whitening annihilates the DC bin.
+`Inf` for `f ≤ 0`, so that whitening sets the DC bin to zero.
 """
 function instrument_psd(f::Real)
     f > 0 || return Inf
@@ -126,7 +126,7 @@ end
 
 Total sky-averaged strain-noise sensitivity ``S_n(f)`` [Hz⁻¹] of LISA:
 [`instrument_psd`](@ref) plus [`confusion_psd`](@ref) for the confusion fit
-of `observation_years`. This is the quantity the simulator synthesizes
+of `observation_years`. This is the quantity the simulator synthesises
 noise against, the matched filter integrates over, and the feature
 extractor whitens by.
 """
@@ -140,7 +140,7 @@ end
 `n` samples of zero-mean stationary Gaussian noise at sampling frequency
 `fs` [Hz] whose one-sided power spectral density is `psd(f)` [Hz⁻¹]. The
 spectral coefficients are drawn as complex normals scaled to
-``E|X_k|^2 = S(f_k) f_s n / 2`` (the unnormalized `rfft` convention), the DC
+``E|X_k|^2 = S(f_k) f_s n / 2`` (the unnormalised `rfft` convention), the DC
 bin is zeroed, and the Nyquist bin of an even `n` is forced real, so the
 inverse transform is a real series with the correct absolute amplitude.
 Bins below `f_min` [Hz] are left empty: the sensitivity model is a fit over

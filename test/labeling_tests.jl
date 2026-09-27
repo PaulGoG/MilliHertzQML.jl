@@ -1,4 +1,4 @@
-# Labeling stage on a synthetic signal-only truth stream, written as the
+# Labelling stage on a synthetic signal-only truth stream, written as the
 # CSV an LDC release provides for its blind year (columns t, X, Y, Z);
 # included by runtests.jl.
 
@@ -37,7 +37,7 @@
             ),
         )
 
-        # Fixed spans: one merger located from the SNR peak (no catalog), at
+        # Fixed spans: one merger located from the SNR peak (no catalogue), at
         # the largest |A| of the burst, labelled 4000 samples before and 400
         # after
         fixed = label_truth_stream(base; truth_csv = truth)

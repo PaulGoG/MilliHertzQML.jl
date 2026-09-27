@@ -2,7 +2,7 @@
 # of the simulator on CurvatureDistinguishability.jl: the antenna patterns of
 # the noise-orthogonal A and E channels on the analytic LISA orbits, the
 # orbital Doppler phase and the finite-arm transfer roll-off, applied to the
-# waveforms this package generates. Only the response is borrowed; the
+# waveforms this package generates. Only the response comes from that package; the
 # inspiral–merger–ringdown amplitude and phase stay in src/waveforms.jl and
 # the channel noise follows the sensitivity model of src/simulation.jl.
 module MilliHertzQMLCurvatureDistinguishabilityExt

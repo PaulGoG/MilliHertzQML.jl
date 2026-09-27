@@ -2,7 +2,7 @@
 # coupling: the A channel of an HDF5 TDI product written as the
 # single-column amplitude CSV that the telemetry producer ingests gaplessly,
 # beside a scenario fragment holding the external-data physics table, the
-# mission start time, the coalescence markers of an event catalog, and the
+# mission start time, the coalescence markers of an event catalogue, and the
 # label spans from which the consumer rebuilds the point-wise labels.
 
 """
@@ -39,7 +39,7 @@ end
     catalog_events(table) -> NamedTuple
 
 Event identifiers, coalescence times [s] in the record's time coordinate,
-and label spans of an event catalog table: the simulator catalog (columns
+and label spans of an event catalogue table: the simulator catalogue (columns
 `event_id`, `t_c_sec`) or the LDC event table (`event`, `merger_time_s`).
 `spans` holds `(label_start_index, label_end_index)` pairs when both
 columns are present and is `nothing` otherwise. `ArgumentError` for a table
@@ -88,15 +88,15 @@ fragment of the producer's external-data mode: `[physics]` with
 the sampling frequency of the file, and the `segment_duration_sec` and
 `batch_size` of [`telemetry_settings`](@ref); `[simulation]` with
 `start_sim_time`; `[[events.markers]]` with one `{time, label = "mbhb_<id>"}`
-entry per event of `catalog` — the simulator catalog (`event_id`,
+entry per event of `catalog` — the simulator catalogue (`event_id`,
 `t_c_sec`) or the LDC event table (`event`, `merger_time_s`;
 [`catalog_events`](@ref)) — at `start_sim_time` plus the coalescence time
 measured from the first record sample, rounded to the millisecond;
 `[[labels]]` with the `label_start_index`/`label_end_index` span of every
-event when the catalog carries them (a span with start > end is empty), so
+event when the catalogue carries them (a span with start > end is empty), so
 that the consumer can rebuild the point-wise labels; and `[payload]` with
 the source, group, row count, catalog, and batch geometry. The hardware and
-git provenance of [`write_toml`](@ref) is merged in. Without a catalog the
+git provenance of [`write_toml`](@ref) is merged in. Without a catalogue the
 marker array is empty and no label array is written.
 
 Payload row ``r`` corresponds to `start_sim_time` + ``(r - 1)/f_s`` and
@@ -155,7 +155,7 @@ function export_telemetry_payload(
         @info "telemetry payload" source group n_rows sample_rate_hz = sample_rate rows_per_batch n_batches =
             div(n_rows, rows_per_batch)
 
-        # Coalescence markers and label spans from the event catalog
+        # Coalescence markers and label spans from the event catalogue
         markers = NamedTuple{(:label, :time),Tuple{String,Dates.DateTime}}[]
         label_entries = nothing
         if catalog_path !== nothing

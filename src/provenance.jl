@@ -60,7 +60,7 @@ end
 
 Platform fingerprint recorded in run provenance snapshots: an anonymous
 machine identifier ([`machine_id`](@ref)), OS kernel, CPU model and
-logical core count, total memory, Julia version with the sanitized
+logical core count, total memory, Julia version with the sanitised
 `versioninfo()` output ([`sanitized_versioninfo`](@ref)), and
 thread/worker counts (Julia threads, BLAS threads, `Distributed`
 workers). Together with the configuration snapshot and the git

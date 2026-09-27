@@ -2,7 +2,7 @@
 # loaded together with CairoMakie. Every figure is built on the base layout
 # (900 × 600 pt single panel; each further stacked panel adds 350 pt, each
 # auxiliary strip 180 pt), shares the project theme (Computer Modern, boxed
-# axes, no titles, legend on top), encodes series families by color and
+# axes, no titles, legend on top), encodes series families by colour and
 # roles by line style, and is exported as vector PDF plus a 4× raster with
 # a provenance sidecar.
 module MilliHertzQMLCairoMakieExt
@@ -153,7 +153,7 @@ decimation(n::Integer, max_points::Integer) = 1:max(1, cld(n, max_points)):n
 """
     top_legend!(figure, axis; nbanks = 1)
 
-Horizontal legend of the labeled series of `axis` above the axes, in the
+Horizontal legend of the labelled series of `axis` above the axes, in the
 first row of the figure layout, in `nbanks` rows.
 """
 function top_legend!(figure::Figure, axis::Axis; nbanks::Integer = 1)
@@ -181,7 +181,7 @@ function label_bands!(
             x[first(run)],
             x[last(run)];
             color = (FIGURE_COLORS.label, 0.25),
-            label = k == 1 ? "Labeled span" : nothing,
+            label = k == 1 ? "Labelled span" : nothing,
         )
     end
     return nothing
@@ -324,7 +324,7 @@ end
 
 Tick values of a logarithmic axis spanning `[lo, hi]`: the decades inside
 the range, with the 2× and 5× intermediates added when fewer than two
-decades fall inside, labeled as plain decimals.
+decades fall inside, labelled as plain decimals.
 """
 function log_ticks(lo::Real, hi::Real)
     0 < lo <= hi || throw(ArgumentError("a logarithmic range needs 0 < lo <= hi."))
@@ -605,7 +605,7 @@ function figure_score_distribution(
                 color = (FIGURE_COLORS.signal, 0.5),
                 strokecolor = FIGURE_STROKES.signal,
                 strokewidth = 1.5,
-                label = "Labeled windows",
+                label = "Labelled windows",
             )
         end
         vlines!(
@@ -802,7 +802,7 @@ function figure_telemetry_alerts(
         handles = Any[]
         labels = String[]
         for (h, l) in (
-            (span_handle, "Labeled span"),
+            (span_handle, "Labelled span"),
             (score_handle, "Classifier output"),
             (alarm_handle, "Alarm"),
             (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
@@ -821,7 +821,7 @@ function figure_telemetry_alerts(
 end
 
 # Animations. A GIF shares the base layout and theme of the figures: fonts,
-# colors, boxed axes, and the legend on top. Axis limits are fixed over the
+# colours, boxed axes, and the legend on top. Axis limits are fixed over the
 # whole sweep, so nothing rescales between frames.
 
 """
@@ -862,7 +862,8 @@ end
 """
     check_gif_path(path)
 
-Throw unless `path` names a GIF; the animations of the project ship as GIF.
+Throw unless `path` names a GIF; the animations of the project are written
+as GIF.
 """
 function check_gif_path(path::AbstractString)
     endswith(lowercase(path), ".gif") ||
@@ -931,7 +932,7 @@ function animate_training_history(
     acc = Float64.(collect(history.val_acc))
     length(train) == length(val) == length(acc) == n ||
         throw(DimensionMismatch("the history columns differ in length."))
-    # The epoch of least validation loss is the checkpoint the run ships
+    # The epoch of least validation loss is the checkpoint the run saves
     checkpoint = argmin(val)
     loss_lo, loss_hi = extrema(vcat(train, val))
     loss_span = max(loss_hi - loss_lo, 1e-12)
@@ -1060,7 +1061,7 @@ function animate_mission_replay(
     score = Float64.(windows.score[perm])
     alarm = Int.(windows.decision[perm]) .== 1
     alarm_idx = findall(alarm)
-    # Reveal order: the order in which the ground learned the windows. A pass
+    # Reveal order: the order in which the windows became evaluable. A pass
     # delivers its backlog newest first and a window becomes evaluable only
     # once the conditioning stretch around it has landed, so an arrival prefix
     # need not be a prefix in mission time.
@@ -1207,7 +1208,7 @@ function animate_mission_replay(
         handles = Any[]
         labels = String[]
         for (h, l) in (
-            (span_handle, "Labeled span"),
+            (span_handle, "Labelled span"),
             (score_handle, "Classifier output"),
             (alarm_handle, "Alarm"),
             (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
@@ -1240,7 +1241,7 @@ end
     log_decimal_ticks(lo, hi) -> (values, labels)
 
 Decade and 3× intermediate ticks of the closed interval `[lo, hi]`,
-labeled as plain decimals. A logarithmic axis of a few decades reads as
+labelled as plain decimals. A logarithmic axis of a few decades reads as
 decimals rather than as powers, and never as a fractional exponent.
 """
 function log_decimal_ticks(lo::Real, hi::Real)
@@ -1312,7 +1313,7 @@ function figure_loss_survival(
             )
         end
         # The rate at which the mean spacing of losses equals the stretch:
-        # above it a clean stretch is a rare event, not a typical one.
+        # above it a stretch without a lost batch is rare, not typical.
         vlines!(
             ax_survival,
             [knee];
@@ -1368,13 +1369,13 @@ function figure_seed_spread(
     n >= 2 || throw(ArgumentError("a spread needs at least two runs."))
 
     x = collect(1:n)
-    shipped = baseline_seed === nothing ? Int[] : findall(==(baseline_seed), seeds)
+    selected = baseline_seed === nothing ? Int[] : findall(==(baseline_seed), seeds)
     return with_theme(figure_theme(; size = figure_size(2))) do
         figure = Figure()
         ax_thr = Axis(figure[1, 1]; ylabel = "Fitted threshold")
         ax_far = Axis(
             figure[2, 1];
-            xlabel = "Initialization seed",
+            xlabel = "Initialisation seed",
             ylabel = "False alarms / 30 d",
         )
         linkxaxes!(ax_thr, ax_far)
@@ -1382,7 +1383,7 @@ function figure_seed_spread(
         ax_far.xticks = (x, string.(seeds))
         xlims!(ax_far, 0.5, n + 0.5)
         # Headroom above whichever is higher, the requested rate or the
-        # worst run, so that neither the rule nor the count meets the frame.
+        # highest delivered rate, so that neither the rule nor the count meets the frame.
         far_top =
             target_far === nothing ? maximum(far_per_30d) :
             max(target_far, maximum(far_per_30d))
@@ -1420,11 +1421,11 @@ function figure_seed_spread(
             strokecolor = FIGURE_STROKES.false_alarm,
             label = "Delivered rate",
         )
-        if !isempty(shipped)
+        if !isempty(selected)
             scatter!(
                 ax_thr,
-                x[shipped],
-                thresholds[shipped];
+                x[selected],
+                thresholds[selected];
                 color = FIGURE_COLORS.signal,
                 markersize = 20,
                 marker = :diamond,
@@ -1433,14 +1434,14 @@ function figure_seed_spread(
             )
             scatter!(
                 ax_far,
-                x[shipped],
-                far_per_30d[shipped];
+                x[selected],
+                far_per_30d[selected];
                 color = FIGURE_COLORS.signal,
                 markersize = 20,
                 marker = :diamond,
                 strokewidth = 1.5,
                 strokecolor = FIGURE_STROKES.signal,
-                label = "Shipped run",
+                label = "Selected run",
             )
         end
         # Every run recovered the same events, so the count is stated once

@@ -5,7 +5,7 @@
 """
     T_SUN
 
-Geometrized solar mass ``G M_\\odot / c^3`` [s].
+Geometrised solar mass ``G M_\\odot / c^3`` [s].
 """
 const T_SUN = 4.925490947e-6
 
@@ -251,7 +251,7 @@ end
 
 Inverse transform of a spectrum on the `rfft` grid of `2n` samples, cut to
 its first `n` samples, with the first 5 % ramped by a half-Hann window to
-remove residual ringing of the roll-on; in the unnormalized FFT
+remove residual ringing of the roll-on; in the unnormalised FFT
 convention, so without physical scale.
 """
 function inverse_segment(H::AbstractVector{<:Complex}, n::Integer)
@@ -295,7 +295,7 @@ luminosity distance `distance_sec` [light-seconds]:
 (Ajith et al. 2008, Eq. 4.17). Multiplying the unit spectrum of
 [`phenoma_spectrum`](@ref), whose inspiral is ``(f/f_\\mathrm{merg})^{-7/6}``,
 gives ``|H(f)| = \\sqrt{5/24}\\, \\pi^{-2/3} \\mathcal{M}^{5/6} f^{-7/6} / d_L``
-in the inspiral: the plus-polarization amplitude of a face-on source,
+in the inspiral: the plus-polarisation amplitude of a face-on source,
 before the inclination factors ``(1 + \\cos^2\\iota)/2`` and ``\\cos\\iota``
 and the antenna patterns.
 """

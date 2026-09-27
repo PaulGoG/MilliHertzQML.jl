@@ -1,7 +1,7 @@
-# src/stages/labeling.jl — labeling stage: point-wise MBHB labels of an LDC
+# src/stages/labeling.jl — labelling stage: point-wise MBHB labels of an LDC
 # product from its signal-only truth stream. The A channel of the truth
 # stream is scanned with the windowed matched-filter SNR against the
-# analytic TDI PSD; mergers come from the source catalog when the product
+# analytic TDI PSD; mergers come from the source catalogue when the product
 # carries one and from SNR peaks otherwise; the positive span of every
 # merger is either the fixed window of Isfan et al. (2025) or the union of
 # windows in which the source is detectable.
@@ -48,7 +48,7 @@ end
     merger_indices_from_peaks(A, starts, snr, settings, fs) -> Vector{Int}
 
 Sample indices of the mergers of the truth-stream channel `A` located
-without a catalog: the SNR peaks ([`snr_peaks`](@ref)) of the windowed
+without a catalogue: the SNR peaks ([`snr_peaks`](@ref)) of the windowed
 scan (`starts`, `snr`) at or above `settings.merger_snr_threshold`,
 separated by at least `settings.peak_min_separation_sec`, with inspiral
 precursors within `settings.label_before_sec` below
@@ -104,14 +104,14 @@ end
     label_truth_stream(config; h5_file = nothing, truth_csv = nothing,
                        output_prefix = nothing) -> NamedTuple
 
-Labeling stage: the signal-only TDI of an LDC product — the compound
-dataset `truth_group` of `h5_file` with the catalog `catalog_group`
+Labelling stage: the signal-only TDI of an LDC product — the compound
+dataset `truth_group` of `h5_file` with the catalogue `catalog_group`
 ([`read_tdi`](@ref), [`read_catalog`](@ref)), or the columns `t, X, Y, Z`
 of `truth_csv` ([`read_truth_csv`](@ref)) — is combined into the A channel
 ([`tdi_to_aet`](@ref)) and scanned with the windowed matched-filter SNR
 ([`windowed_snr`](@ref)) against the analytic TDI PSD
-([`ldc_tdi_psd`](@ref)) of `psd_model`. Mergers are the catalog's
-coalescence times when a catalog is available and SNR peaks otherwise
+([`ldc_tdi_psd`](@ref)) of `psd_model`. Mergers are the catalogue's
+coalescence times when a catalogue is available and SNR peaks otherwise
 ([`merger_indices_from_peaks`](@ref)); their positive spans are the fixed
 window `[-label_before_sec, +label_after_sec]` ([`fixed_spans`](@ref)) or
 the union of windows reaching `label_snr_threshold`
@@ -123,9 +123,9 @@ and replace the configured `h5_file`.
 Writes, under the `inputs` root, `<output_prefix>_labels.csv` (`Label`,
 `SNR`: the peak windowed SNR of the event a sample belongs to),
 `<output_prefix>_events.csv` (one row per merger with its sample index,
-time, window SNR, catalog parameters, and — for fixed spans — the label
+time, window SNR, catalogue parameters, and — for fixed spans — the label
 range and peak SNR), `<output_prefix>_spans.csv`, and the snapshot
-`<output_prefix>_labels.toml` with the labeling parameters and the
+`<output_prefix>_labels.toml` with the labelling parameters and the
 provenance sections of [`write_toml`](@ref). Existing files are backed up
 first.
 
@@ -153,7 +153,7 @@ function label_truth_stream(
             h5_file = settings.h5_file
         end
 
-        # Truth stream and catalog
+        # Truth stream and catalogue
         local truth, catalog, source
         if h5_file !== nothing
             source = resolvepath(h5_file)
@@ -191,7 +191,7 @@ function label_truth_stream(
         @info "windowed matched-filter SNR" window_size step psd_model tdi2 observation_years
         starts, snr = windowed_snr(A, fs; window_size = window_size, step = step, psd = psd)
 
-        # Mergers: from the catalog when available, else from SNR peaks
+        # Mergers: from the catalogue when available, else from SNR peaks
         merger_indices = if catalog !== nothing
             merger_indices_from_catalog(catalog, t0, fs, n)
         else

@@ -91,7 +91,7 @@ end
 """
     replay_spans(results_dir, geometry) -> Union{Nothing, Vector{Tuple{DateTime,DateTime}}}
 
-Labeled spans of a replay, in mission time: the payload rows
+Labelled spans of a replay, in mission time: the payload rows
 `label_start_index` and `label_end_index` of the event table recorded in
 `config_telemetry.toml`, or, when that table is out of reach, the hour
 before every merger of `alert_latency.csv`. `nothing` when the results

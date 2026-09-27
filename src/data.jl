@@ -71,12 +71,12 @@ amplitude:
 
 1. mean whitened power in `low_band` [Hz];
 2. mean whitened power in `high_band` [Hz];
-3. spectral entropy of the normalized whitened power, divided by
+3. spectral entropy of the normalised whitened power, divided by
    ``\\ln N_\\mathrm{bins}`` so that it lies in ``[0, 1]``;
 4. ``\\log_{10}`` of the standard deviation of the whitened power (0 for
    white noise, whose periodogram is exponentially distributed).
 
-`feature_set = :bands` generalizes the whitened set to the bands between
+`feature_set = :bands` generalises the whitened set to the bands between
 consecutive `band_edges` [Hz] (the first band closed on both sides, the
 others open at their lower edge): the mean whitened power of every band,
 then the entropy and the log power spread as above — `length(band_edges)
@@ -84,7 +84,7 @@ then the entropy and the log power spread as above — `length(band_edges)
 whitened set exactly.
 
 `feature_set = :paper` is the set of Isfan et al. (2025) on the raw window:
-the normalized spectral entropy and ``\\log_{10}`` of the mean, standard
+the normalised spectral entropy and ``\\log_{10}`` of the mean, standard
 deviation, and maximum of the periodogram (the paper uses the raw
 moments; the logarithm is a monotone transform that keeps their min–max
 scaling well conditioned over the many decades a TDI spectrum spans).

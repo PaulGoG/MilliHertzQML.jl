@@ -1,7 +1,7 @@
 # src/ldc.jl — LISA Data Challenge products: the analytic TDI noise model of
 # the `ldc` package (equal arms), readers of the compound HDF5 TDI datasets
-# and catalogs, the A/E/T combination, Welch PSD estimation of a record, and
-# event labeling from a truth stream. TDI variables are dimensionless
+# and catalogues, the A/E/T combination, Welch PSD estimation of a record, and
+# event labelling from a truth stream. TDI variables are dimensionless
 # fractional-frequency quantities; PSDs in Hz⁻¹.
 
 """
@@ -281,7 +281,7 @@ end
 """
     read_catalog(path; group = "sky/mbhb/cat") -> DataFrame
 
-Source catalog of an LDC product: the compound dataset at `group` as a
+Source catalogue of an LDC product: the compound dataset at `group` as a
 table, one column per field.
 """
 function read_catalog(path::AbstractString; group::AbstractString = "sky/mbhb/cat")
@@ -459,7 +459,7 @@ end
 Callable ``f \\mapsto S(f)`` interpolating the tabulated one-sided PSD
 `psd` at the strictly increasing positive frequencies `freqs` linearly in
 ``\\log f``–``\\log S``, constant outside the tabulated range, and `Inf` for
-``f \\le 0`` (so whitening annihilates the DC bin).
+``f \\le 0`` (so whitening sets the DC bin to zero).
 """
 function interpolated_psd(freqs::AbstractVector{<:Real}, psd::AbstractVector{<:Real})
     length(freqs) == length(psd) || throw(
@@ -524,7 +524,7 @@ accepted in decreasing order so that accepted peaks are at least
 A peak that precedes a larger accepted peak by at most `precursor_window`
 samples while staying below `precursor_ratio` times its height is a
 fluctuation of that source's inspiral, not a merger, and is dropped. Used
-to locate mergers in a truth stream without a catalog.
+to locate mergers in a truth stream without a catalogue.
 """
 function snr_peaks(
     starts::AbstractRange{<:Integer},

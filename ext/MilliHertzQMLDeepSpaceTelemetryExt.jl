@@ -156,7 +156,7 @@ function list_batches(run::DeepSpaceTelemetryRun)
     sort!(records; by = r -> r.index)
     # A stored index that has fallen behind the content means the producer
     # discarded production: the record then has permanent gaps that no arrival
-    # will fill, which the coverage handles, but it must not pass unremarked.
+    # will fill, which the coverage handles; the drift is reported.
     drifted = count(r -> first(r.rows) != first(batch_rows(r.index, P)), records)
     drifted == 0 || @warn "the producer discarded production: the stored batch index " *
           "no longer tracks the payload rows, so the record carries permanent gaps." batches_affected =

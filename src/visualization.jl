@@ -67,9 +67,9 @@ end
 """
     FIGURE_COLORS
 
-Semantic colors shared by every figure of the project (Okabe–Ito palette),
+Semantic colours shared by every figure of the project (Okabe–Ito palette),
 each with a single use: `data` (classifier output, time series, measured
-points), `label` (labeled spans), `threshold` (the decision threshold,
+points), `label` (labelled spans), `threshold` (the decision threshold,
 black, dashed in every figure), `training` and `validation` (the two
 blocks), `noise` and `signal` (score distributions, and the detected-event
 markers), `fit` (fitted or model curves), `false_alarm` (the false-alarm
@@ -169,7 +169,7 @@ Animated counterpart of [`figure_training_history`](@ref): the two stacked
 panels sharing the epoch axis on a canvas of `size` [pt], revealed one
 epoch per frame at fixed axis limits, held for `hold_frames` frames at the
 end. The epoch of least
-validation loss — the checkpoint whose weights the run ships — is marked in
+validation loss — the checkpoint whose weights the run saves — is marked in
 both panels once the sweep reaches it. `history` holds the vectors
 `epochs`, `train_loss`, `val_loss`, and `val_acc`; `path` must name a GIF,
 the only file written. Returns `path`. Requires CairoMakie to be loaded.
@@ -186,7 +186,7 @@ Four stacked panels of a telemetry replay, two main panels and two strips
 on a canvas of `size` [pt], on a shared mission-time axis
 [days since `epoch`, by default the content end of the first window]:
 window coverage, classifier score with the decision `threshold` as a dashed
-rule, the alarmed windows marked, and the labeled spans (`label_spans`,
+rule, the alarmed windows marked, and the labelled spans (`label_spans`,
 pairs of `DateTime`) shaded, the count of alarm episodes accumulated along
 mission time, and the ground latency of every window (`complete_at −
 content_end` [h]).
@@ -194,7 +194,7 @@ content_end` [h]).
 The windows are revealed in arrival order, sorted by `complete_at`, not in
 mission-time order: a pass delivers its backlog newest first and a window
 becomes evaluable only once the conditioning stretch around it has landed,
-so the trace fills in wherever the ground has learned something rather than
+so the trace fills in wherever windows have become evaluable rather than
 from left to right. A dotted rule marks the ground clock, whose distance to
 the data edge is the delivery latency. The sweep takes about `n_frames`
 frames and the traces are decimated to about `max_points` windows, the
@@ -218,7 +218,7 @@ function figure_training_history end
                          max_points = 5000) -> Figure
 
 Classifier output against mission time [days] with the decision threshold
-and, when `labels` is given, the labeled spans as shaded bands. Long
+and, when `labels` is given, the labelled spans as shaded bands. Long
 traces are decimated to about `max_points` samples. Requires CairoMakie.
 """
 function figure_mission_trace end
@@ -261,7 +261,7 @@ function figure_sensitivity end
 """
     figure_score_distribution(probabilities, threshold; labels = nothing, n_bins = 50) -> Figure
 
-Histogram of the classifier scores, split into noise and labeled windows
+Histogram of the classifier scores, split into noise and labelled windows
 when `labels` is given, with the decision threshold. Requires CairoMakie.
 """
 function figure_score_distribution end
@@ -273,7 +273,7 @@ function figure_score_distribution end
 Two stacked panels on a shared mission-time axis [days since `epoch`] for
 the windows table of a replay: the classifier score of every window at its
 content end with the decision threshold, alarmed windows marked, and the
-labeled spans (`label_spans`, pairs of `DateTime`) shaded; below, the
+labelled spans (`label_spans`, pairs of `DateTime`) shaded; below, the
 ground-availability latency of every window (`complete_at − content_end`
 [h]) with the alert latencies of the detected events (`latencies`, the
 table of `alert_latency_table`) annotated. Requires CairoMakie.
@@ -302,11 +302,10 @@ function figure_loss_survival end
     figure_seed_spread(seeds, thresholds, far_per_30d, events_detected, n_events;
                        baseline_seed = nothing, target_far = nothing) -> Figure
 
-Two stacked panels over the initialization seeds of repeated training
+Two stacked panels over the initialisation seeds of repeated training
 runs: the decision threshold each run fitted, and the false-alarm rate it
 then delivered on the blind record, annotated with the events each run
-recovered of `n_events`. `baseline_seed` marks the run the package ships
-and `target_far` the rate the threshold criterion asked for. Requires
+recovered of `n_events`. `baseline_seed` marks the selected run and `target_far` the rate the threshold criterion asked for. Requires
 CairoMakie.
 """
 function figure_seed_spread end
@@ -329,7 +328,7 @@ function figure_gap_study end
 """
     figure_telemetry_trace(t_days, strain, labels; max_points = 5000, whitened = nothing) -> Figure
 
-Simulated strain record against mission time with the labeled spans as
+Simulated strain record against mission time with the labelled spans as
 shaded bands, an axis offset multiplier for the small strain amplitudes,
 and, when `whitened` is given, a second panel with the whitened record.
 Requires CairoMakie.

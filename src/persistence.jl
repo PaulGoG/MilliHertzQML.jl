@@ -9,7 +9,7 @@ fitted on the training partition (bounds and phase-encoding span; `nothing`
 when absent), and an arbitrary `metadata` dictionary (run identifier, seed,
 configuration snapshot).
 
-The circuit itself is not serialized; `load_model` rebuilds it from the
+The circuit itself is not serialised; `load_model` rebuilds it from the
 hyperparameters, keeping artifacts loadable across package versions.
 """
 function save_model(

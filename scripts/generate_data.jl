@@ -39,7 +39,7 @@ end
 """
     trace_figure(stem, config, result)
 
-Trace of the simulated `A` channel against mission time with the labeled
+Trace of the simulated `A` channel against mission time with the labelled
 spans and, in a second panel, the record high-passed and whitened by the
 noise PSD of that channel as the pre-processor sees it; exported at `stem` as PDF and
 PNG with a provenance sidecar.

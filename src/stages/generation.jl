@@ -1,8 +1,8 @@
 # src/stages/generation.jl — telemetry generation stage: calibrated LISA
 # noise (instrument plus confusion), resolvable galactic binaries and EMRIs
 # scaled to a matched-filter SNR over the record, MBHB injections aligned on
-# the coalescence sample with point-wise labels and an event catalog, and
-# the persisted products (HDF5 record, label CSV, catalog CSV, snapshot
+# the coalescence sample with point-wise labels and an event catalogue, and
+# the persisted products (HDF5 record, label CSV, catalogue CSV, snapshot
 # TOML). The random-draw order of every injector is fixed so that a seed
 # reproduces a record bit for bit.
 
@@ -91,7 +91,7 @@ end
 """
     event_catalog() -> DataFrame
 
-Empty MBHB event catalog with the column schema filled by
+Empty MBHB event catalogue with the column schema filled by
 [`inject_mbhb!`](@ref): event identifier, coalescence time [s] and sample,
 matched-filter SNR of the injected samples, detector-frame total mass
 [M⊙], mass ratio, symmetric mass ratio, IMRPhenomA merger, ringdown, and
@@ -262,10 +262,10 @@ end
 """
     channel_catalog() -> DataFrame
 
-Empty MBHB event catalog of the constellation response: the columns of
+Empty MBHB event catalogue of the constellation response: the columns of
 [`event_catalog`](@ref) — `snr` holding the SNR of the channel or network
 selected by `label_channel` — followed by the luminosity distance [Gpc],
-the ecliptic longitude and latitude, the inclination and polarization
+the ecliptic longitude and latitude, the inclination and polarisation
 [rad], and the per-channel matched-filter SNRs `snr_a` and `snr_e`.
 """
 function channel_catalog()
@@ -436,7 +436,7 @@ are recorded per channel; `snr` and the label span follow the channel or
 network selected by `settings.label_channel` ([`label_bounds`](@ref)).
 `catalog` carries the schema of [`channel_catalog`](@ref). Draw order per
 event: coalescence sample, total mass, mass ratio, distance, longitude,
-latitude, inclination, polarization.
+latitude, inclination, polarisation.
 """
 function inject_mbhb!(
     rng::AbstractRNG,
@@ -602,7 +602,7 @@ function simulate_record(
         psd,
     )
     # MBHB injections aligned on the coalescence sample, with labels and
-    # an event catalog.
+    # an event catalogue.
     @info "injecting massive black hole binaries" n_mbhb = g.n_mbhb label_span =
         g.label_span
     labels = zeros(Int32, n_total)
@@ -725,11 +725,11 @@ end
 
 Generation stage of the pipeline. Every parameter comes from the
 `[generation]` section of `config` ([`generation_settings`](@ref)); `output`
-overrides the configured HDF5 path. The stage synthesizes Gaussian noise of
+overrides the configured HDF5 path. The stage synthesises Gaussian noise of
 the Robson–Cornish–Liu (2019) instrument-plus-confusion PSD
 ([`synthesize_noise`](@ref)), adds the resolvable background
 ([`inject_galactic_binaries!`](@ref), [`inject_emris!`](@ref)), injects
-the MBHB events with their labels and catalog ([`inject_mbhb!`](@ref)) —
+the MBHB events with their labels and catalogue ([`inject_mbhb!`](@ref)) —
 through the detector response of `[generation] response`
 ([`simulate_record`](@ref)) — and persists the products beside `output`:
 
@@ -739,7 +739,7 @@ through the detector response of `[generation] response`
   channels of the constellation response (`response = "lisa"`, through the
   CurvatureDistinguishability extension);
 - `<stem>_labels.csv` — point-wise `Label` (0/1) and `SNR` columns;
-- `<stem>_events.csv` — the event catalog ([`event_catalog`](@ref));
+- `<stem>_events.csv` — the event catalogue ([`event_catalog`](@ref));
 - `<stem>_generation.toml` — the `[generation]` snapshot with `run_id` and
   `n_events_injected`, plus the hardware and git provenance added by
   [`write_toml`](@ref).
@@ -806,7 +806,7 @@ function generate_telemetry(
         channels, labels, snrs, catalog =
             record.channels, record.labels, record.snrs, record.catalog
 
-        # Persist: HDF5 channels, point-wise labels, event catalog,
+        # Persist: HDF5 channels, point-wise labels, event catalogue,
         # provenance snapshot.
         @timeit TIMER "persist" begin
             backup_existing!(h5_file)

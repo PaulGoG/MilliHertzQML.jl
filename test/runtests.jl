@@ -34,7 +34,7 @@ end
 end
 
 @testset "Static QA (JET)" begin
-    # Reports are restricted to this package; dependencies are analyzed but
+    # Reports are restricted to this package; dependencies are analysed but
     # not reported against.
     JET.test_package(MilliHertzQML; target_modules = (MilliHertzQML,))
 end
@@ -496,7 +496,7 @@ end
     f_early = zc_frequency(view(h, div(k_m, 4):div(k_m, 2)))
     f_late = zc_frequency(view(h, (k_m-400):k_m))
     @test f_late > 3 * f_early
-    # Inspiral spectral slope −7/6 on the realized spectrum
+    # Inspiral spectral slope −7/6 on the realised spectrum
     Hs = abs.(rfft(h))
     fr = rfftfreq(n, fs)
     f_lo = 2 * phenoma_start_frequency(p, (k_m - 1) / fs)
@@ -693,8 +693,8 @@ end
     @test m.n_false_alarm_episodes == 1
     @test m.observation_days ≈ 6.0
     @test m.false_alarms_per_30d ≈ 5.0
-    # A permanent alarm detects every event and is charged for every
-    # unlabeled stretch (before, between, after)
+    # A permanent alarm detects every event and counts one false-alarm
+    # episode in every unlabelled stretch (before, between, after)
     m_all = event_metrics(ones(Int, 12), labels; step_size = 43200, sample_rate = 1.0)
     @test m_all.n_detected == 2 && m_all.n_false_alarm_episodes == 3
     @test m_all.recall == 1.0
@@ -850,7 +850,7 @@ end
     @test_throws DimensionMismatch select_threshold(yv, scores[1:19]; geometry...)
 
     # Class-weighted loss: weight 1 is the plain BCE; a larger weight raises
-    # the cost of every imperfectly scored positive
+    # the loss of every imperfectly scored positive
     rng = StableRNG(11)
     model = VariationalQuantumClassifier(4, 2; rng = rng)
     Xw = rand(rng, Float32, 6, 4) .* Float32(2π)
@@ -900,7 +900,7 @@ end
     @test A == (Z .- X) ./ sqrt(2)
     @test_throws DimensionMismatch tdi_to_aet(X, Y, Z[1:99])
 
-    # Compound and group HDF5 layouts read identically; catalogs become tables
+    # Compound and group HDF5 layouts read identically; catalogues become tables
     mktempdir() do dir
         n = 64
         t = collect(0.0:5.0:(5.0*(n-1)))
@@ -937,7 +937,7 @@ end
     @test isapprox(median(sw), 2σ^2 / fs; rtol = 0.03)
     fw2, sw2 = welch_psd(white, fs; segment_length = 1024, average = :mean)
     @test isapprox(mean(sw2), 2σ^2 / fs; rtol = 0.03)
-    # Colored noise synthesized from the model PSD is recovered in band
+    # Coloured noise synthesised from the model PSD is recovered in band
     colored = synthesize_noise(StableRNG(6), 400_000, fs; f_min = 1e-5)
     fc, sc = welch_psd(colored, fs; segment_length = 8192)
     inband = (fc .>= 1e-3) .& (fc .<= 5e-2)
@@ -982,7 +982,7 @@ end
     @test_throws DimensionMismatch interpolated_psd([1e-3, 1e-2], [1.0])
 
     # Windowed SNR of a placed sinusoid burst peaks on the burst, and the
-    # labeling helpers locate it
+    # labelling helpers locate it
     n = 20_000
     sig = zeros(n)
     burst = 8001:9000
@@ -1136,7 +1136,7 @@ end
         Dict{String,Any}("telemetry" => Dict{String,Any}("psd_mode" => "trailing")),
     ).psd_mode == "trailing"
     @test_throws ArgumentError telemetry_settings(
-        Dict{String,Any}("telemetry" => Dict{String,Any}("psd_mode" => "oracle")),
+        Dict{String,Any}("telemetry" => Dict{String,Any}("psd_mode" => "full_record")),
     )
     @test_throws ArgumentError telemetry_settings(
         Dict{String,Any}("telemetry" => Dict{String,Any}("alert_persistence" => 0)),
@@ -1419,7 +1419,7 @@ end
         # at the raster scale
         @test side["animation"]["frame_px"] == 2 .* collect(figure_size(2, 2))
         @test side["animation"]["px_per_unit"] == 2
-        # An animation ships as GIF, and a fractional raster scale renders
+        # An animation is written as GIF, and a fractional raster scale renders
         # frames the encoder does not reproduce
         @test_throws ArgumentError animate_training_history(
             history,
@@ -1461,7 +1461,7 @@ if isfile(SANGRIA_FILE)
         @test isapprox(catalog.CoalescenceTime[5], 11526944.9; atol = 1.0)
 
         # A reference evaluation quotes an optimal A-channel
-        # SNR of 1885.7 for catalog row 4 (0-based) against the SciRDv1 noise
+        # SNR of 1885.7 for catalogue row 4 (0-based) against the SciRDv1 noise
         # model. Its neighbour (row 3, merging 3.1 d earlier) is excluded by a
         # segment starting 3 d before the merger; the segment ends are tapered.
         truth = read_tdi(SANGRIA_FILE; group = "sky/mbhb/tdi")
