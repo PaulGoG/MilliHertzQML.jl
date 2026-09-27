@@ -412,7 +412,7 @@ modulated foreground makes the two records' noise genuinely different.
 A streamed mission therefore has to estimate the PSD of the record it is
 scoring from the part of it that has reached the ground. The replay
 quoted here does so (`psd_mode = "trailing"`, the setting of
-`configs/sangria.toml`): each window is whitened by the Welch median of
+`configs/experiments/q8_b6.toml`): each window is whitened by the Welch median of
 the last 30 days of delivered record behind its conditioning stretch,
 redone once a day, and by the training year's PSD until one 65,536-sample
 segment is on the ground (the first 446 windows). The estimate the batch
@@ -556,7 +556,7 @@ answer what it costs when the link does not: the same payload window —
 days 65 to 95 of the blind year, which carries coalescences 1 and 2 — and
 the same pass schedule, each mission differing from a lossless reference
 in one property of the channel or of the spacecraft, replayed once by the
-shipped model under the ground-causal whitening of `configs/sangria.toml`
+shipped model under the ground-causal whitening of `configs/experiments/q8_b6.toml`
 (persistence 2, `context_windows = 20`) and, for five of them, under the
 oracle PSD of the whole blind year. The reference replay scores 4,945
 windows, alerts on both coalescences and charges 11.5 false-alarm episodes
@@ -728,7 +728,7 @@ julia scripts/infer.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
 
 # Replay a producer mission of the blind year: causal as configured, oracle
 # with psd_mode = "sidecar" in [telemetry]
-julia scripts/infer_telemetry.jl configs/sangria.toml --run-dir <DeepSpaceTelemetry run> \
+julia scripts/infer_telemetry.jl configs/experiments/q8_b6.toml --run-dir <DeepSpaceTelemetry run> \
     --model models/run_q8_b6_pi/gw_model.jld2 \
     --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_pi
 ```

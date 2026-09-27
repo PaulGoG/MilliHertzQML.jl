@@ -1,6 +1,6 @@
-# Sangria experiment `q8_b6`; keys as in configs/sangria.toml. Keys absent
+# Sangria experiment `q8_b6`, the shipped configuration: preprocessing,
+# training, inference, and the telemetry replay of its model. Keys absent
 # here take the defaults documented in configs/default.toml (src/config.jl);
-# the [telemetry] section of the shipped replay lives in configs/sangria.toml;
 # the HDF5 products are passed on the command line. Paths are resolved
 # relative to the project root.
 
@@ -17,6 +17,7 @@ step_size = 100         # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file; > 0
 psd = "welch"           # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+psd_smoothing_dex = 0.0         # log-frequency smoothing of the "welch" estimate and of the replay's "trailing" estimate [dex]; >= 0, 0 disables
 feature_set = "bands"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
@@ -78,3 +79,25 @@ output_prefix = "sangria"       # prefix of the label, event, and span CSVs
 [resources]
 max_memory_gib = 16.0    # a stage whose pre-flight memory estimate exceeds this refuses to start [GiB]; > 0
 warn_memory_gib = 8.0    # a stage whose estimate exceeds this warns [GiB]; <= max_memory_gib
+
+[telemetry]
+segment_duration_sec = 50.0     # producer segment length [s] of the exported scenario; > 0
+batch_size = 10                 # producer segments per batch; >= 1
+start_sim_time = "2035-01-01T00:00:00"   # mission epoch of the exported payload; ISO-8601
+output_prefix = "sangria_blind" # prefix of the payload CSV and scenario fragment
+run_dir = ""                    # DeepSpaceTelemetry run directory; "" requires --run-dir
+mode = "replay"                 # arrival feed handling; one of: "replay" | "live"
+min_coverage = 1.0              # delivered fraction of a window's conditioning stretch before scoring; its own samples must all be there; in (0, 1]
+tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch [s]; >= 0
+context_windows = 20            # window lengths of delivered context on each side used for whitening; >= 0
+psd_sidecar = "data/inputs/sangria_b6_blind_features.toml"   # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
+poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
+producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
+processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
+alert_persistence = 2           # consecutive alarmed windows that raise an alert; >= 1
+psd_mode = "trailing"           # whitening PSD of the replay; one of: "sidecar" (psd_sidecar, else the training run's) | "trailing" (median Welch estimate of the delivered record behind each window)
+psd_trailing_days = 30.0        # delivered record behind a window used by the "trailing" estimate [days]; > 0
+psd_refresh_days = 1.0          # advance of the delivered record after which the "trailing" estimate is redone [days]; > 0
+psd_segment_length = 65536      # segment of the "trailing" estimate [samples]; >= 2
+psd_edge_periods = 3.0          # cutoff periods of the record high-pass trimmed from each end of a delivered run before the "trailing" estimate; >= 0
+events_csv = ""                 # event table (merger_time_s, label spans) for the alert-latency table; "" disables

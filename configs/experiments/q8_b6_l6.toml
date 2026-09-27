@@ -1,6 +1,6 @@
 # Sangria experiment `q8_b6_l6`; keys as in configs/sangria.toml. Keys absent
 # here take the defaults documented in configs/default.toml (src/config.jl);
-# the [telemetry] section of the shipped replay lives in configs/sangria.toml;
+# the replay settings of the shipped model are in configs/experiments/q8_b6.toml;
 # the HDF5 products are passed on the command line. Paths are resolved
 # relative to the project root.
 
@@ -17,6 +17,7 @@ step_size = 100         # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file; > 0
 psd = "welch"           # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+psd_smoothing_dex = 0.0         # log-frequency smoothing of the "welch" estimate and of the replay's "trailing" estimate [dex]; >= 0, 0 disables
 feature_set = "bands"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0

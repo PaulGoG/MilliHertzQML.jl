@@ -1,6 +1,8 @@
-# Sangria benchmark (LDC2a training and blind products). Keys absent here
-# take the defaults documented in configs/default.toml (src/config.jl); the HDF5 products are passed on
-# the command line. Paths are resolved relative to the project root.
+# Sangria benchmark (LDC2a training and blind products): labeling, the
+# two-band whitened configuration, and the telemetry payload export. Keys
+# absent here take the defaults documented in configs/default.toml
+# (src/config.jl); the HDF5 products are passed on the command line. Paths
+# are resolved relative to the project root.
 
 [paths]
 inputs = "data/inputs"              # telemetry records, feature, label and PSD CSVs
@@ -15,6 +17,7 @@ step_size = 100         # sliding-window step [samples]; in [1, window_size]
 sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file; > 0
 psd = "welch"           # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+psd_smoothing_dex = 0.0         # log-frequency smoothing of the "welch" estimate and of the replay's "trailing" estimate [dex]; >= 0, 0 disables
 feature_set = "whitened"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
@@ -87,7 +90,7 @@ mode = "replay"                 # arrival feed handling; one of: "replay" | "liv
 min_coverage = 1.0              # delivered fraction of a window's conditioning stretch before scoring; its own samples must all be there; in (0, 1]
 tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch [s]; >= 0
 context_windows = 20            # window lengths of delivered context on each side used for whitening; >= 0
-psd_sidecar = "data/inputs/sangria_b6_blind_features.toml"   # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
+psd_sidecar = "data/inputs/sangria_blind_features.toml"   # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
 producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0

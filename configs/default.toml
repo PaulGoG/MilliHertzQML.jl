@@ -52,6 +52,7 @@ ldc_model = "sangria"          # noise levels of the "ldc" PSD; one of: "Proposa
 ldc_tdi2 = false               # second-generation TDI factor of the "ldc" PSD; one of: true | false
 ldc_observation_years = 0.0    # confusion term of the "ldc" PSD [yr]; 0 disables, else in [0.25, 10]
 welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+psd_smoothing_dex = 0.0         # log-frequency smoothing of the "welch" estimate and of the replay's "trailing" estimate [dex]; >= 0, 0 disables
 feature_set = "whitened"       # per-window features; one of: "whitened" | "paper" | "bands"
 low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
 high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
