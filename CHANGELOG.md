@@ -66,6 +66,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The physics page states the ecliptic-frame sky and polarisation
   conventions of the constellation response with the equations of the
   conventions document they follow.
+- `figure_telemetry_alerts` labels each alert with its data latency
+  t_alarm − t_merger, the quantity of its marker position and of the
+  benchmark tables; the labels carried the total latency, one hour more.
+  The label of the lower of two neighbouring alerts is set beneath its
+  marker, where the two overlapped, and the delivery trace is drawn
+  translucent so that labels on it remain legible.
 
 ## [1.1.0] — 2026-09-26
 

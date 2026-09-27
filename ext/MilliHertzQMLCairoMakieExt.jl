@@ -751,8 +751,16 @@ function figure_telemetry_alerts(
         # event, the alert time measured from the coalescence — negative when
         # the inspiral is alarmed before the merger.
         ax_lat = Axis(figure[2, 1]; xlabel = "Mission time [days]", ylabel = "Latency [h]")
-        delivery_handle =
-            lines!(ax_lat, t_days, latency_h; color = FIGURE_COLORS.fit, linewidth = 2)
+        # The delivery latency cycles with the downlink schedule and fills a band
+        # at this scale; it is drawn translucent so that alert labels on it
+        # remain legible
+        delivery_handle = lines!(
+            ax_lat,
+            t_days,
+            latency_h;
+            color = (FIGURE_COLORS.fit, 0.35),
+            linewidth = 2,
+        )
         merger_handle = hlines!(
             ax_lat,
             [0.0];
@@ -761,44 +769,73 @@ function figure_telemetry_alerts(
             linewidth = 1.5,
         )
         alert_handle = nothing
+        alert_x = Float64[]
         alert_y = Float64[]
         if latencies !== nothing
-            for row in eachrow(latencies)
-                row.detected || continue
-                x = days_since(epoch, row.t_alarm)
-                y = Dates.value(row.t_alarm - row.t_merger) / 3.6e6
-                p = scatter!(
+            hits = latencies[latencies.detected .== true, :]
+            alert_x = [days_since(epoch, t) for t in hits.t_alarm]
+            # Data latency t_alarm − t_merger, the quantity of the benchmark
+            # tables; the processing budget is not added
+            alert_y =
+                [Dates.value(a - m) / 3.6e6 for (a, m) in zip(hits.t_alarm, hits.t_merger)]
+            isempty(alert_x) || (
+                alert_handle = scatter!(
                     ax_lat,
-                    [x],
-                    [y];
+                    alert_x,
+                    alert_y;
                     color = FIGURE_COLORS.signal,
                     marker = :diamond,
                     markersize = 18,
                     strokewidth = 1.5,
                     strokecolor = FIGURE_STROKES.signal,
                 )
-                alert_handle === nothing && (alert_handle = p)
-                push!(alert_y, y)
-                text!(
-                    ax_lat,
-                    x,
-                    y;
-                    text = "$(round(row.latency_total_h; digits = 1)) h",
-                    align = (:left, :bottom),
-                    offset = (9, 6),
-                    fontsize = ANNOTATION_FONTSIZE,
-                    color = FIGURE_COLORS.signal,
-                )
-            end
+            )
         end
         linkxaxes!(ax_score, ax_lat)
         hidexdecorations!(ax_score; grid = false, ticks = false)
         lo, hi = extrema(t_days)
         xlims!(ax_lat, lo, hi == lo ? lo + 1 : hi)
-        # Room for the annotations, which sit above their markers
         y_lo, y_hi = extrema(vcat(latency_h, alert_y))
-        pad = max(1.0, 0.10 * (y_hi - y_lo))
-        ylims!(ax_lat, y_lo - 0.4 * pad, y_hi + pad)
+        x_span = max(hi - lo, 1.0)
+        y_span = max(y_hi - y_lo, 1.0)
+        # Alerts of neighbouring events can lie within a label's extent of each
+        # other; the label of the lower alert of such a pair is set beneath its
+        # marker.
+        below = [
+            any(
+                j != i &&
+                    abs(alert_x[j] - alert_x[i]) < 0.04 * x_span &&
+                    (
+                        0 < alert_y[j] - alert_y[i] < 0.15 * y_span ||
+                        (alert_y[j] == alert_y[i] && j < i)
+                    ) for j in eachindex(alert_x)
+            ) for i in eachindex(alert_x)
+        ]
+        for (x, y, b) in zip(alert_x, alert_y, below)
+            r = round(y; digits = 1)
+            label = r < 0 ? "−$(-r) h" : "$(abs(r)) h"
+            placement =
+                b ? (align = (:left, :top), offset = (9, -6)) :
+                (align = (:left, :bottom), offset = (9, 6))
+            # A white outline beneath the label keeps it legible on the
+            # delivery trace
+            for (color, strokewidth) in ((:white, 3), (FIGURE_COLORS.signal, 0))
+                text!(
+                    ax_lat,
+                    x,
+                    y;
+                    text = label,
+                    placement...,
+                    fontsize = ANNOTATION_FONTSIZE,
+                    color = color,
+                    strokecolor = :white,
+                    strokewidth = strokewidth,
+                )
+            end
+        end
+        # Room for a marker and its label above the data, and beneath it when
+        # a label is set below its marker
+        ylims!(ax_lat, y_lo - (any(below) ? 0.14 : 0.06) * y_span, y_hi + 0.12 * y_span)
         handles = Any[]
         labels = String[]
         for (h, l) in (

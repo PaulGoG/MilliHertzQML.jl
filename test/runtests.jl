@@ -1302,6 +1302,57 @@ end
         lab;
         whitened = whiten_record(strain, 0.2),
     ) isa CairoMakie.Figure
+    # Alert figure: of two alerts close in mission time and in latency, the
+    # lower one is labelled beneath its marker; labels give the data latency
+    # t_alarm − t_merger with a typographic minus.
+    epoch = DateTime(2035, 1, 1)
+    content_end = [epoch + Hour(3i) for i in 1:200]
+    alert_windows = DataFrame(
+        content_end = content_end,
+        complete_at = content_end .+ Hour(30),
+        score = rand(StableRNG(7), 200),
+        decision = rand(StableRNG(8), 0:1, 200),
+    )
+    alert_rows = DataFrame(
+        detected = [true, true, true, false],
+        t_alarm = Union{Missing,DateTime}[
+            epoch+Hour(75),
+            epoch+Hour(78),
+            epoch+Hour(410),
+            missing,
+        ],
+        t_merger = [epoch + Hour(h) for h in (100, 106, 400, 500)],
+    )
+    alert_figure = figure_telemetry_alerts(
+        alert_windows,
+        0.5;
+        epoch = epoch,
+        label_spans = [(epoch + Hour(90), epoch + Hour(100))],
+        latencies = alert_rows,
+    )
+    @test alert_figure isa CairoMakie.Figure
+    ax_latency = only(
+        filter(
+            a -> a isa CairoMakie.Axis && a.ylabel[] == "Latency [h]",
+            alert_figure.content,
+        ),
+    )
+    alert_labels = Dict(
+        first(vcat(p.text[])) => p.align[] for
+        p in ax_latency.scene.plots if p isa CairoMakie.Text
+    )
+    @test alert_labels == Dict(
+        "−25.0 h" => (:left, :bottom),
+        "−28.0 h" => (:left, :top),
+        "10.0 h" => (:left, :bottom),
+    )
+    y_limits = ax_latency.limits[][2]
+    @test y_limits[1] < -28 && y_limits[2] > 30
+    @test_throws ArgumentError figure_telemetry_alerts(
+        alert_windows[1:0, :],
+        0.5;
+        epoch = epoch,
+    )
     @test_throws DimensionMismatch figure_mission_trace(days[1:10], probs, 0.5)
     @test_throws ArgumentError figure_training_history((
         epochs = Int[],
