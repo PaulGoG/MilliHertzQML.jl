@@ -1,14 +1,14 @@
-written_at = "2026-09-24T17:06:58.592"
+written_at = "2026-09-28T00:36:17.040"
 
 [animation]
-bytes = 1904684
+bytes = 1905652
 files = ["mission_replay.gif"]
 frame_px = [1800, 2620]
 run_id = "telemetry_year_pi"
 px_per_unit = 2
 
 [environment]
-manifest_sha256 = "c45aafa25c09da8d25c4e10ed90dc3c24ed4627c04a6ebeb3b0f2eeedb671dd7"
+manifest_sha256 = "eaaf9be79928ba191d391c1be89596010e55d1c7252b9498c9ff53f3d93973df"
 active_project = "scripts/Project.toml"
 
 [hardware]
@@ -24,6 +24,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.0.0-21-g515110b"
+git_commit = "v1.1.0-32-gbbdfec5"
 git_dirty = false
 package_version = "1.1.0"

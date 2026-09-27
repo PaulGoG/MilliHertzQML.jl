@@ -1,7 +1,7 @@
-written_at = "2026-09-24T17:07:37.746"
+written_at = "2026-09-28T00:31:19.153"
 
 [environment]
-manifest_sha256 = "d5a7ec49c3eaea738e91a8660b89bd03dae546dd26ffb56d8e98ee7d8ef80ef2"
+manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
 active_project = "test/Project.toml"
 
 [figure]
@@ -23,6 +23,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.0.0-21-g515110b"
+git_commit = "v1.1.0-32-gbbdfec5"
 git_dirty = false
 package_version = "1.1.0"
