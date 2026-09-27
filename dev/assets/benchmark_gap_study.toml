@@ -1,13 +1,13 @@
-written_at = "2026-09-27T10:19:51.697"
+written_at = "2026-09-27T10:19:33.419"
 
 [environment]
 manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
 active_project = "test/Project.toml"
 
 [figure]
-files = ["loss_survival.pdf", "loss_survival.png"]
+files = ["gap_study.pdf", "gap_study.png"]
 run_id = "gap_study"
-size_pt = [900, 780]
+size_pt = [1200, 904]
 px_per_unit = 4
 
 [hardware]
