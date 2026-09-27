@@ -473,5 +473,12 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         stretch = payload[(w.row_start-1000):(w.row_end+1000)]
         @test isapprox(w.score, score_window(detector, stretch, 1001); atol = 1e-6)
         @test replay_run(run, detector).score == windows.score
+        # Under the trailing estimate, the windows just after the hole have
+        # fewer contiguous rows behind them than one segment and keep the
+        # previous estimate of the delivered record instead of the static PSD
+        trailing = replay_run(run, detector; trailing_psd = TrailingWelch(3000, 500, 1024))
+        rows_after = trailing.row_start .- 1000 .> last(hole)
+        @test any(rows_after) && all(trailing.psd_row[rows_after] .> 0)
+        @test all(trailing.psd_row[rows_after] .<= trailing.row_end[rows_after] .+ 1000)
     end
 end

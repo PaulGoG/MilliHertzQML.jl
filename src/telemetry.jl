@@ -704,9 +704,11 @@ order in which the batch pre-processor estimates its `"welch"` PSD.
 Nothing that has not reached the ground enters the estimate, unlike a
 PSD of the whole record, which at every window of a streamed mission
 contains data still to be delivered. The estimate is redone once the end
-of that record has moved by `refresh_rows` rows since the previous one;
-while fewer than `segment_length` rows are on the ground behind a window,
-the window is whitened by the detector's own static PSD.
+of that record has moved by `refresh_rows` rows since the previous one.
+While fewer than `segment_length` contiguous rows are on the ground behind
+a window — at the start of a mission, or behind a delivery hole — the
+window is whitened by the previous estimate, and by the detector's own
+static PSD only before any estimate exists.
 """
 struct TrailingWelch
     span_rows::Int
@@ -847,7 +849,13 @@ function whitening_psd!(state::ReplayState, window::UnitRange{Int})
     d = state.detector
     hi = min(last(span), last(window) + d.context_windows * d.window_size)
     lo = max(first(span), hi - tw.span_rows + 1)
-    hi - lo + 1 >= tw.segment_length || return d.psd, 0
+    # Behind a delivery hole the contiguous record can be shorter than one
+    # segment; the previous estimate of the delivered record is then kept
+    # rather than the detector's static PSD, which belongs to another record.
+    if hi - lo + 1 < tw.segment_length
+        state.trailing_psd === nothing && return d.psd, 0
+        return state.trailing_psd, state.trailing_row
+    end
     if state.trailing_psd !== nothing && abs(hi - state.trailing_row) < tw.refresh_rows
         return state.trailing_psd, state.trailing_row
     end
