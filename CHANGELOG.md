@@ -72,6 +72,10 @@ versioning follows [Semantic Versioning](https://semver.org/).
   The label of the lower of two neighbouring alerts is set beneath its
   marker, where the two overlapped, and the delivery trace is drawn
   translucent so that labels on it remain legible.
+- The alarm-episode panel of the replay animation ticks from zero up to
+  the final episode count (`count_ticks`); its top tick lay on the panel
+  edge and collided with the zero of the probability panel above.
+  The inner panels of the gap-study figure tick every level.
 
 ## [1.1.0] — 2026-09-26
 

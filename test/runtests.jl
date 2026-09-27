@@ -1238,6 +1238,9 @@ end
     @test ext.decade_label(-1, 2) == "0.2"
     @test ext.decade_label(-2, 5) == "0.05"
     @test ext.decade_label(1, 2) == "20"
+    @test ext.count_ticks(134) == [0, 50, 100] && ext.count_ticks(23) == [0, 5, 10, 15, 20]
+    @test ext.count_ticks(1) == [0, 1] && ext.count_ticks(0) == [0]
+    @test_throws ArgumentError ext.count_ticks(-1)
     @test_throws ArgumentError ext.decade_label(0, 10)
     values, ticklabels = ext.log_ticks(0.15, 3.0)
     @test values == [0.2, 0.5, 1.0, 2.0]

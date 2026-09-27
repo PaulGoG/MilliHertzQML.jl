@@ -299,6 +299,23 @@ function figure_roc(fpr::AbstractVector{<:Real}, tpr::AbstractVector{<:Real}, au
 end
 
 """
+    count_ticks(n) -> Vector{Int}
+
+Ticks `0, s, 2s, …` up to the count `n` for a counting axis, the step `s`
+taken from the 1–2–5 sequence as the smallest that gives at most five
+ticks. The ticks stop at `n`, so an axis whose limit lies above `n` keeps
+its top tick clear of the frame, and of the tick labels of a panel stacked
+above it.
+"""
+function count_ticks(n::Integer)
+    n >= 0 || throw(ArgumentError("the count must be non-negative, got $n."))
+    n == 0 && return [0]
+    steps = sort(vec([m * 10^e for m in (1, 2, 5), e in 0:15]))
+    step = steps[findfirst(s -> fld(n, s) + 1 <= 5, steps)]
+    return collect(0:step:n)
+end
+
+"""
     decade_label(k, m = 1) -> String
 
 Plain-decimal tick label of ``m \\times 10^k`` for a single-digit mantissa
@@ -1120,7 +1137,8 @@ function animate_mission_replay(
         # Row 1 is the legend; explicit rows keep the panel sizes unambiguous
         ax_cov = Axis(figure[2, 1]; ylabel = "Coverage", yticks = [0.0, 0.5, 1.0])
         ax_score = Axis(figure[3, 1]; ylabel = "MBHB probability")
-        ax_episode = Axis(figure[4, 1]; ylabel = "Alarm episodes")
+        ax_episode =
+            Axis(figure[4, 1]; ylabel = "Alarm episodes", yticks = count_ticks(n_episodes))
         ax_lat = Axis(
             figure[5, 1];
             xlabel = "Mission time [days]",
