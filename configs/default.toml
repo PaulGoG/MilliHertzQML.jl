@@ -28,7 +28,7 @@ label_step = 10             # stride of the detectability scan [samples]; >= 1
 label_before_sec = 43200.0  # fixed span before coalescence [s]; >= 0; used when label_span = "fixed"
 label_after_sec = 3600.0    # fixed span after coalescence [s]; >= 0; used when label_span = "fixed"
 mbhb_duration_days = 2.0    # injected inspiral duration [days], capped at 0.4 of the record; > 0
-noise_f_min_hz = 1e-5       # lowest synthesized noise frequency [Hz]; >= 0
+noise_f_min_hz = 1e-5       # lowest synthesised noise frequency [Hz]; >= 0
 mbhb_total_mass_min = 1e5   # detector-frame total mass, lower bound [M_sun]; >= 1
 mbhb_total_mass_max = 1e7   # detector-frame total mass, upper bound [M_sun]; >= mbhb_total_mass_min
 mbhb_mass_ratio_max = 10.0  # mass ratio q = m1/m2 upper bound; >= 1
@@ -36,7 +36,7 @@ nyquist_taper = 0.9         # waveform spectrum tapered to zero at this fraction
 response = "sky_averaged"   # detector response of the record; one of: "sky_averaged" (one strain referred to the sensitivity) | "lisa" (A and E channels on the constellation orbits; needs CurvatureDistinguishability)
 mbhb_distance_min_gpc = 1.0 # MBHB luminosity distance, lower bound [Gpc]; > 0; "lisa" response only
 mbhb_distance_max_gpc = 50.0  # MBHB luminosity distance, upper bound [Gpc]; >= mbhb_distance_min_gpc; "lisa" response only
-label_channel = "A"         # channel of the label span and the catalog SNR under "lisa"; one of: "A" | "E" | "network"
+label_channel = "A"         # channel of the label span and the catalogue SNR under "lisa"; one of: "A" | "E" | "network"
 orbit_phase = 0.0           # orbital phase of the constellation at the record start [rad]; "lisa" response only
 constellation_phase = 0.0   # cartwheel phase of the constellation at the record start [rad]; "lisa" response only
 
@@ -97,20 +97,20 @@ step_size = 100      # window step [samples], used only without a feature sideca
 sample_rate = 0.2    # sampling frequency [Hz], used only without a feature sidecar; > 0
 
 [ldc]
-h5_file = ""                    # LDC training product with truth stream and catalog (or pass --h5-file / --truth-csv)
+h5_file = ""                    # LDC training product with truth stream and catalogue (or pass --h5-file / --truth-csv)
 truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
-catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalog
-psd_model = "sangria"           # analytic TDI PSD of the labeling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
-tdi2 = false                    # second-generation TDI factor of the labeling PSD; one of: true | false
-observation_years = 0.0         # confusion term of the labeling PSD [yr]; 0 disables, else in [0.25, 10]
+catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalogue
+psd_model = "sangria"           # analytic TDI PSD of the labelling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
+tdi2 = false                    # second-generation TDI factor of the labelling PSD; one of: true | false
+observation_years = 0.0         # confusion term of the labelling PSD [yr]; 0 disables, else in [0.25, 10]
 label_span = "fixed"            # positive span per merger; one of: "fixed" | "detectable"
 label_before_sec = 345600.0     # fixed span before the merger [s]; >= 0
 label_after_sec = 1620.0        # fixed span after the merger [s]; >= 0
-label_snr_threshold = 5.0       # per-window SNR defining "detectable" and locating mergers without a catalog; > 0
-label_window_size = 1000        # window of the labeling SNR scan [samples]; >= 2
-label_step = 10                 # stride of the labeling SNR scan [samples]; >= 1
+label_snr_threshold = 5.0       # per-window SNR defining "detectable" and locating mergers without a catalogue; > 0
+label_window_size = 1000        # window of the labelling SNR scan [samples]; >= 2
+label_step = 10                 # stride of the labelling SNR scan [samples]; >= 1
 peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
-merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
+merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalogue; > 0
 precursor_ratio = 0.1           # amplitude ratio below which an earlier SNR peak is merged into the later one; in [0, 1]
 output_prefix = "ldc"           # prefix of the label, event, and span CSVs
 

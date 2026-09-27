@@ -1,6 +1,6 @@
 # Sangria experiment `q6_b4`; keys as in configs/sangria.toml. Keys absent
 # here take the defaults documented in configs/default.toml (src/config.jl);
-# the replay settings of the shipped model are in configs/experiments/q8_b6.toml;
+# the replay settings of the selected model are in configs/experiments/q8_b6.toml;
 # the HDF5 products are passed on the command line. Paths are resolved
 # relative to the project root.
 
@@ -61,18 +61,18 @@ block = "all"        # rows evaluated when the features are the training table; 
 
 [ldc]
 truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
-catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalog
-psd_model = "sangria"           # analytic TDI PSD of the labeling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
-tdi2 = false                    # second-generation TDI factor of the labeling PSD; one of: true | false
-observation_years = 0.0         # confusion term of the labeling PSD [yr]; 0 disables, else in [0.25, 10]
+catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalogue
+psd_model = "sangria"           # analytic TDI PSD of the labelling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
+tdi2 = false                    # second-generation TDI factor of the labelling PSD; one of: true | false
+observation_years = 0.0         # confusion term of the labelling PSD [yr]; 0 disables, else in [0.25, 10]
 label_span = "fixed"            # positive span per merger; one of: "fixed" | "detectable"
 label_before_sec = 345600.0     # fixed span before the merger [s]; >= 0
 label_after_sec = 1620.0        # fixed span after the merger [s]; >= 0
-label_snr_threshold = 5.0       # per-window SNR defining "detectable" and locating mergers without a catalog; > 0
-label_window_size = 1000        # window of the labeling SNR scan [samples]; >= 2
-label_step = 10                 # stride of the labeling SNR scan [samples]; >= 1
+label_snr_threshold = 5.0       # per-window SNR defining "detectable" and locating mergers without a catalogue; > 0
+label_window_size = 1000        # window of the labelling SNR scan [samples]; >= 2
+label_step = 10                 # stride of the labelling SNR scan [samples]; >= 1
 peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
-merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalog; > 0
+merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalogue; > 0
 precursor_ratio = 0.1           # amplitude ratio below which an earlier SNR peak is merged into the later one; in [0, 1]
 output_prefix = "sangria"       # prefix of the label, event, and span CSVs
 
