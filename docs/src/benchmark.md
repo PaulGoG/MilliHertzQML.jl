@@ -451,6 +451,11 @@ the threshold for hours around each coalescence.
 
 ![Replay of the blind year under causal whitening, with alert latencies](assets/benchmark_telemetry_alerts_causal.png)
 
+The lower panel shows, for every window, the latency with which it became
+available for scoring, the wait for its conditioning stretch (1.16 days)
+plus the downlink delay of the batch that completes it (up to 18 hours),
+and, for every coalescence, the alert time relative to the merger.
+
 The definition of an alert determines the latencies and is therefore
 stated explicitly. The 1.0.0 tag assigned to each event the earliest
 alarmed window overlapping its label span, irrespective of the windows
@@ -492,15 +497,16 @@ window:
 | 6 | 2035-11-10T00:11 | **+15.1** | +15.1 | +15.1 | +15.1 | yes |
 | False alarms / 30 d | | **1.90** | 5.94 | 1.32 | 1.65 | |
 
-The data latencies exclude the one-hour processing budget, which
+The alert time is the arrival at the ground station of the batch that
+completes the alert, so it contains the conditioning lag and the downlink
+delay; the latencies exclude the one-hour processing budget, which
 `latency_total_h` of the table adds. Under the persistence criterion and
-causal whitening the alerts of events 3, 5 and 6 fall between 0.3 hours
-before and 42 hours after the merger in data time. Those of events 1 and
-4 fall 25.6 and 16.1 hours before it: their windows lie within the
-27.8-hour conditioning stretch that reaches past the merger, and an alert
-is available only once its window has reached the ground, 28 to 47 hours
-after its data time (the delivery latency of the lower panel), so neither
-precedes its merger in ground time. At 1.90 false-alarm episodes per 30
+causal whitening the alerts of events 3, 5 and 6 reach the ground between
+0.3 hours before and 42 hours after the merger. Those of events 1 and 4
+reach it 25.6 and 16.1 hours before the merger: their alarmed windows end
+67 and 63 hours before it and their conditioning stretches 39 and 35
+hours before it, so the merger is not in the data that raised them. At
+1.90 false-alarm episodes per 30
 days, 1.3 chance episodes are expected inside the five 96-hour label
 spans (Poisson probability 0.36 of two or more), so the two early alerts
 are not evidence of a detection of the inspiral. Event 2 has no alert of
@@ -715,8 +721,126 @@ PSD smoothed by 0.01 dex in log-frequency keeps it within half a window;
 the line structure of the estimator and the exact TDI notch, not the
 shape of the spectrum, determine the kernel. A smoothed whitening PSD is
 therefore a precondition for operation on a link that loses any data,
-rather than a refinement of this result; it is planned, together with the
-retraining it requires.
+rather than a refinement of this result; the retrained model is reported in
+the section Smoothed whitening below.
+
+## Smoothed whitening
+
+The conditioning stretch of twenty window lengths, and with it the
+conditioning lag of 1.16 days and the tolerance to scattered loss, is set
+by the kernel of the record high-pass followed by whitening, whose length
+comes from the line structure of the Welch estimate. The configuration
+`configs/experiments/q8_b6_s001.toml` is the selected configuration with
+the Welch estimate smoothed by 0.01 dex in log-frequency, for the training
+and blind features and for the trailing estimate of the replay. Its model
+`q8_b6_s001_pi` was trained on the smoothed features with the seed and the
+threshold rule of the selected run, and the blind year was scored once.
+
+| | Selected, `q8_b6_pi` | Smoothed, `q8_b6_s001_pi` |
+|---|---|---|
+| Validation events, episodes | 3/3, 4 | 3/3, 5 |
+| Test-block event | 1/1 | 0/1 |
+| Blind label spans | 5/5 | 5/5 |
+| Blind false-alarm episodes (per 30 d) | 19 (1.57) | 36 (2.97) |
+| Blind ROC area | 0.807 | 0.782 |
+
+In the batch benchmark the smoothed model recovers the five label spans at
+2.97 false-alarm episodes per 30 days, within the range of 1.57 to 8.74
+that re-initialisation alone produces for the selected configuration; with
+five validation episodes against four and the test-block event missed, the
+selection rule of the grid would not have preferred it. Its advantage is
+in the streamed setting.
+
+**Conditioning length.** Every fifth blind-year window was streamed from
+a stretch of *c* window lengths on each side, whitened by the full-record
+PSD, and compared with its batch score:
+
+| *c* | Stretch [samples] | Median \|Δ\| | 99th percentile \|Δ\| | ROC area | Rank correlation |
+|---|---|---|---|---|---|
+| 1 | 3,000 | 0.0004 | 0.0049 | 0.782 | 1.000 |
+| 2 | 5,000 | 0.0002 | 0.0033 | 0.784 | 1.000 |
+| 4 | 9,000 | 0.0001 | 0.0017 | 0.783 | 1.000 |
+| 20 | 41,000 | 0.0000 | 0.0001 | 0.783 | 1.000 |
+
+The streamed scores agree with the batch scores from one window length
+on; the selected model needs twenty for a rank correlation of 0.997 and a
+99th percentile of 0.022, and its agreement is not monotone below. The
+configuration uses two window lengths: a window needs 50 delivered batches
+instead of 410, and the conditioning lag falls from 1.16 days to 2.8 hours.
+
+**Persistence.** The persistence rule of the selected configuration,
+applied to the calibration block of the smoothed model, gives three
+consecutive alarmed windows: two leave 1.10 false alarms per 30 days,
+three bring the block to 0.28 and keep a window of margin on the shortest
+alarmed calibration event. One of the four calibration events, the one in
+the test block, is not alarmed at any persistence.
+
+**Year replay.** The lossless year-long mission of the previous sections,
+replayed with the smoothed model; alert time minus merger time [h], with
+the alert time the arrival at the ground station of the batch that
+completes the alert:
+
+| Event | Causal PSD, persistence 3 | Causal PSD, persistence 2 | Full-record PSD, persistence 3 |
+|---|---|---|---|
+| 1 | **−71.1** | −71.3 | −22.8, shared with event 2 |
+| 2 | **−52.3** | −52.4 | −52.3, shared with event 1 |
+| 3 | **−27.8** | −27.9 | −22.0 |
+| 4 | **−21.1** | −21.2 | −17.3 |
+| 5 | not alerted | +17.9 | −9.9 |
+| 6 | **−12.0** | −12.2 | −11.1 |
+| False-alarm episodes (per 30 d) | **2 (0.16)** | 9 (0.74) | 4 (0.33) |
+
+![Replay of the blind year under causal whitening by the smoothed-whitening model q8_b6_s001_pi](assets/benchmark_telemetry_alerts_smoothed.png)
+
+Under causal whitening at the persistence the rule fixes, five of the six
+coalescences are alerted on their own, each before its merger in ground
+time, 12.0 to 71.1 hours ahead, at two false-alarm episodes in the year;
+event 5 is not alerted. The conditioning stretches of the alarmed windows
+end 12 to 71 hours before the respective merger, so the merger is not in
+the data that raised the alert. At 0.16 episodes per 30 days about 0.12
+chance episodes are expected inside the label spans, which cover 21 days
+of the year, and the Poisson probability of five or more is below
+10⁻⁶: the alerts are a detection of the inspiral, not chance
+coincidences. At a persistence of two every coalescence is alerted on its
+own, five of them before the merger, at 0.74 per 30 days. The non-causal
+replay under the full-record PSD counts more false alarms than the causal
+one and alerts events 1 and 2 with one shared alert. The score baseline of
+the smoothed model follows the annual modulation of the noise level, which
+that of the selected model does not: under the full-record PSD it falls
+towards 0.1 at the beginning and at the end of the year and approaches the
+threshold between days 200 and 300; the trailing estimate follows part of
+this modulation.
+
+**Lossy link.** The seventeen 30-day missions of the previous section,
+replayed with the smoothed model; at the persistence of two used there,
+against the selected model:
+
+| Mission | Permanent loss | Windows scored, selected | Windows scored, smoothed | Coalescences alerted, selected | Coalescences alerted, smoothed |
+|---|---|---|---|---|---|
+| Lossless reference | 0 | 4,945 | 5,125 | 2, one shared alert | 2 |
+| Bernoulli 0.1 % | 0.04 % | 4,285 (0.87) | 5,024 (0.98) | 2 | 2 |
+| Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,926 (0.96) | 2 | 2, one shared alert |
+| Bernoulli 0.3 % | 0.19 % | 2,120 (0.43) | 4,636 (0.90) | 0 | 2 |
+| Bernoulli 0.5 % | 0.42 % | 426 (0.09) | 4,142 (0.81) | 2, one shared alert | 2 |
+
+The fraction of the reference record the smoothed model scores follows the
+independent-batch estimate `(1 − p)^50` (0.98, 0.96, 0.91, 0.81). Over all
+seventeen missions it alerts both coalescences at 0 to 2.5 false-alarm
+episodes per 30 days, where the selected model counts 6.1 to 19.4 and
+misses at least one coalescence in three missions; at a persistence of
+three both coalescences stay alerted in every mission, in five of them by
+one alert shared by the two. The false alarms fall because the long kernel
+of the unsmoothed whitening produced the alarm tails after each merger.
+The tables are rebuilt from the replays by `alert_latency_table` at either
+persistence; the replay results are those of the
+`gapreplay_<mission>_s001` runs.
+
+These results rest on one initialisation seed of the smoothed
+configuration, and the selected configuration of the batch benchmark is
+unchanged. For streamed operation and for a link that loses data, the
+smoothed configuration removes the two limitations of the selected one:
+the conditioning lag, and the loss rate above which windows can no longer
+be scored.
 
 ## Caveats
 

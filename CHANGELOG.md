@@ -34,6 +34,17 @@ versioning follows [Semantic Versioning](https://semver.org/).
   now includes the stages run by the scripts of the smoke test and the
   three package extensions.
 
+- `configs/experiments/q8_b6_s001.toml`: the selected configuration with the
+  Welch whitening estimate smoothed by 0.01 dex, two window lengths of
+  conditioning context (from a scan of streamed against batch scores) and
+  a persistence of three (from the calibration rule). The benchmark page
+  and the README report its model: in the batch benchmark 5/5 label spans
+  at 2.97 false-alarm episodes per 30 days; in the causal year replay five
+  of six coalescences alerted on their own 12 to 71 hours before the
+  merger in ground time at 0.16 per 30 days; in the seventeen lossy
+  missions both coalescences alerted in every mission, with 81 % of the
+  record scored at 0.42 % permanent loss.
+
 ### Changed
 - The trailing whitening estimate of a replay pools the Welch segments of
   every delivered run inside its span instead of using the last contiguous
@@ -63,6 +74,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   gap: the delivered payload was indexed by batch index, which no longer
   tracks the payload rows after such a gap. It is keyed by the first row
   a batch holds, and a stretch is assembled from the blocks that cover it.
+- The benchmark page and the README placed the early alerts of the causal
+  year replay in data time and stated that they reach the ground after the
+  merger. The alert time is the ground arrival of the batch that completes
+  the alert; events 1 and 4 are alerted 25.6 and 16.1 hours before the
+  merger on the ground, from conditioning stretches that end 39 and 35
+  hours before it. The conclusion that the two alerts are consistent with
+  chance is unchanged.
 - The physics page states the ecliptic-frame sky and polarisation
   conventions of the constellation response with the equations of the
   conventions document they follow.

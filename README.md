@@ -259,11 +259,12 @@ ground-station passes and under causal whitening — the PSD estimated from
 the delivered record behind each window and re-estimated daily — the same
 model raises a sustained alert (two consecutive alarmed windows, a
 persistence fixed on the calibration block of the training year) for five
-of the six coalescences at 1.90 false-alarm episodes per 30 days, between
-26 hours before and 42 hours after the merger in data time; event 2 is
-alarmed only within the cluster of alarms around the merger of event 1.
-The two alerts that precede their merger lie within the conditioning
-stretch that contains it and reach the ground after it. Evaluated on
+of the six coalescences at 1.90 false-alarm episodes per 30 days, reaching
+the ground station between 26 hours before and 42 hours after the merger;
+event 2 is alarmed only within the cluster of alarms around the merger of
+event 1. The two alerts that precede their merger are not evidence of a
+detection of the inspiral: at this rate 1.3 chance episodes are expected
+inside the label spans. Evaluated on
 isolated alarms instead, the same replay alarms three coalescences 1.1 to
 1.7 days before their merger at 5.94 per 30 days, which is consistent with
 chance coincidence at that false-alarm rate. Whitened by the full-record
@@ -273,14 +274,15 @@ whitening does not produce; this replay is non-causal and is an upper
 reference for the causal replay. The mission lost no data, and the
 coupling excludes delivery holes from scoring rather than handling them.
 
-![Classifier output and alarms over the year-long replay under causal whitening, with the alert time of every coalescence against the delivery latency of the link](docs/src/assets/benchmark_telemetry_alerts_causal.png)
+![Classifier output and alarms over the year-long replay under causal whitening, with the alert time of every coalescence at the ground station against the latency at which each window becomes available for scoring](docs/src/assets/benchmark_telemetry_alerts_causal.png)
 
 The replay is also rendered as an animation: four panels traverse the year
 in the order in which the ground station received the windows. The dotted
 line is the ground-station clock; its distance from the edge of the
-received data is the delivery latency.
+received data is the availability latency, the wait for the conditioning
+stretch plus the downlink delay.
 
-![A year of telemetry replay under causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
+![A year of telemetry replay under causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
 ### The spread under re-initialisation
 
@@ -313,6 +315,32 @@ inside it.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, and false-alarm episodes per 30 days](docs/src/assets/benchmark_gap_study.png)
 
+### Smoothed whitening
+
+The conditioning stretch of the selected configuration, twenty window
+lengths on each side, is set by the long kernel of whitening with a raw
+Welch estimate. `configs/experiments/q8_b6_s001.toml` smooths that estimate
+by 0.01 dex in log-frequency and retrains the same model with the same
+seed and threshold rule. Streamed and batch scores then agree from one
+window length of context on (rank correlation 1.000), so the stretch falls
+to two window lengths, 50 batches instead of 410, and the conditioning lag
+from 1.16 days to 2.8 hours. In the batch benchmark the smoothed model
+recovers the five label spans at 2.97 false-alarm episodes per 30 days,
+within the spread the selected configuration shows under re-initialisation.
+
+In the year-long replay under causal whitening, at the persistence of
+three that the calibration rule gives for this model, five of the six
+coalescences are alerted on their own, each 12 to 71 hours before its
+merger in ground time, at two false-alarm episodes in the year (0.16 per
+30 days); about 0.1 chance episodes are expected inside the label spans,
+so these alerts are a detection of the inspiral. In the seventeen lossy
+missions it alerts both coalescences in every mission at 0 to 2.5 false
+alarms per 30 days, and at 0.42 % permanent loss it still scores 81 % of
+the record, where the selected configuration scores 9 %. These results
+rest on one initialisation seed.
+
+![Classifier output and alarms over the year-long replay of the smoothed-whitening model, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
+
 ### Against other methods
 
 Compared with the published method, reproduced on the same years and
@@ -344,14 +372,16 @@ scaler and this pipeline through the full-record PSD of the blind year.
   spread.
 - **Single channel.** Only A is used. E and T carry independent
   information and would allow a null-channel veto.
-- **Scattered permanent loss must stay below about 0.2 %.** The coupling
+- **Scattered permanent loss must stay below about 0.2 % for the selected
+  configuration.** The coupling
   discards windows that cross a delivery hole instead of scoring them, and
   because a window needs its whole conditioning stretch of 410 batches,
   the scorable record decreases rapidly above that rate; outages,
   retransmitted loss, bursty loss and gaps in the data itself reduce it
   far less, and the causal whitening estimate pools the delivered runs
-  around the holes. The classifier has never been trained on gapped data, and a
-  smoothed whitening PSD, which would shorten the stretch, is planned.
+  around the holes. The classifier has never been trained on gapped data.
+  The smoothed-whitening configuration `q8_b6_s001` shortens the stretch to
+  50 batches and still scores 81 % of the record at 0.42 % loss.
 - **The threshold comes from the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
   here spans one year, in one direction.
