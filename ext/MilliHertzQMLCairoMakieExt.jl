@@ -28,6 +28,7 @@ using MilliHertzQML: contiguous_runs
 using CairoMakie.Makie: scatter!, stairs!, Observable, @lift, Point2f, record
 using CairoMakie.Makie: rowsize!, Auto, LinearTicks
 using CairoMakie.Makie: widths
+using CairoMakie.Makie: linkyaxes!, hideydecorations!, colgap!
 using DataFrames: DataFrame, nrow
 using Dates: Dates, DateTime
 import MilliHertzQML:
@@ -46,7 +47,8 @@ import MilliHertzQML:
     animate_training_history,
     animate_mission_replay,
     figure_loss_survival,
-    figure_seed_spread
+    figure_seed_spread,
+    figure_gap_study
 
 """
     LEGEND_STYLE
@@ -1458,6 +1460,134 @@ function figure_seed_spread(
         )
         top_legend!(figure, ax_far)
         rowgap!(figure.layout, 10)
+        figure
+    end
+end
+
+function figure_gap_study(
+    levels::AbstractVector{<:AbstractString},
+    families::AbstractVector{<:AbstractString},
+    scored_fraction::AbstractVector{<:Real},
+    events_detected::AbstractVector{<:Integer},
+    n_events::Integer,
+    false_alarms_per_30d::AbstractVector{<:Real};
+    reference_far::Union{Nothing,Real} = nothing,
+)
+    n = length(levels)
+    lengths = (
+        length(families),
+        length(scored_fraction),
+        length(events_detected),
+        length(false_alarms_per_30d),
+    )
+    all(==(n), lengths) || throw(
+        DimensionMismatch(
+            "the level, family, survival, detection and false-alarm vectors " *
+            "differ in length.",
+        ),
+    )
+    n >= 1 || throw(ArgumentError("the study is empty."))
+    n_events >= 1 || throw(ArgumentError("n_events must be at least 1."))
+    all(>=(0), scored_fraction) || throw(ArgumentError("a scored fraction is negative."))
+    all(e -> 0 <= e <= n_events, events_detected) ||
+        throw(ArgumentError("events detected exceed n_events."))
+
+    y = collect(n:-1:1)      # the first level at the top
+    return with_theme(figure_theme(; size = (1200, max(600, 220 + 36 * n)))) do
+        figure = Figure()
+        ax_windows = Axis(
+            figure[1, 1];
+            xlabel = "Windows scored, of reference",
+            yticks = (y, String.(levels)),
+            xticks = 0:0.25:1,
+        )
+        ax_events = Axis(figure[1, 2]; xlabel = "Events detected", xticks = 0:1:n_events)
+        ax_far = Axis(figure[1, 3]; xlabel = "False alarms per 30 d")
+        linkyaxes!(ax_windows, ax_events, ax_far)
+        hideydecorations!(ax_events; grid = false, ticks = false)
+        hideydecorations!(ax_far; grid = false, ticks = false)
+        ylims!(ax_windows, 0.4, n + 0.6)
+        xlims!(ax_windows, -0.05, 1.12)
+        xlims!(ax_events, -0.4, n_events + 0.4)
+
+        # A dashed rule between consecutive families of levels, across all panels
+        for i in 2:n
+            families[i] == families[i-1] && continue
+            for ax in (ax_windows, ax_events, ax_far)
+                hlines!(
+                    ax,
+                    [y[i] + 0.5];
+                    color = (:grey, 0.5),
+                    linestyle = :dash,
+                    linewidth = 1.5,
+                )
+            end
+        end
+
+        vlines!(
+            ax_windows,
+            [1.0];
+            color = FIGURE_COLORS.target,
+            linestyle = :dot,
+            linewidth = 1.5,
+        )
+        scatter!(
+            ax_windows,
+            Float64.(scored_fraction),
+            y;
+            color = FIGURE_COLORS.data,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.data,
+        )
+        scatter!(
+            ax_events,
+            Float64.(events_detected),
+            y;
+            color = FIGURE_COLORS.signal,
+            strokewidth = 1.5,
+            strokecolor = FIGURE_STROKES.signal,
+        )
+
+        # A replay that scored nothing has no rate; its row stays empty.
+        finite = isfinite.(false_alarms_per_30d)
+        top = maximum(
+            vcat(
+                Float64.(false_alarms_per_30d[finite]),
+                reference_far === nothing ? Float64[] : [Float64(reference_far)],
+            );
+            init = 0.0,
+        )
+        xlims!(ax_far, 0.0, top > 0 ? 1.15 * top : 1.0)
+        if reference_far !== nothing
+            vlines!(
+                ax_far,
+                [reference_far];
+                color = FIGURE_COLORS.target,
+                linestyle = :dash,
+                linewidth = 1.5,
+            )
+            text!(
+                ax_far,
+                Float64(reference_far),
+                n + 0.55;
+                text = "Reference",
+                align = (:left, :top),
+                offset = (6, -2),
+                fontsize = ANNOTATION_FONTSIZE,
+                color = FIGURE_COLORS.target,
+            )
+        end
+        if any(finite)
+            scatter!(
+                ax_far,
+                Float64.(false_alarms_per_30d[finite]),
+                y[finite];
+                color = FIGURE_COLORS.false_alarm,
+                strokewidth = 1.5,
+                strokecolor = FIGURE_STROKES.false_alarm,
+            )
+        end
+        colgap!(figure.layout, 12)
         figure
     end
 end

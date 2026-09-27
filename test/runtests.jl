@@ -1309,6 +1309,26 @@ end
             joinpath(dir, "wide"),
         )
         @test TOML.parsefile(joinpath(dir, "wide.toml"))["figure"]["size_pt"] == [900, 950]
+        gap = figure_gap_study(
+            ["Reference", "Loss 0.3 %", "Outage 24 h"],
+            ["reference", "loss", "outage"],
+            [1.0, 0.44, 0.99],
+            [2, 2, 2],
+            2,
+            [18.9, 104.2, NaN];
+            reference_far = 18.9,
+        )
+        save_figure(gap, joinpath(dir, "gap"))
+        @test TOML.parsefile(joinpath(dir, "gap.toml"))["figure"]["size_pt"] == [1200, 600]
+        @test_throws DimensionMismatch figure_gap_study(
+            ["a"],
+            ["f"],
+            [1.0, 0.5],
+            [2],
+            2,
+            [1.0],
+        )
+        @test_throws ArgumentError figure_gap_study(["a"], ["f"], [1.0], [3], 2, [1.0])
         save_figure(figure_roc(fpr, tpr, 0.9), stem; run_id = "unit")
         @test isfile(joinpath(dir, "roc_curve_#1.pdf"))
         @test_throws ArgumentError save_figure(

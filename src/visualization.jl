@@ -312,6 +312,21 @@ CairoMakie.
 function figure_seed_spread end
 
 """
+    figure_gap_study(levels, families, scored_fraction, events_detected, n_events,
+                     false_alarms_per_30d; reference_far = nothing) -> Figure
+
+Three panels side by side over the levels of a delivery-gap study, one row
+per level with the level names on the vertical axis in the given order
+(first level on top) and a dashed separator between consecutive families:
+the windows a replay scored as a fraction of the reference mission, the
+coalescences it detected of `n_events`, and its false-alarm episodes per
+30 days. A `NaN` rate (a replay that scored nothing) leaves its row empty
+in the third panel; `reference_far` draws the reference's rate there as a
+labelled guide. Requires CairoMakie.
+"""
+function figure_gap_study end
+
+"""
     figure_telemetry_trace(t_days, strain, labels; max_points = 5000, whitened = nothing) -> Figure
 
 Simulated strain record against mission time with the labeled spans as
