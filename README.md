@@ -108,7 +108,7 @@ from `main`.
 
 The remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md`.
 
-## Overview
+## Pipeline
 
 ```mermaid
 flowchart LR
@@ -130,9 +130,11 @@ path replays the same model against a telemetry mission, scoring each
 window as its conditioning stretch reaches the ground. The threshold is
 fitted once, in the batch path, and carried unchanged into both.
 
+Every script takes the configuration file as its first argument (default `configs/default.toml`) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, a seed override, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, the per-epoch training history, and a configuration snapshot are stored.
+
 ## Usage
 
-Every script takes the configuration file as its first argument (default `configs/default.toml`) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, a seed override, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, the per-epoch training history, and a configuration snapshot are stored.
+### Simulated telemetry
 
 ```bash
 # 1. Simulate continuous telemetry (HDF5 strain + point-wise labels + event catalog)
@@ -162,9 +164,7 @@ as GIFs beside the static figures.
 
 `--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialisation-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
-Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
-
-Figures are built on one layout (a 900 × 600 pt single panel that grows by 350 pt per stacked panel) under one theme (Computer Modern, 26 pt type, boxed axes, legend above the axes, Okabe–Ito colours, one colour per quantity) and exported by the scripts as vector PDF plus a 4× PNG with a provenance sidecar per figure (`<plots>/run_<id>/<figure>.{pdf,png,toml}`): the simulated trace with its whitened panel, the training history, the mission trace with the labelled spans and the threshold, the ROC curve, the detection sensitivity versus SNR, and the score distributions. The figure functions live in the package as a CairoMakie extension (`using CairoMakie` activates them), so the core library carries no plotting dependency.
+### Sangria products
 
 For an LDC product (Sangria), the labels come from the truth stream instead of the simulator, and the whitening PSD is estimated from the record (`[preprocessing] psd = "welch"`) or taken from the LDC analytic TDI model (`"ldc"`). `configs/sangria.toml` holds the benchmark settings (`configs/sangria_paper.toml` the paper-parity variant); the HDF5 products are passed on the command line:
 
@@ -190,6 +190,8 @@ julia scripts/infer.jl configs/sangria.toml --run-id sangria01
 
 The validation anchors of the LDC reader and noise model run with the test suite when `MILLIHERTZQML_LDC_DIR` names the directory holding `LDC2_sangria_training_v2.h5`.
 
+### Telemetry coupling
+
 The coupling to the telemetry simulator DeepSpaceTelemetry.jl is file-based in both directions. Upstream, a product of this pipeline is exported as the producer's external payload (one `Amplitude` column at 0.2 Hz) with a scenario fragment carrying the geometry (50 s segments, ten per batch, so one batch equals one window step), the mission epoch, and the event catalog as markers. Downstream, a producer run directory is replayed (or followed live) through the producer's own API: the consumer tracks the coverage of delivered rows, scores every window as soon as it is complete with the same conditioning as the batch pipeline, and reports the ground-availability latency of the first alarm of every event:
 
 ```bash
@@ -202,13 +204,25 @@ julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTeleme
     --events data/inputs/simulated_telemetry_complex_events.csv --run-id coupling01
 ```
 
+`infer_telemetry.jl` writes `telemetry_windows.csv` (one row per scored window with its completion time and inference wall time), `alert_latency.csv` (per event: first alarmed window, data latency, total latency with the ground processing budget, false-alarm episodes per 30 days), a snapshot, and the alert figure. The `[telemetry]` section of the configuration holds the geometry, the coverage and erosion policy, the accepted producer version, and the processing budget.
+
+### Constellation response
+
 The simulator records, by default, one strain referred to the sky-averaged sensitivity, with every source placed at a matched-filter SNR. With `response = "lisa"` in `[generation]` it records the A and E channels of the constellation instead — antenna patterns on the LISA orbits, orbital Doppler phase and transfer roll-off from CurvatureDistinguishability.jl, loaded as a package extension — with the MBHB injections at physical amplitude for a luminosity distance drawn from `[mbhb_distance_min_gpc, mbhb_distance_max_gpc]` and isotropic orientation, independent noise per channel at the Michelson-channel level, and labels on the channel named by `label_channel`. Such records are whitened with `psd = "channel"` (or `"welch"`) in `[preprocessing]`; the physics page of the manual states the conventions and their limits.
 
-`infer_telemetry.jl` writes `telemetry_windows.csv` (one row per scored window with its completion time and inference wall time), `alert_latency.csv` (per event: first alarmed window, data latency, total latency with the ground processing budget, false-alarm episodes per 30 days), a snapshot, and the alert figure. The `[telemetry]` section of the configuration holds the geometry, the coverage and erosion policy, the accepted producer version, and the processing budget.
+### Run artifacts
+
+Every snapshot a stage writes carries the hardware fingerprint, the git description of the tree, and the package version; existing files are moved to `<stem>_#k<ext>` backups instead of being overwritten; preprocessing reuses a feature product whose parameters have not changed unless `--force` is given. Before allocating, a stage estimates its memory against `[resources]` and refuses to start above `max_memory_gib`. The scripts print the stage-timing table at the end.
 
 Training writes `split.toml` (block ranges), `threshold.toml` (the threshold fitted on the calibration block of `threshold_block` by `threshold_criterion`: `far`, at most `target_far_per_30d` false-alarm episodes per 30 days and an alarm duty cycle of at most `target_fpr` on unlabelled windows, scanned from the highest threshold down so that the operating point stays on the branch of short, isolated episodes; `fpr`; or `youden`), `threshold_sweep.csv` (event and window recall and false-alarm rate of the calibration block at every candidate threshold, drawn as the `threshold_sweep` figure), and `metrics.toml` (window- and event-level metrics of the validation and test blocks) into the run directory. Inference applies the persisted threshold; with labels it writes `metrics.toml` and the post-hoc `threshold_sweep.csv` for the evaluated rows. Blind inference (`--labels ""`) produces per-window scores and decisions without labels.
 
+### Figures
+
+Figures are built on one layout (a 900 × 600 pt single panel that grows by 350 pt per stacked panel) under one theme (Computer Modern, 26 pt type, boxed axes, legend above the axes, Okabe–Ito colours, one colour per quantity) and exported by the scripts as vector PDF plus a 4× PNG with a provenance sidecar per figure (`<plots>/run_<id>/<figure>.{pdf,png,toml}`): the simulated trace with its whitened panel, the training history, the mission trace with the labelled spans and the threshold, the ROC curve, the detection sensitivity versus SNR, and the score distributions. The figure functions live in the package as a CairoMakie extension (`using CairoMakie` activates them), so the core library carries no plotting dependency.
+
 ## Results
+
+### The Sangria blind year
 
 On the LISA Data Challenge 2a "Sangria" blind year, the eight-qubit model
 (`configs/experiments/q8_b6.toml`: 8 qubits, 4 re-uploading layers, six
@@ -230,6 +244,8 @@ legitimate for a finished record and an oracle for a streamed one.
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
 Every run encodes its features on the half period ``[0, π]`` of the ``R_z`` gate, so that a feature saturated above the training range is encoded as a state distinct from the noise floor. The shipped model clears the threshold in the merger bin of four of the six blind coalescences; the two most saturated still rely on the inspiral excess of the hours before.
+
+### Telemetry replay
 
 Replayed through a simulated year-long telemetry mission with daily
 ground-station passes and whitened causally — the PSD estimated from the
@@ -283,6 +299,8 @@ window, and a gap in the data itself costs the stretch around it and the
 event inside it.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, and false-alarm episodes per 30 days](docs/src/assets/benchmark_gap_study.png)
+
+### Against other methods
 
 Against the published method, reproduced on the same years and encoding
 with its own raw-periodogram features and four-qubit register
