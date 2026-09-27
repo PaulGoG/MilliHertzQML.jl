@@ -46,6 +46,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
   record scored at 0.42 % permanent loss.
 
 ### Changed
+- The README and the manual were revised as a whole. The README and the
+  home page open with the results of both configurations; the benchmark
+  page opens with a summary table, places the seed spread beside the grid,
+  and gives the reproduction of the smoothed configuration and of the
+  telemetry payload; the telemetry page is divided into the run interface,
+  scheduling, the whitening PSD, the choice of context, the alert table,
+  and gaps; the physics page describes the log-frequency smoothing and the
+  non-stationary foreground, and the architecture page the training
+  throughput as an open item. The Sangria usage of the README follows the
+  selected configuration.
 - The trailing whitening estimate of a replay pools the Welch segments of
   every delivered run inside its span instead of using the last contiguous
   run only, trims `[telemetry] psd_edge_periods` cutoff periods of the

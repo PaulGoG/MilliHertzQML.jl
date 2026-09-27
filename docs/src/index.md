@@ -1,35 +1,86 @@
 # MilliHertzQML
 
-MilliHertzQML is a Julia pipeline for the detection of massive black hole binary (MBHB) coalescences in simulated LISA telemetry using a variational quantum classifier (VQC) with data re-uploading. Quantum circuits are simulated with `Yao.jl`; training uses `Zygote.jl` automatic differentiation and `Flux.jl` optimisers.
+MilliHertzQML is a Julia pipeline for the detection of massive black hole
+binary (MBHB) coalescences in LISA telemetry by a variational quantum
+classifier (VQC) with data re-uploading. The circuits are simulated with
+`Yao.jl`; training uses `Zygote.jl` gradients and `Flux.jl` optimisers.
+The classification approach follows Isfan et al. [IsfanEtAl2025](@cite).
 
-On the LISA Data Challenge 2a "Sangria" blind year, the eight-qubit model
-(`configs/experiments/q8_b6.toml`: 8 qubits, 4 re-uploading layers, six
-sub-mHz band powers, run `q8_b6_pi`) detects **all five labelled MBHB
-events at 1.57 false-alarm episodes per 30 mission days**, from a decision
-threshold fitted on the pooled held-out block of the *training* year —
-validation and test together, 110 days — and applied without adjustment;
-the fit predicted 1.38. The configuration and seed were chosen on the
-validation block of the training year by a selection rule fixed before the
-blind year was scored, and the [benchmark page](benchmark.md)
-reports every run of the grid beside it.
-The spread under re-initialisation alone ranges from 1.57 to 8.74 per 30
-days across four seeds of the same configuration, and the single seed of
-every other configuration lies inside that spread on the selection
-statistic, so the ranking between configurations is not established. The
-blind year is whitened by the full-record PSD, the median Welch estimate
-of the entire blind year, which is available only after the whole record
-has been received; this is admissible for a completed record and
-non-causal for a streamed one.
+On the LISA Data Challenge 2a "Sangria" blind year, with decision
+thresholds fitted on the training year and applied unchanged:
+
+| | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
+|---|---|---|
+| Completed blind year | 5 of 5 labelled events, 1.57 false alarms per 30 days | 5 of 5, 2.97 per 30 days |
+| Streamed year, causal whitening | 5 of 6 coalescences alerted, 1.90 per 30 days | 5 of 6, each 12 to 71 hours before its merger, 0.16 per 30 days |
+| Record scored at 0.43 % scattered batch loss | 9 % | 81 % |
+
+The selected configuration, eight qubits, four re-uploading layers and six
+sub-mHz band powers, was chosen on the training year by a rule fixed
+before the blind year was scored; the spread of its false-alarm rate under
+re-initialisation alone, 1.57 to 8.74 per 30 days over four seeds, is
+larger than the differences between configurations. The completed record
+is whitened by the full-record PSD of the blind year, available only after
+the whole record has been received; the streamed year is whitened
+causally, from data already delivered to the ground station. The
+[Sangria Benchmark](benchmark.md) page gives the protocol, every run, and
+the limits of these results.
 
 ![Classifier output over the Sangria blind year](assets/benchmark_mission_trace.png)
 
-The pipeline comprises four stages, each a library function (`generate_telemetry`, `preprocess_record`, `train_classifier`, `evaluate_classifier`, plus `label_truth_stream` for LDC products) behind a thin script that takes the configuration file as its first argument (`julia scripts/<stage>.jl configs/default.toml [--run-id ID] ...`); the TOML file is the single source of every parameter and is validated on load:
+## Pipeline
 
-1. `scripts/generate_data.jl` — simulates continuous milliHertz telemetry at physical strain amplitude (Robson–Cornish–Liu noise [RobsonCornishLiu2019](@cite), resolvable galactic binaries and EMRIs, IMRPhenomA MBHB injections [AjithEtAl2008](@cite) at a prescribed matched-filter SNR), written to HDF5 with point-wise labels and an event catalogue. For an LDC product, `scripts/label_ldc.jl` derives the point-wise labels from the truth stream instead.
-2. `scripts/preprocess_ldc.jl` — extracts a spectral feature vector (four features by default, one per band plus two under `feature_set = "bands"`) per sliding window of the A channel, whitened by the strain model, the LDC TDI noise model, or a Welch estimate of the record, and writes the window-geometry sidecar.
-3. `scripts/train.jl` — splits the windows chronologically into training, validation, and test blocks; trains the VQC with Adam, exponential learning-rate decay, and early stopping on the validation block; fits the decision threshold on the calibration block (`threshold_block`, the validation block by default); scores the test block once at window and event level.
-4. `scripts/infer.jl` — applies the persisted threshold to a feature table (or to one block of the training table), reports window- and event-level metrics when labels are present, and produces diagnostic figures.
+Every stage is a library function behind a thin script that takes the
+configuration file as its first argument
+(`julia scripts/<stage>.jl configs/default.toml [--run-id ID] ...`); the
+TOML file is the single source of every parameter and is validated on
+load.
 
-Scripts resolve relative paths against the project root and may be invoked from any working directory; RNG seeds come from the configuration. Every artifact carries git and hardware provenance, existing files are backed up rather than overwritten, and each stage checks its memory estimate against `[resources]` before allocating (see [Quantum Architecture](architecture.md), "Pipeline architecture").
+**Batch path**, on a completed record:
 
-See [Physics & Data](physics.md) for the simulation and feature models (including known deficiencies), [Quantum Architecture](architecture.md) for the circuit and training design, [Telemetry Coupling](telemetry.md) for the payload export and the streaming replay, [Sangria Benchmark](benchmark.md) for the results on the LDC blind year, and the [API Reference](api.md) for docstrings.
+1. `scripts/generate_data.jl` (`generate_telemetry`) simulates continuous
+   milliHertz telemetry at physical strain amplitude: Robson–Cornish–Liu
+   noise [RobsonCornishLiu2019](@cite), resolvable galactic binaries and
+   EMRIs, and IMRPhenomA MBHB injections [AjithEtAl2008](@cite) at a
+   prescribed matched-filter SNR, written to HDF5 with point-wise labels
+   and an event catalogue. For an LDC product, `scripts/label_ldc.jl`
+   (`label_truth_stream`) derives the labels from the truth stream
+   instead.
+2. `scripts/preprocess_ldc.jl` (`preprocess_record`) whitens the A channel,
+   by the strain model, the LDC TDI noise model, or a Welch estimate of the
+   record, optionally smoothed in log-frequency, and extracts one feature
+   vector per sliding window: band powers of the whitened spectrum, its
+   entropy and its log power spread.
+3. `scripts/train.jl` (`train_classifier`) splits the windows
+   chronologically into training, validation and test blocks, trains the
+   VQC with Adam and early stopping on the validation block, fits the
+   decision threshold on the calibration block, and scores the test block
+   once.
+4. `scripts/infer.jl` (`evaluate_classifier`) applies the persisted
+   threshold to a feature table and reports window- and event-level
+   metrics with diagnostic figures.
+
+**Streaming path**, on a telemetry mission:
+`scripts/export_telemetry_payload.jl` writes a product as the payload of
+the DeepSpaceTelemetry.jl producer, and `scripts/infer_telemetry.jl`
+replays or follows the producer's run directory, scoring every window
+once the stretch of data around it has reached the ground and timing the
+alerts against the coalescences.
+
+Every artifact carries git and hardware provenance, existing files are
+backed up rather than overwritten, and each stage checks its memory
+estimate against `[resources]` before allocating.
+
+## Manual
+
+- [Physics & Data](physics.md): the noise model, the simulator, the
+  constellation response, the features and the whitening, the LDC
+  products, and the known physical deficiencies.
+- [Quantum Architecture](architecture.md): the circuit, the evaluation
+  protocol, training, the decision threshold, and the pipeline
+  architecture.
+- [Telemetry Coupling](telemetry.md): the payload export, the replay of a
+  producer run, the whitening of a streamed record, and the alert table.
+- [Sangria Benchmark](benchmark.md): the results on the LDC blind year,
+  completed and streamed, over a lossy link, and with smoothed whitening.
+- [API Reference](api.md) and [References](references.md).

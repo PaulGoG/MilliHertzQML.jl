@@ -43,17 +43,157 @@ julia scripts/export_telemetry_payload.jl configs/default.toml \
 
 ## Replay and alerts
 
-The consumer never writes into a producer run directory; it reads it through the producer's own API in the package extension that loads with DeepSpaceTelemetry.jl (`open_telemetry_run`), so that a change of the run-directory contract surfaces as a version bump — checked against `[telemetry] producer_compat` — or an API error rather than as silent format drift. The run exposes its geometry (`run_geometry`: sampling rate, segment length, batch size, samples per batch, mission epoch, producer version), its batches (`list_batches`: delivered, lost, or pruned, each with the payload rows it covers, taken from the content epoch the producer stamps on the batch rather than from its stored index, since the two differ once the producer discards production, and `list_batches` warns when they do), the payload of a delivered batch (`read_batch`), the arrival feed in mission-time order (`arrival_events`), and the lifecycle state (`run_state`).
+### Run interface
 
-Replaying the feed (`replay_run`) maintains the coverage of delivered rows as a set of disjoint intervals (`Coverage`), so that the order of arrivals — live batches first, then the archive backfilled newest-first — does not matter; a lost or pruned batch is a permanent hole, widened by `tdi_gap_dilation_sec` on each side, that later arrivals never fill. Whenever a batch arrives, the windows whose conditioning stretch — their own rows widened by `context_windows` window lengths on each side and cut to the record — is now delivered to at least `min_coverage`, and whose own rows are all delivered, are scored once (`WindowScheduler`, `conditioning_rows`), at the mission time of the arrival that completed that stretch; a hole inside a window is never scored across. The score comes from the same conditioning as the batch pipeline: the delivered stretch around the window — up to `context_windows` window lengths on each side — is high-passed and whitened, and the window is cut from it (`StreamingDetector`, built by `detector_from_run` from the model artifact, its threshold, and the sidecar of the feature table it was trained on). Under `psd_mode = "sidecar"` the whitening PSD is fixed: that of the feature sidecar `psd_sidecar` when one is configured, and the PSD persisted with the training run otherwise. In the benchmark the sidecar supplies the full-record PSD of the blind year, the median Welch estimate of the entire blind year, which is available only after the whole record has been received. Under `psd_mode = "trailing"` the whitening PSD is instead the causal PSD estimate of `TrailingWelch`: the median Welch spectrum of every delivered run inside the last `psd_trailing_days` behind the window's conditioning stretch, each run high-passed as every stretch is, trimmed by `psd_edge_periods` cutoff periods at both ends where the high-pass rings, and the segments of all runs pooled so that none spans a delivery hole — redone whenever that record has advanced by `psd_refresh_days`, kept from the previous estimate while no run holds a segment (`psd_segment_length`), and replaced by the training run's own PSD only before any estimate exists. The estimate is causal in that only data already delivered to the ground station enter it, unlike a sidecar PSD of a whole record, which for a streamed mission includes data not yet delivered; the scored-window table records the last row behind each estimate (`psd_row`, 0 for the static PSD). The first windows of a record, and any isolated window, are scored on shorter context and are edge-affected, as in the batch pipeline.
+The consumer never writes into a producer run directory. It reads the
+directory through the producer's own API, in the package extension that
+loads with DeepSpaceTelemetry.jl (`open_telemetry_run`), so that a change
+of the run-directory contract surfaces as a version bump, checked against
+`[telemetry] producer_compat`, or as an API error rather than as silent
+format drift. The run exposes its geometry (`run_geometry`: sampling
+rate, segment length, batch size, samples per batch, mission epoch,
+producer version), its batches (`list_batches`: delivered, lost or pruned,
+each with the payload rows it covers), the payload of a delivered batch
+(`read_batch`), the arrival feed in mission-time order (`arrival_events`),
+and the lifecycle state (`run_state`). The rows of a batch are taken from
+the content epoch the producer stamps on it rather than from its stored
+index, since the two differ once the producer discards production;
+`list_batches` warns when they do.
 
-Both settings must be chosen for the record being scored rather than left at their defaults. A whitening PSD calibrates the record being scored: whitening one observation record with the PSD estimated from another mis-scales every band power wherever the noise is not stationary between them, and the annually modulated Galactic foreground makes that the normal case rather than the exceptional one; on the Sangria blind year, whitening with the training run's own PSD removes every detection. `context_windows` has to reach past the conditioning kernel, which decays as a power law rather than exponentially whenever the whitening PSD resolves sharp spectral features such as the TDI transfer nulls; with the Sangria Welch estimate the streamed scores match the batch pipeline only from about twenty window lengths of context upward, and not monotonically below that, so the agreement has to be measured rather than assumed. The look-ahead is a property of the filter, not a tuning choice: the whitening is zero-phase, so a window's conditioned features depend on the data after it as much as on the data before it, and a detector that scores each window as soon as its own samples are delivered detects two of the five Sangria blind events where a centred stretch detects all five; sixty-four window lengths of past context do not remove this deficit. An alert therefore carries a conditioning lag of `context_windows` window lengths, 1.16 days at the Sangria settings and 2.8 hours with the smoothed whitening of `configs/experiments/q8_b6_s001.toml`, on top of the ground segment's delivery latency.
+### Scheduling and conditioning
 
-The table of scored windows records, per window, its rows and their mission times, the completing arrival and its time, the coverage, the score, the decision, and the inference wall time; windows beyond the rows of the ingested payload (which the producer records in its snapshot and pads with zeros afterwards) are not scored. `alert_latency_table` reduces it per event of an event table (`merger_time_s` or the simulator's `t_c_sec`, optional label spans): the earliest alert touching the event's label span, where an alert is a run of `alert_persistence` consecutive alarmed windows — consecutive in window index, irrespective of arrival order — raised by the arrival that completes the run (with a persistence of one, every alarmed window is an alert); its completion time as the alert time, the data latency (alert time minus merger time — negative when the inspiral is alarmed inside the label span before the coalescence), the total latency with the `processing_latency_hours` budget, whether the event was detected, and the runs of alarmed windows outside every span that reach the persistence as false-alarm episodes per 30 days of scored data; shorter runs raise no alert and are not counted. One alert can touch two events whose spans overlap; the table reports it for both, and the benchmark page counts such an event as not detected on its own. In live mode (`follow_run`, `[telemetry] mode = "live"` or `--live`), the feed is polled every `poll_interval_sec` and consumed beyond the events already processed until the run reaches a terminal sentinel and the feed is drained; the two modes share the same state machine (`process_event!`) and give identical tables.
+Replaying the feed (`replay_run`) maintains the coverage of delivered rows
+as a set of disjoint intervals (`Coverage`), so the order of arrivals,
+live batches first and the archive backfilled newest-first, does not
+matter. A lost or pruned batch is a permanent hole, widened by
+`tdi_gap_dilation_sec` on each side, that later arrivals never fill.
 
-The figure `figure_telemetry_alerts` stacks the score trace with the threshold, the alarmed windows, and the labelled spans over the ground-availability latency of every window, with the alert latency of each detected event annotated. The coupling excludes delivery holes from scoring rather than scoring across them, follows a producer that discarded production (the rows a batch holds come from its content epoch, not its index), and pools the causal PSD estimate over the delivered runs around the holes; no masked or Lomb–Scargle features are implemented. The effect of the exclusion is measured on the [benchmark page](benchmark.md) over seventeen missions: scattered permanent loss above about 0.2 % of batches removes most of the scorable record, a threshold set by the length of the conditioning stretch rather than by the loss rate, whereas bursts, retransmission, outages and gaps in the data itself remove a fraction of that.
+A window is scored once, at the mission time of the arrival that completes
+its **conditioning stretch**: its own rows widened by `context_windows`
+window lengths on each side and cut to the record. The stretch must be
+delivered to at least `min_coverage`, and the window's own rows entirely,
+so a hole inside a window is never scored across (`WindowScheduler`,
+`conditioning_rows`). The score uses the conditioning of the batch
+pipeline: the delivered stretch is high-passed and whitened as a whole,
+and the window is cut from it (`StreamingDetector`, built by
+`detector_from_run` from the model artifact, its threshold, and the
+sidecar of the feature table it was trained on). The first windows of a
+record, and any isolated window, are scored on shorter context and are
+edge-affected, as in the batch pipeline.
 
-`animate_mission_replay` sweeps the same replay across four panels in the order the ground received the windows. The dotted rule is the ground clock, and its distance from the edge of the data is the availability latency: the conditioning lag plus the delivery latency.
+### Whitening PSD
+
+`[telemetry] psd_mode` selects the PSD that whitens each stretch.
+
+- **`"sidecar"`: a fixed PSD**, that of the feature sidecar `psd_sidecar`
+  when one is configured and the PSD persisted with the training run
+  otherwise. In the benchmark the sidecar supplies the full-record PSD of
+  the blind year, the median Welch estimate of the entire blind year,
+  which is available only after the whole record has been received.
+- **`"trailing"`: the causal estimate of `TrailingWelch`**, the median
+  Welch spectrum of every delivered run inside the last
+  `psd_trailing_days` behind the window's conditioning stretch. Each run
+  is high-passed as every stretch is and trimmed by `psd_edge_periods`
+  cutoff periods at both ends, where the high-pass rings, and the segments
+  (`psd_segment_length`) of all runs are pooled, so that none spans a
+  delivery hole. The estimate is redone whenever that record has advanced
+  by `psd_refresh_days`, kept from the previous estimate while no run
+  holds a segment, and replaced by the training run's own PSD only before
+  any estimate exists. When `[preprocessing] psd_smoothing_dex` is
+  positive, it is smoothed in log-frequency by the width that smoothed the
+  batch estimate behind the model's training features.
+
+The trailing estimate is causal in that only data already delivered to
+the ground station enter it, unlike a sidecar PSD of a whole record, which
+for a streamed mission includes data not yet delivered. The scored-window
+table records the last row behind each estimate (`psd_row`, 0 for the
+static PSD).
+
+### Choosing the PSD and the context
+
+Both settings must be chosen for the record being scored rather than left
+at their defaults. A whitening PSD calibrates the record it whitens:
+whitening one observation record with the PSD estimated from another
+mis-scales every band power wherever the noise is not stationary between
+them, and the annually modulated Galactic foreground makes that the
+normal case. On the Sangria blind year, whitening with the training run's
+own PSD removes every detection.
+
+`context_windows` has to reach past the conditioning kernel, the impulse
+response of the high-pass followed by whitening. That kernel decays as a
+power law rather than exponentially whenever the whitening PSD resolves
+sharp spectral features such as the TDI transfer nulls. With the Sangria
+Welch estimate the streamed scores match the batch pipeline only from
+about twenty window lengths of context upward, and not monotonically
+below that; with the same estimate smoothed by 0.01 dex in log-frequency
+they match from one window length on (see the benchmark page). The
+agreement has to be measured for the whitening in use rather than
+assumed. The look-ahead is a property of the filter, not a tuning choice:
+the whitening is zero-phase, so a window's conditioned features depend on
+the data after it as much as on the data before it, and a detector that
+scores each window as soon as its own samples are delivered detects two
+of the five Sangria blind events where a centred stretch detects all
+five; sixty-four window lengths of past context do not remove this
+deficit. An alert therefore carries a conditioning lag of
+`context_windows` window lengths, 1.16 days at twenty and 2.8 hours with
+the smoothed whitening of `configs/experiments/q8_b6_s001.toml`, on top of
+the delivery latency of the ground segment.
+
+### Alerts
+
+The table of scored windows records, per window, its rows and their
+mission times, the completing arrival and its time, the coverage, the
+score, the decision, and the inference wall time; windows beyond the rows
+of the ingested payload, which the producer records in its snapshot and
+pads with zeros afterwards, are not scored.
+
+`alert_latency_table` reduces it per event of an event table
+(`merger_time_s` or the simulator's `t_c_sec`, optional label spans). An
+alert is a run of `alert_persistence` consecutive alarmed windows,
+consecutive in window index whatever the order of arrival, raised by the
+arrival that completes the run; with a persistence of one, every alarmed
+window is an alert. For every event the table gives the earliest alert
+touching its label span and:
+
+- `t_alarm`, the **alert time**: the arrival at the ground station of the
+  batch that completes the alert, which includes the conditioning lag and
+  the downlink delay;
+- `latency_data_h`, the alert time minus the merger time, negative when
+  the alert reaches the ground before the coalescence;
+- `latency_total_h`, the same with the ground processing budget
+  `processing_latency_hours` added;
+- whether the event was detected, and whether its alert is shared with
+  another event whose label span overlaps;
+- the false-alarm episodes per 30 days of scored data: runs of alarmed
+  windows outside every span that reach the persistence. Shorter runs
+  raise no alert and are not counted.
+
+The benchmark page counts an event whose only alert is shared as not
+detected on its own. In live mode (`follow_run`, `[telemetry] mode =
+"live"` or `--live`) the feed is polled every `poll_interval_sec` and
+consumed beyond the events already processed until the run reaches a
+terminal sentinel and the feed is drained; the two modes share the same
+state machine (`process_event!`) and give identical tables.
+
+### Gaps and figures
+
+The coupling excludes delivery holes from scoring rather than scoring
+across them, follows a producer that discarded production, and pools the
+causal PSD estimate over the delivered runs around the holes; no masked
+or Lomb–Scargle features are implemented. The effect of the exclusion is
+measured on the [benchmark page](benchmark.md) over seventeen missions:
+scattered permanent loss removes the windows whose conditioning stretch
+contains a hole, so the tolerable loss rate is set by the length of the
+stretch; bursts, retransmission, outages and gaps in the data itself
+remove far less.
+
+`figure_telemetry_alerts` stacks the score trace, with the threshold, the
+alarmed windows and the labelled spans, over the availability latency of
+every window (the wait for its conditioning stretch plus the downlink
+delay) and the alert time of every detected event. `animate_mission_replay`
+sweeps the same replay across four panels in the order in which the ground
+received the windows; the dotted rule is the ground clock, and its
+distance from the edge of the data is the availability latency.
 
 ![A year of telemetry replay: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and window availability](assets/mission_replay.gif)
 

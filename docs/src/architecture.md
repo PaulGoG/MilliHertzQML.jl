@@ -72,3 +72,4 @@ The pipeline is a library with thin command-line entry points. Every stage is a 
 Retained here so the documentation reflects the code as it stands; these are the open items.
 
 1. **Single evaluation record.** The blocks are cut from one record, so the test block carries the events of one realisation; the Sangria blind set is the independent evaluation.
+2. **Training throughput.** The circuit of every sample is simulated gate by gate, each gate constructing new blocks and a new register under the Zygote tape. An epoch of the eight-qubit model takes four to five minutes on 16 threads, although its arithmetic amounts to seconds: the cost is overhead, not computation. A batched state-vector simulator with adjoint gradients, the encoding applied as per-sample phases and the ansatz as shared gates over the batch, would remove the overhead on the CPU and, written with KernelAbstractions.jl, run unchanged on GPU backends, which pay off from about sixteen qubits.

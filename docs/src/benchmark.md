@@ -1,37 +1,47 @@
 # Sangria benchmark
 
-This page reports the results of the classifier on the LISA Data Challenge 2a
-"Sangria" data set: one year of simulated LISA telemetry for training and a
-second, blind year for evaluation.
+This page reports the results of the classifier on the LISA Data Challenge
+2a "Sangria" data set: one year of simulated LISA telemetry for training
+and a second, blind year for evaluation. The blind year is scored twice:
+as a completed record, and streamed through a simulated telemetry mission
+in which every window is scored once the data around it has reached the
+ground.
 
-The principal result is that on the blind year the eight-qubit model
-detects **all five labelled MBHB events at 1.57 false-alarm episodes per
-30 mission days** (19 episodes over 364 days), from a decision threshold
-fitted on held-out data of the *training* year and applied without
-adjustment. The rate predicted at the fitted threshold was 1.38, so the
-operating point transfers. The model was chosen on the validation block of
-the training year before the blind year was scored; it has the same
-configuration and seed as the model selected for the 1.0.0 tag, retrained
-on the half-period encoding.
+| | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
+|---|---|---|
+| Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
+| Streamed year, causal whitening: coalescences alerted on their own | 5 of 6 | 5 of 6 |
+| Alerts reaching the ground more than an hour before the merger | 2, consistent with chance | **5, 12 to 71 h ahead** |
+| Streamed year: false alarms per 30 d | 1.90 | **0.16** |
+| Conditioning lag of every alert | 1.16 days | **2.8 hours** |
+| Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
-The configuration was selected by a pre-registered statistic on the
-training year, so the value 1.57 involves no selection on the blind year;
-but the spread under re-initialisation alone, measured below, ranges from
-1.57 to 8.74, and every other configuration of the grid falls inside that
-spread, so the ranking *between* configurations is not resolved. Every
-run on this page encodes its features on the half period ``[0, \pi]`` of
-the ``R_z`` gate; the merger windows of the high-SNR coalescences, which
-the full-period encoding mapped onto the noise floor, now score above the
-threshold for four of the six, but still not for the two most saturated
-(see the encoding paragraph of the protocol). Finally, the blind year is
-whitened by its full-record PSD, a label-free statistic of the record under
-evaluation: the median Welch estimate of the entire blind year, which is
-available only after the whole record has been received. This is
-admissible for a completed record and non-causal for a streamed one; the
-telemetry replay below is therefore quoted under causal whitening, in
-which the PSD is estimated only from data already delivered to the ground
-station, and the replay whitened by the full-record PSD is reported beside
-it as an upper reference for the causal replay.
+The selected configuration, eight qubits, four re-uploading layers and six
+sub-mHz band powers, was chosen on the training year by a rule fixed before
+the blind year was scored. On the completed blind year it detects all five
+labelled events at 1.57 false-alarm episodes per 30 mission days (19
+episodes over 364 days), from a decision threshold fitted on held-out data
+of the training year and applied without adjustment; the fit predicted
+1.38, so the operating point transfers. The spread under re-initialisation
+alone, 1.57 to 8.74 over four seeds, covers every other configuration of
+the grid, so the ranking *between* configurations is not resolved.
+
+The completed record is whitened by its full-record PSD, the median Welch
+estimate of the entire blind year: a label-free statistic, admissible for a
+completed record but available only after the whole record has been
+received. The streamed results are therefore quoted under causal
+whitening, in which the PSD is estimated only from data already delivered
+to the ground station; the stream whitened by the full-record PSD is
+reported beside it as an upper reference.
+
+Smoothing the Welch estimate in log-frequency shortens the kernel of the
+whitening filter and with it the stretch of data every window needs. The
+model retrained on smoothed features is the one that alerts the
+coalescences before their merger in the causal stream, and the one that
+keeps scoring on a link that loses data; it rests on a single
+initialisation seed. Every run on this page encodes its features on the
+half period ``[0, \pi]`` of the ``R_z`` gate (see the encoding paragraph of
+the protocol).
 
 ## Data and labels
 
@@ -118,11 +128,11 @@ recall and ROC area are reported too, but the event-level pair defines the
 operating point.
 
 **Encoding.** Every run on this page maps its features onto ``[0, \pi]``
-before the ``R_z`` encoding gate (`[training] phase_span = 1.0`). The
-1.0.0 tag used the full period ``[0, 2\pi]``: ``R_z(2\pi) = -I`` is a
-global phase, so a feature clamped at the upper scaler bound was encoded
-exactly as one at the lower bound, and by continuity the response
-returned to its floor value as a feature approached the bound. At the
+before the ``R_z`` encoding gate (`[training] phase_span = 1.0`). On the
+full period ``[0, 2\pi]``, ``R_z(2\pi) = -I`` is a global phase, so a
+feature clamped at the upper scaler bound is encoded exactly as one at
+the lower bound, and by continuity the response returns to its floor
+value as a feature approaches the bound. At the
 coalescence itself the band powers exceed the scaler bound by two to
 three orders of magnitude, and under the full period five of the six
 blind coalescences scored below the threshold in the six-hour bin holding
@@ -267,6 +277,44 @@ the need for the check itself: an operating point measured on one
 observation record does not carry over to the next unless it lies where
 the noise tails of the two records agree, and a large ROC area does not
 substitute for verifying this.
+
+## The spread under re-initialisation
+
+The selected configuration was trained at three further seeds inside the
+same grid, each refitting its own threshold on the pooled held-out block
+and applying it to the blind year without adjustment:
+
+| Seed | Fitted threshold | Fit predicted | Delivered FA / 30 d | Events | AUC |
+|---|---|---|---|---|---|
+| 1009 | 0.7398 | 2.750 | 2.062 | 5 of 5 | 0.8110 |
+| 2027 | 0.6432 | 2.750 | 8.741 | 5 of 5 | 0.8274 |
+| 3041 | 0.7637 | 2.475 | 3.299 | 5 of 5 | 0.8129 |
+| 9999 (selected) | 0.7366 | 1.375 | 1.567 | 5 of 5 | 0.8065 |
+
+![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](assets/benchmark_seed_spread.png)
+
+**Every realisation recovers all five events; two of the four remain
+below the three per 30 days that the criterion requested.** The quantity
+that varies is the false-alarm rate, by a factor of five and a half from
+1.57 to 8.74, while the ROC area varies by two and a half per cent, in
+the opposite direction: the seed with the largest area has the worst
+operating point. The outlier is the seed with the lowest fitted threshold,
+0.643, which lies in the shoulder where the noise tails of the two years
+disagree. This is the finding of the model grid, now measured within one
+configuration rather than across several: the area under the curve is
+nearly insensitive to the rate delivered at the operating point, because
+the threshold lies in the tail and the area is dominated by the bulk of
+the distribution.
+
+The principal result should therefore be read as an event recall that is
+stable and a false-alarm rate that carries a factor-of-several uncertainty from
+initialisation alone, in addition to the Poisson uncertainty of the
+episodes themselves. The selected seed was chosen on the training year,
+where it is also the best of the four (four validation episodes against
+seven and ten); that the ranking held on the blind year constitutes a
+single observation. Four realisations do not measure a distribution; they
+constrain the scatter sufficiently to show that a threshold fitted in the
+shoulder does not transfer, irrespective of the seed that produced it.
 
 ## Against the published method
 
@@ -457,10 +505,9 @@ plus the downlink delay of the batch that completes it (up to 18 hours),
 and, for every coalescence, the alert time relative to the merger.
 
 The definition of an alert determines the latencies and is therefore
-stated explicitly. The 1.0.0 tag assigned to each event the earliest
-alarmed window overlapping its label span, irrespective of the windows
-that followed it. Evaluated in this way, the causal replay alarms three coalescences 1.1 to 1.7 days
-before their merger at 5.94 false-alarm episodes per 30 days, a rate at
+stated explicitly. Assigning to each event the earliest alarmed window
+overlapping its label span, irrespective of the windows that follow it,
+the causal replay alarms three coalescences 1.1 to 1.7 days before their merger at 5.94 false-alarm episodes per 30 days, a rate at
 which about four chance episodes are expected inside the five 96-hour
 label spans, so the early alarms are consistent with chance coincidence.
 An isolated alarmed window cannot be distinguished from the false-alarm
@@ -482,8 +529,7 @@ classifier produces five alarm episodes of one to seven windows, 1.38 per
 30 days, and alarms its four events for 3, 7, 13 and 46 consecutive
 windows. Two consecutive windows is the value that satisfies all three
 conditions: it brings the block to 0.83 per 30 days, and three would leave
-the shortest event run without margin. The 1.0.0 tag, whose model
-alarmed its calibration events for at least four windows, used three.
+the shortest event run without margin.
 Both replays, evaluated at that persistence and at the first alarmed
 window:
 
@@ -506,9 +552,8 @@ causal whitening the alerts of events 3, 5 and 6 reach the ground between
 reach it 25.6 and 16.1 hours before the merger: their alarmed windows end
 67 and 63 hours before it and their conditioning stretches 39 and 35
 hours before it, so the merger is not in the data that raised them. At
-1.90 false-alarm episodes per 30
-days, 1.3 chance episodes are expected inside the five 96-hour label
-spans (Poisson probability 0.36 of two or more), so the two early alerts
+1.90 false-alarm episodes per 30 days, 1.3 chance episodes are expected
+inside the five 96-hour label spans (Poisson probability 0.36 of two or more), so the two early alerts
 are not evidence of a detection of the inspiral. Event 2 has no alert of
 its own under either whitening. Its merger follows event 1's by 29.5
 hours, the two label spans overlap, and every alarmed window in its span
@@ -516,12 +561,7 @@ lies in the cluster of alarm runs from 27 hours before to 26 hours after
 event 1's merger; none lies within 3.6 hours of its own merger. The
 replay therefore detects five coalescences, not six, and the batch
 metric's "5 of 5 label spans" is unaffected only because the two spans
-merge into one. The estimate pooled over the delivered runs and trimmed
-at their ends replaced, after the gap study below, the estimate of the
-1.1.0 release made on the last contiguous run; on this lossless mission
-that release counted 17 episodes (1.40 per 30 days) against the 23 here,
-a difference within the Poisson uncertainty of either count, and alerted
-events 1 and 4 1.9 and 7.5 hours after their mergers.
+merge into one.
 
 The full-record PSD changes three alerts: event 1 is alerted 1.9 hours after
 its merger instead of 25.6 hours before it, and events 4 and 5 are
@@ -556,44 +596,6 @@ keeps five of five label spans but raises the false-alarm rate from 1.57
 to 4.78 episodes per 30 days (ROC area 0.800 against 0.807): the fitted
 threshold does not transfer to features whitened differently, and the
 shorter kernel can be used only by a model trained on smoothed features.
-
-## The spread under re-initialisation
-
-The selected configuration was trained at three further seeds inside the
-same grid, each refitting its own threshold on the pooled held-out block
-and applying it to the blind year without adjustment:
-
-| Seed | Fitted threshold | Fit predicted | Delivered FA / 30 d | Events | AUC |
-|---|---|---|---|---|---|
-| 1009 | 0.7398 | 2.750 | 2.062 | 5 of 5 | 0.8110 |
-| 2027 | 0.6432 | 2.750 | 8.741 | 5 of 5 | 0.8274 |
-| 3041 | 0.7637 | 2.475 | 3.299 | 5 of 5 | 0.8129 |
-| 9999 (selected) | 0.7366 | 1.375 | 1.567 | 5 of 5 | 0.8065 |
-
-![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](assets/benchmark_seed_spread.png)
-
-**Every realisation recovers all five events; two of the four remain
-below the three per 30 days that the criterion requested.** The quantity
-that varies is the false-alarm rate, by a factor of five and a half from
-1.57 to 8.74, while the ROC area varies by two and a half per cent, in
-the opposite direction: the seed with the largest area has the worst
-operating point. The outlier is the seed with the lowest fitted threshold,
-0.643, which lies in the shoulder where the noise tails of the two years
-disagree. This is the finding of the model grid, now measured within one
-configuration rather than across several: the area under the curve is
-nearly insensitive to the rate delivered at the operating point, because
-the threshold lies in the tail and the area is dominated by the bulk of
-the distribution.
-
-The principal result should therefore be read as an event recall that is
-stable and a false-alarm rate that carries a factor-of-several uncertainty from
-initialisation alone, in addition to the Poisson uncertainty of the
-episodes themselves. The selected seed was chosen on the training year,
-where it is also the best of the four (four validation episodes against
-seven and ten); that the ranking held on the blind year constitutes a
-single observation. Four realisations do not measure a distribution; they
-constrain the scatter sufficiently to show that a threshold fitted in the
-shoulder does not transfer, irrespective of the seed that produced it.
 
 ## Effect of a lossy link
 
@@ -698,17 +700,6 @@ alerts, however, move to 53 and 76 h before merger 1, on windows
 conditioned on a partial stretch. Those alarms fall inside the label spans
 and count as detections; whether they arise from the inspiral or from the
 conditioning cannot be determined from this replay.
-
-Two defects were found in the course of this study and are corrected in
-this version. A replay of a producer that discarded production terminated
-with an error on the first window after the gap, because the delivered payload was indexed by batch index,
-which no longer tracks the payload rows after such a gap. In addition,
-the causal estimate was sensitive to holes: it was made on the last
-contiguous delivered run only, which behind a hole held one or two
-3.8-day segments, and once pooled over every delivered run it carried the
-high-pass transient of each run's ends; before the two changes the same
-missions counted 63, 88 and 151 false alarms per 30 days at 0.08 %,
-0.19 % and 3 %-with-one-retry, against 15, 12 and 10 now.
 
 The operating requirement is on **scattered permanent** loss, and it is
 strict: about a fifth of a per cent for scoring most of the record, and
@@ -821,7 +812,7 @@ against the selected model:
 | Bernoulli 0.1 % | 0.04 % | 4,285 (0.87) | 5,024 (0.98) | 2 | 2 |
 | Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,926 (0.96) | 2 | 2, one shared alert |
 | Bernoulli 0.3 % | 0.19 % | 2,120 (0.43) | 4,636 (0.90) | 0 | 2 |
-| Bernoulli 0.5 % | 0.42 % | 426 (0.09) | 4,142 (0.81) | 2, one shared alert | 2 |
+| Bernoulli 0.5 % | 0.43 % | 426 (0.09) | 4,142 (0.81) | 2, one shared alert | 2 |
 
 The fraction of the reference record the smoothed model scores follows the
 independent-batch estimate `(1 − p)^50` (0.98, 0.96, 0.91, 0.81). Over all
@@ -873,8 +864,13 @@ be scored.
   the first event, includes the nine months not yet delivered; that replay
   is an upper reference for the causal replay. The latencies quoted are
   those of the causal replay, which a mission could run.
-- **Five coalescences are detected on their own, not six.** Event 2 is
-  alarmed only by windows that belong to the alarm cluster of event 1.
+- **Five coalescences are detected on their own, not six.** In the
+  causal replay of the selected model event 2 is alarmed only by windows
+  that belong to the alarm cluster of event 1.
+- **The smoothed configuration rests on one seed.** Its early alerts are
+  significant against the false-alarm rate it delivers, but the spread of
+  that rate under re-initialisation is measured only for the selected
+  configuration.
 
 ## Reproducing
 
@@ -899,16 +895,33 @@ julia scripts/preprocess_ldc.jl configs/experiments/q8_b6.toml \
 julia scripts/train.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
 julia scripts/infer.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
 
-# Replay a producer mission of the blind year: causal as configured, full-record
-# PSD with psd_mode = "sidecar" in [telemetry]
+# Export the blind year as a telemetry payload, run a DeepSpaceTelemetry mission on
+# the scenario fragment it writes, and replay the mission: causal as configured,
+# full-record PSD with psd_mode = "sidecar" in [telemetry]
+julia scripts/export_telemetry_payload.jl configs/experiments/q8_b6.toml \
+    --h5-file $LDC/LDC2_sangria_blind_v2.h5 \
+    --catalog data/inputs/sangria_blind_points_events.csv --output-prefix sangria_blind
 julia scripts/infer_telemetry.jl configs/experiments/q8_b6.toml --run-dir <DeepSpaceTelemetry run> \
     --model models/run_q8_b6_pi/gw_model.jld2 \
     --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_pi
+
+# The smoothed-whitening configuration: the same steps with its own feature prefix
+julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001.toml \
+    --h5-file $LDC/LDC2_sangria_training_v2.h5 --label-file data/inputs/sangria_labels.csv
+julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001.toml \
+    --h5-file $LDC/LDC2_sangria_blind_v2.h5 \
+    --label-file data/inputs/sangria_blind_points_labels.csv \
+    --output-prefix sangria_b6s001_blind
+julia scripts/train.jl configs/experiments/q8_b6_s001.toml --run-id q8_b6_s001_pi
+julia scripts/infer.jl configs/experiments/q8_b6_s001.toml --run-id q8_b6_s001_pi
+julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001.toml --run-dir <DeepSpaceTelemetry run> \
+    --model models/run_q8_b6_s001_pi/gw_model.jld2 \
+    --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_s001_pi
 ```
 
-Training runs to early stopping in 20 to 50 epochs at roughly a minute
-and a half each on 16 threads; inference over the blind year takes a
-minute. The other configurations are in `configs/experiments/` and
+Training runs to early stopping in 16 to 50 epochs; an epoch of the
+eight-qubit model takes four to five minutes on 16 threads, and
+inference over the blind year about a minute. The other configurations are in `configs/experiments/` and
 `configs/sangria.toml`; every run on this page was trained with the
 committed `phase_span = 1.0`. The batch gradient is chunked at a fixed
 size and reduced in chunk order, so the thread count does not enter the
