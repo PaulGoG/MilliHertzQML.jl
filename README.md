@@ -8,7 +8,7 @@
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimisation uses `Zygote.jl` gradients and `Flux.jl` optimizers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
+Quantum machine learning for gravitational-wave detection in the milliHertz band. A variational quantum classifier (VQC) with data re-uploading detects massive black hole binary (MBHB) coalescences in simulated LISA-like telemetry. Quantum circuits are simulated with `Yao.jl`; optimisation uses `Zygote.jl` gradients and `Flux.jl` optimisers. The classification approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001 (2025), DOI: 10.1088/1361-6382/ae1787, replacing the original Python/Qiskit implementation with a Julia one.
 
 ## File structure
 
@@ -103,10 +103,10 @@ from `main`.
 | Pipeline architecture | Every stage a typed library function behind a thin dispatcher; TOML single source of truth validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; produce-or-load feature products; memory guard from `[resources]`; stage-timing table |
 | Telemetry simulator | Functional and seeded; Robson–Cornish–Liu (2019, DOI 10.1088/1361-6382/ab1101) noise at physical amplitude, IMRPhenomA (Ajith et al. 2008, DOI 10.1103/PhysRevD.77.104017) injections scaled to a matched-filter SNR, anchored on the coalescence sample, Nyquist-tapered by construction; optionally the A and E channels of the constellation through the CurvatureDistinguishability extension (antenna patterns on the orbits, Doppler phase, transfer roll-off, injections at physical amplitude for a drawn distance); no spins or higher modes |
 | Feature extraction | PSD-whitened, amplitude- and window-length-independent features (two fixed bands, a configurable band partition, or the paper's raw-window set); whitening by the strain model, the LDC TDI model, or a Welch estimate; scaler fitted on the training partition and persisted with the model together with the phase-encoding span (`[0, π]` by default; earlier artifacts load on `[0, 2π]`) |
-| LDC products | Native reader of the compound TDI datasets and catalogs; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against a reference matched-filter SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
+| LDC products | Native reader of the compound TDI datasets and catalogues; analytic TDI noise PSD reproducing the `ldc` package; truth-stream labels; validated against a reference matched-filter SNR anchor and a noise-only null test on Sangria; benchmarked on the blind year (`docs/src/benchmark.md`) |
 | Training script | Chronological block split with a one-window buffer, class-weighted loss, batch gradients and forward passes over the Julia threads (one Zygote tape per chunk of samples, deterministic reduction), early stopping on the validation block, decision threshold fitted on the calibration block (`threshold_block`: the validation block by default, or validation and test pooled where a separate blind record exists, so that the fitted false-alarm rate rests on enough episodes to transfer), test block evaluated once with event-level metrics and the false-alarm rate per 30 days |
 | Inference script | Applies the persisted threshold to any feature table or to one block of the training table; window- and event-level metrics with labels; blind mode without |
-| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static or ground-causal trailing-PSD whitening, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; delivery holes excluded from scoring, outages, retransmission and generation gaps handled, the ground-causal whitening estimate pooled over the delivered runs |
+| Telemetry coupling | Payload export for DeepSpaceTelemetry; run-directory adapter over the producer's API (package extension); coverage, window scheduling, record-context streaming detector with static whitening or causal whitening by a trailing PSD estimated only from data already delivered to the ground station, replay and live modes, alert-latency table with a persistence criterion and its figure; integration test runs a producer mission in a temporary root; delivery holes excluded from scoring, outages, retransmission and generation gaps handled, the causal whitening estimate pooled over the delivered runs |
 | Documentation | Tracks the current state, including the Sangria benchmark page with its figures and the limits of the result; the remaining deficiencies are listed on the physics and architecture pages |
 
 The remaining deficiencies are documented in `docs/src/physics.md` and `docs/src/architecture.md`.
@@ -128,9 +128,11 @@ flowchart LR
   S --> A["Alert latencies"]
 ```
 
-The batch path trains and evaluates on a record held whole; the streaming
+The batch path trains and evaluates on a complete record; the streaming
 path replays the same model against a telemetry mission, scoring each
-window as its conditioning stretch reaches the ground. The threshold is
+window once its conditioning stretch (the interval of the record around
+the window over which it is high-pass filtered and whitened) has reached
+the ground. The threshold is
 fitted once, in the batch path, and carried unchanged into both.
 
 Every script takes the configuration file as its first argument (default `configs/default.toml`) and may be invoked from any working directory; relative paths resolve against the repository root. The TOML file is the single source of every parameter — physical and numerical settings, output roots under `[paths]`, memory thresholds under `[resources]`, RNG seeds — validated on load with the offending key named; the command line adds only a run identifier, a test-mode switch, a seed override, and the location of external inputs. Each run is assigned a run identifier under which models (JLD2), plots, logs, the per-epoch training history, and a configuration snapshot are stored.
@@ -163,9 +165,9 @@ Training converges in a few dozen epochs and stops on the validation
 block; `scripts/animate.jl` renders the history and the streaming replay
 as GIFs beside the static figures.
 
-![Training and validation loss and the validation accuracy, epoch by epoch, with the checkpoint the run ships](docs/src/assets/training_history.gif)
+![Training and validation loss and the validation accuracy, epoch by epoch, with the selected checkpoint of the run](docs/src/assets/training_history.gif)
 
-`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialisation-variance studies; the override lands in the run's configuration snapshot, so the seed a run used is read off its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
+`--test-mode` restricts training to the first `test_mode_samples` windows and `test_mode_epochs` epochs (from `[training]`) for rapid validation. `--seed` overrides `[training] seed` for one run, for initialisation-variance studies; the override is recorded in the run's configuration snapshot, so that the seed of a run can be read from its own artifacts. Training and inference use every Julia thread of the session (`julia -t auto`, or `JULIA_NUM_THREADS`) for the batch gradients and the forward passes; `threaded = false` under `[training]` selects the serial path. Each stage is also a library function (`generate_telemetry`, `label_truth_stream`, `preprocess_record`, `train_classifier`, `evaluate_classifier`) taking the parsed configuration and returning its artifacts, for use from tests or other packages.
 
 ### Sangria products
 
@@ -195,7 +197,7 @@ The validation anchors of the LDC reader and noise model run with the test suite
 
 ### Telemetry coupling
 
-The coupling to the telemetry simulator DeepSpaceTelemetry.jl is file-based in both directions. Upstream, a product of this pipeline is exported as the producer's external payload (one `Amplitude` column at 0.2 Hz) with a scenario fragment carrying the geometry (50 s segments, ten per batch, so one batch equals one window step), the mission epoch, and the event catalog as markers. Downstream, a producer run directory is replayed (or followed live) through the producer's own API: the consumer tracks the coverage of delivered rows, scores every window as soon as it is complete with the same conditioning as the batch pipeline, and reports the ground-availability latency of the first alarm of every event:
+The coupling to the telemetry simulator DeepSpaceTelemetry.jl is file-based in both directions. Upstream, a product of this pipeline is exported as the producer's external payload (one `Amplitude` column at 0.2 Hz) with a scenario fragment carrying the geometry (50 s segments, ten per batch, so one batch equals one window step), the mission epoch, and the event catalogue as markers. Downstream, a producer run directory is replayed (or followed live) through the producer's own API: the consumer tracks the coverage of delivered rows, scores every window as soon as it is complete with the same conditioning as the batch pipeline, and reports the ground-availability latency of the first alarm of every event:
 
 ```bash
 julia scripts/export_telemetry_payload.jl configs/default.toml \
@@ -234,102 +236,107 @@ events at 1.57 false-alarm episodes per 30 mission days**, from a decision
 threshold fitted on the pooled held-out block of the *training* year —
 validation and test together, 110 days — and applied without adjustment;
 the fit predicted 1.38. The configuration and seed were chosen on the
-validation block of the training year by a rule written down before the
+validation block of the training year by a selection rule fixed before the
 blind year was scored, and the [benchmark page](docs/src/benchmark.md)
-reports every run of the grid beside it. Two things qualify the number.
-The spread under re-initialisation alone runs from 1.57 to 8.74 per 30
-days across four seeds of the same configuration, and every other
-configuration's single seed lies inside that spread on the selection
-statistic, so the ranking between configurations is not established. And
-the blind year is whitened by its own year-median PSD, which is
-legitimate for a finished record and an oracle for a streamed one.
+reports every run of the grid beside it.
+The spread under re-initialisation alone ranges from 1.57 to 8.74 per 30
+days across four seeds of the same configuration, and the single seed of
+every other configuration lies inside that spread on the selection
+statistic, so the ranking between configurations is not established. The
+blind year is whitened by the full-record PSD, the median Welch estimate
+of the entire blind year, which is available only after the whole record
+has been received; this is admissible for a completed record and
+non-causal for a streamed one.
 
 ![Classifier output over the Sangria blind year](docs/src/assets/benchmark_mission_trace.png)
 
-Every run encodes its features on the half period ``[0, π]`` of the ``R_z`` gate, so that a feature saturated above the training range is encoded as a state distinct from the noise floor. The shipped model clears the threshold in the merger bin of four of the six blind coalescences; the two most saturated still rely on the inspiral excess of the hours before.
+Every run encodes its features on the half period ``[0, π]`` of the ``R_z`` gate, so that a feature saturated above the training range is encoded as a state distinct from the noise floor. The selected model exceeds the threshold in the merger bin of four of the six blind coalescences; the detection of the two most saturated rests on the inspiral excess of the preceding hours.
 
 ### Telemetry replay
 
 Replayed through a simulated year-long telemetry mission with daily
-ground-station passes and whitened causally — the PSD estimated from the
-delivered record behind each window, redone daily — the same model raises
-a sustained alert (two consecutive alarmed windows, a persistence fixed on
-the training year's calibration block) for five of the six coalescences,
-event 2 being only ever alarmed in the cluster of alarms around event 1's
-merger, at 1.90 false-alarm episodes per 30 days, between 26 hours before
-and 42 hours after the merger in data time; the two alerts that precede
-their merger lie within the conditioning stretch that contains it and
-reach the ground after it. Read on isolated alarms instead, the same
-replay alarms three coalescences 1.1 to 1.7 days early at 5.94 per 30
-days, which is what chance gives at that rate. Whitened by the oracle year-median PSD
-of the whole blind year, the replay reaches 1.32 per 30 days with two
-alerts two to three days early on two-window inspiral runs the causal
-whitening does not produce; that is the bound, not the result. The
-mission lost no data, and the coupling excludes delivery holes from
-scoring rather than handling them.
+ground-station passes and under causal whitening — the PSD estimated from
+the delivered record behind each window and re-estimated daily — the same
+model raises a sustained alert (two consecutive alarmed windows, a
+persistence fixed on the calibration block of the training year) for five
+of the six coalescences at 1.90 false-alarm episodes per 30 days, between
+26 hours before and 42 hours after the merger in data time; event 2 is
+alarmed only within the cluster of alarms around the merger of event 1.
+The two alerts that precede their merger lie within the conditioning
+stretch that contains it and reach the ground after it. Evaluated on
+isolated alarms instead, the same replay alarms three coalescences 1.1 to
+1.7 days before their merger at 5.94 per 30 days, which is consistent with
+chance coincidence at that false-alarm rate. Whitened by the full-record
+PSD, the replay reaches 1.32 per 30 days, with two alerts two to three
+days before the merger on two-window inspiral runs that the causal
+whitening does not produce; this replay is non-causal and is an upper
+reference for the causal replay. The mission lost no data, and the
+coupling excludes delivery holes from scoring rather than handling them.
 
-![Classifier output and alarms over the year-long replay under ground-causal whitening, with the alert time of every coalescence against the delivery latency of the link](docs/src/assets/benchmark_telemetry_alerts_causal.png)
+![Classifier output and alarms over the year-long replay under causal whitening, with the alert time of every coalescence against the delivery latency of the link](docs/src/assets/benchmark_telemetry_alerts_causal.png)
 
-The replay animates: four panels sweep the year in the order the ground
-received the windows, the dotted rule marking how far the delivery lags
-the measurement.
+The replay is also rendered as an animation: four panels traverse the year
+in the order in which the ground station received the windows, and the
+dotted line marks the delay of the delivery relative to the measurement.
 
-![A year of telemetry replay under ground-causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
+![A year of telemetry replay under causal whitening: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and ground latency](docs/src/assets/mission_replay.gif)
 
 ### The spread under re-initialisation
 
-Trained at three further seeds inside the same grid, each refitting its
-own threshold: all four realisations recover 5 of 5 events, two of the
-four stay under the requested three per 30 days, and the delivered rate
-spans 1.57 to 8.74 while the ROC area moves from 0.807 to 0.827 in the
-opposite direction. The recall is stable; the false-alarm rate carries a
-factor-of-several uncertainty from initialisation alone, and the seed
-whose threshold fitted lowest is the one that does not transfer.
+The selected configuration was trained at three further seeds inside the
+same grid, each run refitting its own threshold. All four realisations
+recover 5 of 5 events, two of the four remain below the requested three
+per 30 days, and the delivered rate spans 1.57 to 8.74 while the ROC area
+changes from 0.807 to 0.827 in the opposite direction. The recall is
+stable; the false-alarm rate carries a factor-of-several uncertainty from
+initialisation alone, and the seed with the lowest fitted threshold is the
+one whose operating point does not transfer.
 
 ![Threshold each run fitted and the false-alarm rate it then delivered, over four initialisation seeds](docs/src/assets/benchmark_seed_spread.png)
 
-### What a lossy link costs
+### Effect of a lossy link
 
 Seventeen 30-day missions over the same payload window, each differing
 from a lossless reference in one property of the channel or of the
-spacecraft, replayed by the shipped model. Scattered permanent loss is
-the property that hurts: a window is scored only once its whole
-conditioning stretch of 410 consecutive batches has reached the ground,
-so the scorable fraction falls as `(1 − p)^410` and collapses beyond
-about 0.2 %, and above that whether a coalescence survives depends on
-where the holes fall. The same losses clustered in bursts spare most of
-the record, three retransmission attempts on a 3 % channel leave no hole
-at all, a link outage of up to three days costs latency and not a single
-window, and a gap in the data itself costs the stretch around it and the
-event inside it.
+spacecraft, were replayed with the selected model. Scattered permanent
+loss is the property that reduces the scored record: a window is scored
+only once its whole conditioning stretch of 410 consecutive batches has
+reached the ground, so the scorable fraction falls as `(1 − p)^410` and
+decreases rapidly beyond about 0.2 %; above that rate, whether a
+coalescence is still detected depends on where the holes fall. The same
+losses clustered in bursts preserve most of the record, three
+retransmission attempts on a 3 % channel leave no hole, a link outage of
+up to three days increases the latency without removing a single window,
+and a gap in the data itself removes the stretch around it and the event
+inside it.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, and false-alarm episodes per 30 days](docs/src/assets/benchmark_gap_study.png)
 
 ### Against other methods
 
-Against the published method, reproduced on the same years and encoding
-with its own raw-periodogram features and four-qubit register
-(`configs/sangria_paper.toml`), the band features cut the false-alarm
-rate from 31.7 to 1.57 episodes per 30 days and take the loudest merger
-from a margin of 0.002 above the threshold to well clear of it. The paper
-reports no false-alarm rate. Against a classical multilayer perceptron
-trained on the same challenge data, which detects all six coalescences
-with no false alarm at all on 29,569 parameters, the 64-parameter circuit
-does not win, and the benchmark page says so, together with the reasons
-the comparison is indicative rather than decided: the baseline is quoted
-from its shipped predictions, not reproduced, and both classifiers see a
-record renormalised towards the training one, the baseline through a
-refitted scaler and this pipeline through the blind year's own whitening
-PSD.
+Compared with the published method, reproduced on the same years and
+encoding with its own raw-periodogram features and four-qubit register
+(`configs/sangria_paper.toml`), the band features reduce the false-alarm
+rate from 31.7 to 1.57 episodes per 30 days and raise the score of the
+highest-SNR merger from a margin of 0.002 above the threshold to well
+above it. The paper reports no false-alarm rate. A classical multilayer
+perceptron trained on the same challenge data detects all six
+coalescences with no false alarm, with 29,569 parameters; the 64-parameter
+circuit does not reach that result. The benchmark page reports this
+together with the reasons the comparison is indicative rather than
+decided: the baseline is quoted from the predictions released with it,
+not reproduced, and both classifiers are evaluated on a record
+renormalised towards the training one, the baseline through a refitted
+scaler and this pipeline through the full-record PSD of the blind year.
 
 ## Limitations
 
 - **One blind realisation of five events.** The recall is 5 of 5 and the
   false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Read the recall as a result, not a rate.
-- **Four initialisations, not a distribution.** The shipped configuration
-  was trained at four seeds: all recover 5 of 5 events, two of four land
-  under the requested rate, and the delivered false-alarm rate spans 1.57
+- **Four initialisations, not a distribution.** The selected configuration
+  was trained at four seeds: all recover 5 of 5 events, two of four remain
+  below the requested rate, and the delivered false-alarm rate spans 1.57
   to 8.74 per 30 days. Read the recall as stable and the false-alarm rate
   as carrying a factor-of-several uncertainty from initialisation alone.
   The rest of the grid remains single-run at `seed = 9999`, inside that
@@ -339,10 +346,10 @@ PSD.
 - **Scattered permanent loss must stay below about 0.2 %.** The coupling
   discards windows that cross a delivery hole instead of scoring them, and
   because a window needs its whole conditioning stretch of 410 batches,
-  the scorable record collapses above that rate; outages, retransmitted
-  loss, bursty loss and gaps in the data itself cost far less, and the
-  ground-causal whitening estimate pools the delivered runs around the
-  holes. The classifier has never been trained on gapped data, and a
+  the scorable record decreases rapidly above that rate; outages,
+  retransmitted loss, bursty loss and gaps in the data itself reduce it
+  far less, and the causal whitening estimate pools the delivered runs
+  around the holes. The classifier has never been trained on gapped data, and a
   smoothed whitening PSD, which would shorten the stretch, is planned.
 - **The threshold comes from the same mission's earlier year.** A real
   chain would recalibrate as the mission proceeds; the transfer measured
@@ -351,9 +358,10 @@ PSD.
   feature is a state distinct from the floor, but every clamped feature is
   the same state whatever its magnitude; the two most saturated
   coalescences still score below the threshold in their merger bin.
-- **The oracle replay is a bound.** The replay latencies are quoted under
-  ground-causal whitening; the oracle replay beside them, whitened by the
-  whole blind year, is a bound.
+- **The replay whitened by the full-record PSD is non-causal.** The replay
+  latencies are quoted under causal whitening; the replay beside them,
+  whitened by the full-record PSD, is an upper reference for the causal
+  replay.
 
 The physical and methodological deficiencies behind these — waveform and
 noise-model scope, the single evaluation record — are listed in

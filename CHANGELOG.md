@@ -16,8 +16,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The benchmark page's lossy-link section is rewritten from a
   seventeen-mission study on DeepSpaceTelemetry.jl 2.0.0 (scattered,
   bursty and retransmitted loss, link outages, generation gaps, recorder
-  overflow, partial conditioning), replayed under the ground-causal
-  whitening and under the oracle PSD.
+  overflow, partial conditioning), replayed under causal whitening (the
+  PSD estimated only from data already delivered to the ground station)
+  and under the full-record PSD (the median Welch estimate of the entire
+  blind year, which is available only after the whole record has been
+  received).
 - `smooth_psd` and `[preprocessing] psd_smoothing_dex` (0, off, by
   default): the Welch estimate that whitens a record, and the trailing
   estimate of a replay (`TrailingWelch` `smoothing_dex`), smoothed by a
@@ -41,8 +44,8 @@ versioning follows [Semantic Versioning](https://semver.org/).
   beyond the trim. Behind a few permanent holes the contiguous record held
   one or two segments and the estimate was close to a raw periodogram: on
   30-day missions the false-alarm rate rose several-fold and at 0.3 % loss
-  both coalescences went undetected, while the oracle PSD kept the
-  reference rate. `TrailingWelch` takes `edge_rows`. The causal year
+  both coalescences went undetected, while the replay under the
+  full-record PSD retained the reference rate. `TrailingWelch` takes `edge_rows`. The causal year
   replay of the selected model changes with it: 23 false-alarm episodes
   (1.90 per 30 days) instead of 17 (1.40), a difference within the
   Poisson uncertainty of either count; the same five coalescences are
@@ -60,15 +63,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   gap: the delivered payload was indexed by batch index, which no longer
   tracks the payload rows after such a gap. It is keyed by the first row
   a batch holds, and a stretch is assembled from the blocks that cover it.
-- The physics page states the ecliptic-frame sky and polarization
+- The physics page states the ecliptic-frame sky and polarisation
   conventions of the constellation response with the equations of the
   conventions document they follow.
 
 ## [1.1.0] — 2026-09-26
 
 First public version of the repository. The models are retrained on the half-period encoding and the benchmark
-page is rewritten from those runs. The shipped run is `q8_b6_pi`: the
-configuration of the 1.0.0 tag, selected again on the validation block
+page is rewritten from those runs. The selected run is `q8_b6_pi`: the
+configuration of the 1.0.0 tag, chosen again on the validation block
 of the training year by a pre-registered rule, delivering all five blind
 label spans at 1.57 false-alarm episodes per 30 days (fit 1.38, ROC area
 0.807) against 2.47 (fit 2.20, 0.793) before. Every model of the grid, the
@@ -78,33 +81,34 @@ spread and is reported as unresolved.
 
 ### Changed
 - Features are encoded on `[0, π]` instead of `[0, 2π]`. The encoding
-  gate `R_z` is 2π-periodic with `R_z(2π) = −I`, so the full period sent
+  gate `R_z` is 2π-periodic with `R_z(2π) = −I`, so the full period mapped
   both ends of the scaler interval to the same state and a feature
   saturated above the training range scored as one at the noise floor: on
   the Sangria blind year five of the six coalescences fell below the
   threshold at the merger itself. The span is a configuration key
   (`[training] phase_span`, in units of π) persisted with the scaler;
   artifacts written before it existed load with `2π` and a warning. The
-  retrained grid ships with this release; the full-period runs of the
-  1.0.0 tag remain only in the page's history.
+  retrained grid is part of this release; the full-period runs of the
+  1.0.0 tag remain only in the history of the page.
 - The decision threshold is fitted on the validation block by default
   (`threshold_block = "validation"`); pooling validation and test is an
   opt-in that the Sangria configurations declare. The pooled block never
   leaked into the model, but it made the test block's operating-point
-  metrics in-sample, which the documentation had described as costing
-  nothing.
+  metrics in-sample, which the documentation had described as having no
+  effect.
 - The alert protocol of the telemetry replay requires persistence: an
   alert is raised by the arrival that completes
   `[telemetry] alert_persistence` consecutive alarmed windows (three by
   default; two in the Sangria configuration, fitted on the retrained
   model's calibration block), and shorter runs are neither alerts nor
-  charged as false-alarm episodes. The lead times of the 1.0.0 tag rested on isolated one-
+  counted as false-alarm episodes. The lead times of the 1.0.0 tag rested on isolated one-
   or two-window alarms up to four days before the merger; under the
   persistence criterion no alert precedes its merger by more than twenty
   minutes, and the false-alarm rate of the year replay falls from 3.71 to
-  1.16 episodes per 30 days under ground-causal whitening (2.56 to 0.74
-  under the oracle PSD) for the full-period model, and 6.35 to 1.40
-  (oracle 1.65 to 1.32) for the retrained one at its persistence of two.
+  1.16 episodes per 30 days under causal whitening (2.56 to 0.74 under the
+  full-record PSD) for the full-period model, and 6.35 to 1.40
+  (full-record PSD 1.65 to 1.32) for the retrained one at its persistence
+  of two.
   The value is fixed on the calibration block of the training year: the
   smallest persistence under one false alert per 30 days that keeps every
   calibration event alerted with a window of margin. `alert_latency_table`
@@ -146,18 +150,18 @@ spread and is reported as unresolved.
   Michelson-channel level (`R(f) S_n(f)`), the MBHB injections at physical
   amplitude for a luminosity distance drawn from
   `[mbhb_distance_min_gpc, mbhb_distance_max_gpc]` with isotropic sky
-  position, inclination and polarization, projected frequency by frequency
+  position, inclination and polarisation, projected frequency by frequency
   at the arrival time of each frequency on the antenna patterns, Doppler
   phase and transfer roll-off of the orbits; the background sources are
   projected in the time domain and scaled to a network SNR. Labels and the
-  catalog SNR follow `label_channel` (A, E or network); the catalog records
+  catalogue SNR follow `label_channel` (A, E or network); the catalogue records
   the extrinsic parameters and both channel SNRs; the HDF5 record carries
   `X`, `Y`, `Z` recombining to A, E and a vanishing T. The pre-processor
   whitens such records with `psd = "channel"`. `phenoma_spectrum`,
   `phenoma_series`, `phenoma_physical_amplitude` and
   `phenoma_arrival_delay` expose the pieces of the waveform; the
   sky-averaged generator is unchanged bit for bit.
-- Ground-causal whitening for the replay (`[telemetry] psd_mode =
+- Causal whitening for the replay (`[telemetry] psd_mode =
   "trailing"`, `TrailingWelch`): each window is whitened by the median
   Welch estimate of the delivered record behind its conditioning stretch,
   refreshed as the record advances, so that no data still in flight
@@ -166,18 +170,18 @@ spread and is reported as unresolved.
   under it (`psd_mode = "trailing"` in `configs/sangria.toml`), and the
   benchmark page quotes the causal replay — five coalescences alerted on
   their own at 1.40 false-alarm episodes per 30 days with the retrained
-  model — with the oracle replay of the year-median sidecar PSD, 1.32,
-  beside it as a bound: at the first event that PSD contains nine months
-  of undelivered data.
+  model — with the replay under the full-record sidecar PSD, 1.32, beside
+  it as an upper reference for the causal replay: at the first event that
+  PSD contains nine months of undelivered data.
 - `threshold.toml` files written before the fitting block became
   configurable are read through `migrate_threshold_info!`, which renames
   their `validation_*` rates to `fit_*`.
 
 ### Fixed
-- The benchmark page selects the shipped model on the training year by
-  a pre-registered rule and reports every run; counts five coalescences
-  detected on their own,
-  event 2 being only ever alarmed by event 1's windows; describes the
+- The benchmark page selects the model on the training year by a
+  pre-registered rule and reports every run; counts five coalescences
+  detected on their own, event 2 being alarmed only by windows of the
+  alarm cluster of event 1; describes the
   classical baseline's refitted scaler and this pipeline's blind-year
   whitening symmetrically; attributes the inspiral-time alerts to the
   encoding; and defines every variable of its reproduction block.
