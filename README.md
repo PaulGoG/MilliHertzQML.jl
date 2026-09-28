@@ -169,9 +169,10 @@ of the simulator and the features.
 
 - **One blind realisation of five events.** Five events do not measure a
   detection efficiency.
-- **Few initialisations.** The false-alarm rate of the selected
-  configuration spans 1.57 to 8.74 per 30 days over four seeds; the
-  smoothed configuration was trained at one.
+- **Four initialisations per configuration.** They settle the recall of
+  the band partitions, but not a ranking by false-alarm rate: the rate of
+  the selected configuration spans 1.57 to 8.74 per 30 days over its
+  seeds. The smoothed configuration was trained at one seed.
 - **Single channel.** Only A is used; E and T would allow a null-channel
   veto.
 - **Scattered permanent loss.** A window whose conditioning stretch

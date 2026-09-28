@@ -17,9 +17,11 @@ thresholds fitted on the training year and applied unchanged:
 
 The selected configuration, eight qubits, four re-uploading layers and six
 sub-mHz band powers, was chosen on the training year by a rule fixed
-before the blind year was scored; the spread of its false-alarm rate under
-re-initialisation alone, 1.57 to 8.74 per 30 days over four seeds, is
-larger than the differences between configurations. The completed record
+before the blind year was scored. Trained at four seeds, every
+configuration with four or six sub-mHz bands recovers all five events in
+every run, and the false-alarm rates of the configurations do not differ
+beyond the scatter between seeds, which for the selected one spans 1.57
+to 8.74 per 30 days. The completed record
 is whitened by the full-record PSD of the blind year, available only after
 the whole record has been received; the streamed year is whitened
 causally, from data already delivered to the ground station. The

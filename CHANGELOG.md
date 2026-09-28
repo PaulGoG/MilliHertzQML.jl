@@ -34,6 +34,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
   now includes the stages run by the scripts of the smoke test and the
   three package extensions.
 
+- The Sangria grid trained at four seeds (18 further runs), reported on
+  the benchmark page with `figure_grid_seeds`: the four- and six-band
+  configurations recover all five blind events in every run, the two-band
+  ones in two of eight; apart from 2000-sample windows the false-alarm
+  rates do not differ beyond the seed scatter; applied seed by seed, the
+  selection rule chooses three different configurations.
 - `figure_grid_seeds`: the configurations of a model grid trained at
   several seeds, one row each, with the validation false-alarm episodes
   (the selection statistic) and the blind false-alarm rate of every run,

@@ -43,6 +43,16 @@ lowest fitted threshold is the one whose operating point does not
 transfer.* See [the spread under
 re-initialisation](benchmark.md#The-spread-under-re-initialisation).
 
+![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
+
+*Every configuration of the grid at four seeds. The configurations with
+four or six sub-mHz bands recover all five events in every run, the
+two-band ones in two of eight; apart from the 2000-sample windows, near 26
+false alarms per 30 days at every seed, the rates do not differ beyond
+the scatter between seeds, and the validation episodes, the selection
+statistic, cannot rank the configurations.* See [the grid over four
+seeds](benchmark.md#The-grid-over-four-seeds).
+
 ## The streamed year
 
 ![Classifier output and alarms over the year-long replay under causal whitening](assets/benchmark_telemetry_alerts_causal.png)

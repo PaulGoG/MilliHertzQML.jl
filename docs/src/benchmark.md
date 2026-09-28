@@ -22,9 +22,11 @@ the blind year was scored. On the completed blind year it detects all five
 labelled events at 1.57 false-alarm episodes per 30 mission days (19
 episodes over 364 days), from a decision threshold fitted on held-out data
 of the training year and applied without adjustment; the fit predicted
-1.38, so the operating point transfers. The spread under re-initialisation
-alone, 1.57 to 8.74 over four seeds, covers every other configuration of
-the grid, so the ranking *between* configurations is not resolved.
+1.38, so the operating point transfers. Trained at four seeds, the configurations with
+four or six sub-mHz bands recover all five events in every run, the
+two-band ones in two of eight; apart from 2000-sample windows, their
+false-alarm rates do not differ beyond the scatter between seeds, which
+for the selected configuration spans 1.57 to 8.74 per 30 days.
 
 The completed record is whitened by its full-record PSD, the median Welch
 estimate of the entire blind year: a label-free statistic, admissible for a
@@ -268,11 +270,10 @@ Six sub-mHz bands have two effects: they reduce the annual excursion of
 the noise tail and they raise the event peaks above it, so that the
 threshold can lie in the stable region. The mechanism is that a contrast
 between two band powers that are modulated together is invariant under
-the modulation, whereas a single wide band provides no contrast. One
-record and single-seed runs cannot establish whether the ordering of the
-configurations generalises beyond this data set: the seed spread of the
-selected configuration on the selection statistic, four to ten episodes,
-covers the single seed of every other configuration. What does follow is
+the modulation, whereas a single wide band provides no contrast. The
+grid trained at four seeds, below, confirms the recall of the band
+partitions and shows that the rates of the configurations do not differ
+beyond the scatter between seeds. What does follow is
 the need for the check itself: an operating point measured on one
 observation record does not carry over to the next unless it lies where
 the noise tails of the two records agree, and a large ROC area does not
@@ -315,6 +316,51 @@ seven and ten); that the ranking held on the blind year constitutes a
 single observation. Four realisations do not measure a distribution; they
 constrain the scatter sufficiently to show that a threshold fitted in the
 shoulder does not transfer, irrespective of the seed that produced it.
+
+### The grid over four seeds
+
+Every other configuration of the grid was then trained at the same three
+further seeds, each run refitting its own threshold on the pooled
+held-out block, 28 runs in all:
+
+| Configuration | Validation episodes, median (range) | Blind false alarms / 30 d, median (range) | Runs with 5 of 5 events |
+|---|---|---|---|
+| **`q8_b6`** (selected) | 8.5 (4 to 10) | 2.68 (1.57 to 8.74) | 4 of 4 |
+| `q8_b6_l6` | 9.5 (9 to 10) | 4.62 (4.04 to 5.53) | 4 of 4 |
+| `q6_b4` | 6.5 (1 to 8) | 3.38 (0.49 to 10.64) | 4 of 4 |
+| `q6_b4_noweight` | 7.0 (5 to 7) | 5.48 (2.23 to 9.81) | 4 of 4 |
+| `q6_b4_w2000` | 9.5 (8 to 10) | 25.98 (24.66 to 26.39) | 4 of 4 |
+| `q4_l6` | 8.0 (6 to 10) | 1.69 (1.24 to 4.70) | 1 of 4 |
+| `sangria` | 9.0 (8 to 10) | 1.73 (1.24 to 2.64) | 1 of 4 |
+
+![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
+
+Three results follow. **The partition of the spectrum decides the
+recall:** the configurations with four or six sub-mHz bands recover all
+five events in all 20 of their runs, the two-band configurations in 2 of
+their 8 runs, 33 of 40 events. **The false-alarm rate differs between
+configurations only through the 2000-sample windows:** over all seven the
+Kruskal–Wallis statistic of the blind log rates is 15.0 (permutation
+``p = 0.006``), but `q6_b4_w2000` delivers about 26 episodes per 30 days at
+every seed, and without it the rates do not differ beyond the scatter
+between seeds (``p = 0.23``; among the four band configurations that
+always recover five events, ``p = 0.76``). **The selection statistic
+cannot rank the configurations:** applied seed by seed, the rule selects
+`q8_b6` at seeds 9999 and 3041, `q6_b4` at seed 2027 (0.49 per 30 days on
+the blind year) and `q6_b4_w2000` at seed 1009 (25.8), where four
+configurations tie on validation episodes and the tie-break by validation
+ROC area chooses the worst operating point, as the inversion of ROC area
+and operating point above predicts. The validation block counts 1 to 10
+episodes per run, and those counts differ between configurations only
+marginally (``p = 0.04``).
+
+The selected run therefore owes its 1.57 per 30 days to its configuration
+and its seed together. The configuration recovers every event at every
+seed with a median of 2.68, the lowest median among the configurations
+that always recover five events, but not distinguishable from `q6_b4` on
+four seeds each. The tables are built by `alert_latency`-independent
+metrics of each run: the validation block of its training and the blind
+year of its inference.
 
 ## Against the published method
 
@@ -839,12 +885,10 @@ be scored.
 - **One blind realisation of five events.** The event recall is 5 of 5 and
   the false-alarm rate is measured over 364 days, but five events do not
   measure a detection efficiency. Treat the recall as a result, not a rate.
-- **One initialisation per configuration, four for the selected one.** The
-  grid runs at `seed = 9999`; the selected configuration was repeated at
-  three further seeds, whose blind rates span 1.57 to 8.74 per 30 days.
-  The single seed of every other configuration lies inside the seed spread
-  of the selected one on the selection statistic, so the configuration
-  ranking is not established.
+- **Four initialisations per configuration.** They establish the recall
+  of the band partitions and the rate of the 2000-sample windows; they do
+  not rank the other configurations by false-alarm rate, and the
+  selection statistic of the validation block, 1 to 10 episodes, cannot.
 - **Single channel.** Only A is used; E and T carry independent
   information and would also permit a null-channel veto.
 - **No gaps in the principal result.** The Sangria products are gapless, and the
