@@ -6,134 +6,108 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-28
+
+The streamed detector becomes usable on a real link. A Welch whitening
+estimate smoothed in log-frequency shortens the stretch of data each
+window needs from 410 batches to 50; the selected configuration retrained
+on it (`q8_b6_s001`) alerts five of the six coalescences of the Sangria
+blind year at the ground station 12 to 71 hours before their merger, at
+0.16 false-alarm episodes per 30 days, and keeps scoring through
+scattered batch loss. The causal whitening of a replay pools every
+delivered run, the lossy-link study is redone on DeepSpaceTelemetry.jl
+2.0.0 over seventeen missions, the grid is trained at four seeds, and the
+README and the manual are rewritten, with the figures gathered on a new
+Results page.
+
 ### Added
-- `figure_gap_study`: the levels of a delivery-gap study on the vertical
-  axis, three panels beside them (windows scored of the reference, events
-  detected, false alarms per 30 days), families separated.
-- `welch_psd` accepts a vector of records and pools the segments of every
-  record long enough to hold one, so that an estimate of a record with
-  holes never spans a hole.
-- The benchmark page's lossy-link section is rewritten from a
-  seventeen-mission study on DeepSpaceTelemetry.jl 2.0.0 (scattered,
-  bursty and retransmitted loss, link outages, generation gaps, recorder
-  overflow, partial conditioning), replayed under causal whitening (the
-  PSD estimated only from data already delivered to the ground station)
-  and under the full-record PSD (the median Welch estimate of the entire
-  blind year, which is available only after the whole record has been
-  received).
 - `smooth_psd` and `[preprocessing] psd_smoothing_dex` (0, off, by
   default): the Welch estimate that whitens a record, and the trailing
   estimate of a replay (`TrailingWelch` `smoothing_dex`), smoothed by a
   Gaussian in log-frequency. A 0.01-dex smoothing lowers the envelope of
   the whitening kernel at one window length from 21 % to 0.1 % of its
-  peak; applied to the blind year with the selected model and its
-  threshold unchanged it keeps five of five label spans at 4.78 instead
-  of 1.57 false-alarm episodes per 30 days, so a model trained on
-  smoothed features is required to use it.
-- A test of the labelling stage on a synthetic truth stream; coverage
-  now includes the stages run by the scripts of the smoke test and the
-  three package extensions.
-
-- The Sangria grid trained at four seeds (18 further runs), reported on
-  the benchmark page with `figure_grid_seeds`: the four- and six-band
-  configurations recover all five blind events in every run, the two-band
-  ones in two of eight; apart from 2000-sample windows the false-alarm
-  rates do not differ beyond the seed scatter; applied seed by seed, the
-  selection rule chooses three different configurations.
-- `figure_grid_seeds`: the configurations of a model grid trained at
-  several seeds, one row each, with the validation false-alarm episodes
-  (the selection statistic) and the blind false-alarm rate of every run,
-  the median of every configuration, and runs that missed a blind event
-  drawn open.
-- `configs/experiments/q8_b6_s001.toml`: the selected configuration with the
-  Welch whitening estimate smoothed by 0.01 dex, two window lengths of
+  peak.
+- `configs/experiments/q8_b6_s001.toml`: the selected configuration with
+  the Welch estimate smoothed by 0.01 dex, two window lengths of
   conditioning context (from a scan of streamed against batch scores) and
-  a persistence of three (from the calibration rule). The benchmark page
-  and the README report its model: in the batch benchmark 5/5 label spans
-  at 2.97 false-alarm episodes per 30 days; in the causal year replay five
-  of six coalescences alerted on their own 12 to 71 hours before the
-  merger in ground time at 0.16 per 30 days; in the seventeen lossy
-  missions both coalescences alerted in every mission, with 81 % of the
-  record scored at 0.42 % permanent loss.
+  a persistence of three (from the calibration rule). Its model delivers
+  5/5 label spans at 2.97 false-alarm episodes per 30 days on the
+  completed blind year; five of six coalescences alerted on their own,
+  12 to 71 hours before the merger at the ground station, at 0.16 per 30
+  days in the causal year replay; and both coalescences alerted in each of
+  the seventeen lossy missions, with 81 % of the record scored at 0.43 %
+  permanent loss.
+- The lossy-link study of the benchmark page: seventeen 30-day missions on
+  DeepSpaceTelemetry.jl 2.0.0 (scattered, bursty and retransmitted loss,
+  link outages, generation gaps, recorder overflow, partial conditioning),
+  replayed under causal whitening and under the full-record PSD.
+- The Sangria grid trained at four seeds (18 further runs): the four- and
+  six-band configurations recover all five blind events in every run, the
+  two-band ones in two of eight; apart from 2000-sample windows the
+  false-alarm rates do not differ beyond the seed scatter; applied seed by
+  seed, the selection rule chooses three different configurations.
+- Figures: `figure_gap_study` (the levels of a delivery-gap study with the
+  windows scored, the events detected and the false alarms) and
+  `figure_grid_seeds` (a model grid over initialisation seeds).
+- `welch_psd` accepts a vector of records and pools the segments of every
+  record long enough to hold one, so that an estimate never spans a hole.
+- A Results page of the manual with every figure and animation and their
+  captions.
+- A test of the labelling stage on a synthetic truth stream; coverage
+  includes the stages run by the scripts of the smoke test and the three
+  package extensions.
 
 ### Changed
-- The README is condensed to an overview: the results table, the
-  streamed replay of the smoothed-whitening model and the replay
-  animation, setup, entry points, status and limitations. A new Results
-  page of the manual gathers every figure and animation with captions,
-  and the usage details of the README (command-line switches, the replay
-  command and its outputs, a quick start) moved to the manual pages they
-  belong to.
-- The README and the manual were revised as a whole. The README and the
-  home page open with the results of both configurations; the benchmark
-  page opens with a summary table, places the seed spread beside the grid,
-  and gives the reproduction of the smoothed configuration and of the
-  telemetry payload; the telemetry page is divided into the run interface,
-  scheduling, the whitening PSD, the choice of context, the alert table,
-  and gaps; the physics page describes the log-frequency smoothing and the
-  non-stationary foreground, and the architecture page the training
-  throughput as an open item. The Sangria usage of the README follows the
-  selected configuration.
 - The trailing whitening estimate of a replay pools the Welch segments of
   every delivered run inside its span instead of using the last contiguous
   run only, trims `[telemetry] psd_edge_periods` cutoff periods of the
-  record high-pass from both ends of every run before segmenting it (the
-  high-pass rings at the ends of a run as it does at the ends of the batch
-  record), and keeps its previous estimate while no run holds a segment
-  beyond the trim. Behind a few permanent holes the contiguous record held
-  one or two segments and the estimate was close to a raw periodogram: on
-  30-day missions the false-alarm rate rose several-fold and at 0.3 % loss
-  both coalescences went undetected, while the replay under the
-  full-record PSD retained the reference rate. `TrailingWelch` takes `edge_rows`. The causal year
-  replay of the selected model changes with it: 23 false-alarm episodes
-  (1.90 per 30 days) instead of 17 (1.40), a difference within the
-  Poisson uncertainty of either count; the same five coalescences are
-  detected on their own; the alerts of events 1 and 4 move from 1.9 and
-  7.5 hours after their mergers to 25.6 and 16.1 hours before them in
-  data time, within the conditioning stretch that contains the merger.
+  record high-pass from both ends of every run, and keeps its previous
+  estimate while no run holds a segment beyond the trim. Behind a few
+  permanent holes the contiguous record held one or two segments and the
+  estimate was close to a raw periodogram. The causal year replay of the
+  selected model changes with it: 23 false-alarm episodes (1.90 per 30
+  days) instead of 17 (1.40), within the Poisson uncertainty of either
+  count; the same five coalescences are detected on their own; the alerts
+  of events 1 and 4 move from 1.9 and 7.5 hours after their mergers to
+  25.6 and 16.1 hours before them at the ground station.
+- The README is condensed to an overview (results table, the streamed
+  replay of the smoothed model and the replay animation, setup, entry
+  points, status, limitations); its usage details moved to the manual. The
+  manual was revised as a whole: summary tables on the home and benchmark
+  pages, the telemetry page divided into subsections, the log-frequency
+  smoothing and the non-stationary foreground on the physics page, model
+  selection and training throughput as open items on the architecture
+  page.
 - `configs/experiments/q8_b6.toml` carries the `[telemetry]` section of
   the replay of its model; `configs/sangria.toml` keeps one for its own
-  model and for the payload export, with the whitening sidecar of its own
-  features.
+  model and for the payload export.
+- Figure labels: "Labelled span", "Initialisation seed", "Selected run",
+  and "Window availability" for the band of `complete_at − content_end`,
+  the wait of a window for its conditioning stretch plus the downlink
+  delay, formerly "Delivery".
 
 ### Fixed
 - A replay of a producer that discarded production (a generation gap, a
   recorder overflow) raised a `KeyError` on the first window after the
   gap: the delivered payload was indexed by batch index, which no longer
   tracks the payload rows after such a gap. It is keyed by the first row
-  a batch holds, and a stretch is assembled from the blocks that cover it.
-- The held-out block of the training year spans 109 days, not 110 as the
-  README and the benchmark page stated; the conditioning lag is not
-  irreducible, as the benchmark page called it.
-- The benchmark page and the README placed the early alerts of the causal
-  year replay in data time and stated that they reach the ground after the
-  merger. The alert time is the ground arrival of the batch that completes
-  the alert; events 1 and 4 are alerted 25.6 and 16.1 hours before the
-  merger on the ground, from conditioning stretches that end 39 and 35
-  hours before it. The conclusion that the two alerts are consistent with
-  chance is unchanged.
+  a batch holds.
+- `figure_telemetry_alerts` labelled each alert with the total latency,
+  one hour more than its marker and the tables, and let labels of
+  neighbouring alerts overlap. Labels give the alert time minus the merger
+  time and are placed by their extent (`alert_label_placement`).
+- The alarm-episode panel of the replay animation ticks up to the final
+  episode count (`count_ticks`); its top tick collided with the panel
+  above. The inner panels of the gap-study figure tick every level, and
+  the rate axis of the grid figure is ticked at 1, 2 and 5 per decade.
+- The manual stated the early alerts of the causal year replay in data
+  time and said they reach the ground after the merger; the alert time is
+  the ground arrival of the batch that completes the alert. The held-out
+  block of the training year spans 109 days, not 110, and the conditioning
+  lag is not irreducible.
 - The physics page states the ecliptic-frame sky and polarisation
   conventions of the constellation response with the equations of the
   conventions document they follow.
-- `figure_telemetry_alerts` labels each alert with its data latency
-  t_alarm − t_merger, the quantity of its marker position and of the
-  benchmark tables; the labels carried the total latency, one hour more.
-  The label of the lower of two neighbouring alerts is set beneath its
-  marker, where the two overlapped, and the delivery trace is drawn
-  translucent so that labels on it remain legible.
-- Alert labels of `figure_telemetry_alerts` are placed by their extent
-  (`alert_label_placement`): each takes the first of four positions around
-  its marker that is clear of the other markers and labels, where the
-  previous rule compared marker distances only and let a label run into the
-  next marker. The lower-panel band, labelled "Delivery", is the
-  availability latency of each window (the wait for its conditioning
-  stretch plus the downlink delay, `complete_at − content_end`) and is now
-  labelled "Window availability", as is the corresponding panel of the
-  replay animation.
-- The alarm-episode panel of the replay animation ticks from zero up to
-  the final episode count (`count_ticks`); its top tick lay on the panel
-  edge and collided with the zero of the probability panel above.
-  The inner panels of the gap-study figure tick every level.
 
 ## [1.1.0] — 2026-09-26
 
@@ -256,5 +230,6 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.2.0
 [1.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.1.0

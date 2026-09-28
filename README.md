@@ -47,9 +47,9 @@ before their merger, at two false-alarm episodes in the year, where about
 station received the windows; the dotted line is the ground clock.*
 
 Every figure and animation, with captions, is on the
-[Results](https://PaulGoG.github.io/MilliHertzQML.jl/dev/results/) page of
+[Results](https://PaulGoG.github.io/MilliHertzQML.jl/stable/results/) page of
 the manual; the
-[Sangria Benchmark](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/)
+[Sangria Benchmark](https://PaulGoG.github.io/MilliHertzQML.jl/stable/benchmark/)
 page gives the protocol, every run of the grid, the comparisons with the
 published method and a classical baseline, and the limits of each result.
 
@@ -80,7 +80,7 @@ release tag,
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v1.1.0")
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v1.2.0")
 ```
 
 or develops a clone by path. From a clone:
@@ -160,9 +160,9 @@ window once its conditioning stretch, the part of the record around it
 over which it is filtered and whitened, has reached the ground. The
 threshold is fitted once, in the batch path, and carried unchanged into
 both. The manual describes the
-[configuration and provenance](https://PaulGoG.github.io/MilliHertzQML.jl/dev/architecture/),
-the [telemetry coupling](https://PaulGoG.github.io/MilliHertzQML.jl/dev/telemetry/),
-and the [physics](https://PaulGoG.github.io/MilliHertzQML.jl/dev/physics/)
+[configuration and provenance](https://PaulGoG.github.io/MilliHertzQML.jl/stable/architecture/),
+the [telemetry coupling](https://PaulGoG.github.io/MilliHertzQML.jl/stable/telemetry/),
+and the [physics](https://PaulGoG.github.io/MilliHertzQML.jl/stable/physics/)
 of the simulator and the features.
 
 ## Limitations
@@ -282,7 +282,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {1.1.0},
+  version = {1.2.0},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }
