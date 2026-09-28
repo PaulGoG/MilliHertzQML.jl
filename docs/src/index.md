@@ -71,8 +71,25 @@ Every artifact carries git and hardware provenance, existing files are
 backed up rather than overwritten, and each stage checks its memory
 estimate against `[resources]` before allocating.
 
+**Quick start**, on simulated telemetry:
+
+```bash
+julia scripts/generate_data.jl configs/default.toml --run-id sim01
+julia scripts/preprocess_ldc.jl configs/default.toml \
+    --h5-file data/inputs/simulated_telemetry_complex.h5 \
+    --label-file data/inputs/simulated_telemetry_complex_labels.csv \
+    --output-prefix telemetry_sim
+julia scripts/train.jl configs/default.toml --run-id <RUN_ID>
+julia scripts/infer.jl configs/default.toml --run-id <RUN_ID> --block test
+```
+
+The Sangria runs are reproduced by the commands at the end of the
+[Sangria Benchmark](benchmark.md#Reproducing) page.
+
 ## Manual
 
+- [Results](results.md): the figures and animations of the results, with
+  short captions.
 - [Physics & Data](physics.md): the noise model, the simulator, the
   constellation response, the features and the whitening, the LDC
   products, and the known physical deficiencies.

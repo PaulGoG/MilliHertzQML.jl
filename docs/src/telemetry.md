@@ -43,6 +43,17 @@ julia scripts/export_telemetry_payload.jl configs/default.toml \
 
 ## Replay and alerts
 
+`scripts/infer_telemetry.jl` replays a producer run directory, or follows
+it live with `--live`, and writes `telemetry_windows.csv` (one row per
+scored window), `alert_latency.csv` (one row per event of `--events`), a
+snapshot of the `[telemetry]` settings, and the alert figure:
+
+```bash
+julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTelemetry run directory> \
+    --model models/run_<RUN_ID>/gw_model.jld2 \
+    --events data/inputs/simulated_telemetry_complex_events.csv --run-id coupling01
+```
+
 ### Run interface
 
 The consumer never writes into a producer run directory. It reads the

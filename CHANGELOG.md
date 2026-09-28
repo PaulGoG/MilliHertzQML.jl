@@ -51,6 +51,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   record scored at 0.42 % permanent loss.
 
 ### Changed
+- The README is condensed to an overview: the results table, the
+  streamed replay of the smoothed-whitening model and the replay
+  animation, setup, entry points, status and limitations. A new Results
+  page of the manual gathers every figure and animation with captions,
+  and the usage details of the README (command-line switches, the replay
+  command and its outputs, a quick start) moved to the manual pages they
+  belong to.
 - The README and the manual were revised as a whole. The README and the
   home page open with the results of both configurations; the benchmark
   page opens with a summary table, places the seed spread beside the grid,
