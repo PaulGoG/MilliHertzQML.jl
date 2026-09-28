@@ -364,6 +364,26 @@ function log_ticks(lo::Real, hi::Real)
     return values, labels
 end
 
+"""
+    dense_log_ticks(lo, hi) -> (values, labels)
+
+Ticks of a logarithmic axis spanning `[lo, hi]` at the 1×, 2× and 5×
+multiples of every decade, for axes that span two or three decades; above
+nine such ticks it falls back to [`log_ticks`](@ref).
+"""
+function dense_log_ticks(lo::Real, hi::Real)
+    0 < lo <= hi || throw(ArgumentError("a logarithmic range needs 0 < lo <= hi."))
+    values = Float64[]
+    labels = String[]
+    for k in floor(Int, log10(lo)):ceil(Int, log10(hi)), m in (1, 2, 5)
+        v = m * 10.0^k
+        lo <= v <= hi || continue
+        push!(values, v)
+        push!(labels, decade_label(k, m))
+    end
+    return length(values) <= 9 ? (values, labels) : log_ticks(lo, hi)
+end
+
 function figure_threshold_sweep(
     sweep::DataFrame,
     threshold::Real;
@@ -1768,7 +1788,7 @@ function figure_grid_seeds(
                 figure[1, 2];
                 xlabel = "Blind false alarms per 30 d",
                 xscale = log10,
-                xticks = log_ticks(lo, hi),
+                xticks = dense_log_ticks(lo, hi),
                 yticks = y,
             )
         else

@@ -1241,6 +1241,9 @@ end
     @test ext.count_ticks(134) == [0, 50, 100] && ext.count_ticks(23) == [0, 5, 10, 15, 20]
     @test ext.count_ticks(1) == [0, 1] && ext.count_ticks(0) == [0]
     @test_throws ArgumentError ext.count_ticks(-1)
+    @test ext.dense_log_ticks(0.35, 37.0) ==
+          ([0.5, 1.0, 2.0, 5.0, 10.0, 20.0], ["0.5", "1", "2", "5", "10", "20"])
+    @test ext.dense_log_ticks(1e-3, 1e3) == ext.log_ticks(1e-3, 1e3)
     # Alert labels: a right-hand label that would cover the next marker moves
     # to the left, and so does one that would leave the axis
     @test ext.alert_label_placement([0.5, 0.56], [0.5, 0.52], ["−27.8 h", "−21.1 h"]) ==
