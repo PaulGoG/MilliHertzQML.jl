@@ -1,4 +1,4 @@
-written_at = "2026-09-27T14:01:23.984"
+written_at = "2026-09-29T10:47:48.601"
 
 [environment]
 manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
@@ -23,6 +23,6 @@ cpu_threads_logical = 22
 julia_version = "1.13.0"
 
 [git]
-git_commit = "v1.1.0-21-gd1e973b"
+git_commit = "v1.2.0-4-gebc0187"
 git_dirty = false
-package_version = "1.1.0"
+package_version = "1.2.0"
