@@ -10,11 +10,26 @@ ground.
 | | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted on their own | 5 of 6 | 5 of 6 |
-| Alerts reaching the ground more than an hour before the merger | 2, consistent with chance | **5, 12 to 71 h ahead** |
-| Streamed year: false alarms per 30 d | 1.90 | **0.16** |
+| Streamed year, causal whitening: coalescences alerted on their own | 6 of 6 | 5 of 6 |
+| Alerts reaching the ground before the merger | none | **5, 11 to 24 h ahead** |
+| Streamed year: false alarms per 30 d | 2.31 | **0.49** |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+
+!!! warning "Correction, 29 September 2026"
+    The streamed-year alert times first published with this release
+    credited an alert to a coalescence from the start of its four-day label
+    span, and so counted alarm runs 60 to 95 hours before a merger, where
+    the matched-filter SNR of the source in a single window is about 2, as
+    early detections. This manual has been rebuilt with every alert credited
+    only from the signal onset, the first window in which the signal-only
+    truth reaches the labelling SNR of 5, 7 to 35 hours before the merger
+    on the blind year; alarms before the onset count as false alarms. The
+    persistence settings of the release are unchanged, and the
+    completed-record results are not affected. The [development
+    manual](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
+    gives the reasoning; the package implements the crediting from the
+    release after 1.2.0.
 
 The selected configuration, eight qubits, four re-uploading layers and six
 sub-mHz band powers, was chosen on the training year by a rule fixed before
@@ -552,13 +567,24 @@ plus the downlink delay of the batch that completes it (up to 18 hours),
 and, for every coalescence, the alert time relative to the merger.
 
 The definition of an alert determines the latencies and is therefore
-stated explicitly. Assigning to each event the earliest alarmed window
-overlapping its label span, irrespective of the windows that follow it,
-the causal replay alarms three coalescences 1.1 to 1.7 days before their merger at 5.94 false-alarm episodes per 30 days, a rate at
-which about four chance episodes are expected inside the five 96-hour
-label spans, so the early alarms are consistent with chance coincidence.
-An isolated alarmed window cannot be distinguished from the false-alarm
-population. The alert
+stated explicitly. An alarm is credited to a coalescence only where its
+signal can be seen: from the signal onset, the first 1000-sample window in
+which the matched-filter SNR of the signal-only A channel against the
+analytic Sangria PSD reaches 5, to the end of the label span. The onsets
+lie 34.8, 29.1, 27.8, 32.2, 7.4 and 27.4 hours before the six mergers
+(event 2's sought past the span of event 1, whose signal dominates until
+its merger 29.5 hours earlier); 74 hours before the merger the window SNR
+of every source is at most 2.0. Alarm runs earlier in the label span count
+as false alarms. The label span itself, four days before to 27 minutes
+after the merger, is the training convention and credits noise alarms of
+its first days as early detections; the alert times first published with
+this release did so. Assigning to each event the earliest alarmed window
+of its credited span, irrespective of the windows that follow it, the
+causal replay alarms every coalescence after its merger, at 6.77
+false-alarm episodes per 30 days; credited over the whole label span it
+had alarmed three coalescences 1.1 to 1.7 days before their merger, on
+windows where the window SNR of the source is below 3. An isolated alarmed
+window cannot be distinguished from the false-alarm population. The alert
 protocol therefore requires persistence: an alert is raised by the
 arrival that completes `alert_persistence` consecutive alarmed windows,
 and shorter runs are neither alerts nor counted as false alarms.
@@ -571,57 +597,47 @@ et al. 2024) [ChaudharyEtAl2024](@cite), taken as the standard because the Defin
 none for its low-latency alert pipelines — that keeps every calibration
 event alerted with a window of margin, and whose waiting time stays within
 half of the Definition Study's one-hour processing budget. On the calibration
-block of the retrained model (validation and test, 109 days) the
-classifier produces five alarm episodes of one to seven windows, 1.38 per
-30 days, and alarms its four events for 3, 7, 13 and 46 consecutive
-windows. Two consecutive windows is the value that satisfies all three
-conditions: it brings the block to 0.83 per 30 days, and three would leave
-the shortest event run without margin.
-Both replays, evaluated at that persistence and at the first alarmed
-window:
+block of the retrained model (validation and test, 109 days), credited
+over the label spans as in this release, the classifier produces five
+alarm episodes of one to seven windows, 1.38 per 30 days, and alarms its
+four events for 3, 7, 13 and 46 consecutive windows; two consecutive
+windows bring the block to 0.83 per 30 days, and three would leave the
+shortest event run without margin, so the release uses two. Credited from
+the signal onsets of the training year, the same block counts 1.38 false
+alerts per 30 days at two and 0.83 at three, so two does not meet the
+standard; the release after 1.2.0 drops the margin criterion and uses
+three. Both replays, evaluated at the persistence of the release and at
+the first alarmed window, credited from the signal onset:
 
-| Event | Merger (mission time) | Causal PSD, two consecutive: alert − merger [h] | Causal PSD, first alarmed window | Full-record PSD, two consecutive | Full-record PSD, first alarmed window | Alert of its own |
-|---|---|---|---|---|---|---|
-| 1 | 2035-03-19T16:27 | **−25.6** | −25.6 | +1.9 | −25.6 | yes |
-| 2 | 2035-03-20T21:59 | −27.7 | −27.9 | −27.6 | −27.7 | no: event 1's |
-| 3 | 2035-08-12T15:40 | **−0.3** | −0.3 | −0.3 | −0.3 | yes |
-| 4 | 2035-09-17T07:48 | **−16.1** | −40.5 | −64.4 | −64.4 | yes |
-| 5 | 2035-09-21T21:39 | **+41.7** | +41.7 | −51.3 | −54.5 | yes |
-| 6 | 2035-11-10T00:11 | **+15.1** | +15.1 | +15.1 | +15.1 | yes |
-| False alarms / 30 d | | **1.90** | 5.94 | 1.32 | 1.65 | |
+| Event | Merger (mission time) | Signal onset [h] | Causal PSD, two consecutive: alert − merger [h] | Causal PSD, first alarmed window | Full-record PSD, two consecutive | Full-record PSD, first alarmed window | Alert of its own |
+|---|---|---|---|---|---|---|---|
+| 1 | 2035-03-19T16:27 | −34.8 | **+1.8** | +1.7 | +1.9 | +1.8 | yes |
+| 2 | 2035-03-20T21:59 | −29.1 | **+17.0** | +17.0 | +17.0 | +17.0 | yes |
+| 3 | 2035-08-12T15:40 | −27.8 | **+0.1** | +0.1 | +0.4 | +0.3 | yes |
+| 4 | 2035-09-17T07:48 | −32.2 | **+7.5** | +7.5 | +7.5 | +7.5 | yes |
+| 5 | 2035-09-21T21:39 | −7.4 | **+41.7** | +41.7 | +41.7 | +41.7 | yes |
+| 6 | 2035-11-10T00:11 | −27.4 | **+15.1** | +15.1 | +15.1 | +15.1 | yes |
+| False alarms / 30 d | | | **2.31** | 6.77 | 1.90 | 2.48 | |
 
 The alert time is the arrival at the ground station of the batch that
 completes the alert, so it contains the conditioning lag and the downlink
 delay; the latencies exclude the one-hour processing budget, which
 `latency_total_h` of the table adds. Under the persistence criterion and
-causal whitening the alerts of events 3, 5 and 6 reach the ground between
-0.3 hours before and 42 hours after the merger. Those of events 1 and 4
-reach it 25.6 and 16.1 hours before the merger: their alarmed windows end
-67 and 63 hours before it and their conditioning stretches 39 and 35
-hours before it, so the merger is not in the data that raised them. At
-1.90 false-alarm episodes per 30 days, 1.3 chance episodes are expected
-inside the five 96-hour label spans (Poisson probability 0.36 of two or more), so the two early alerts
-are not evidence of a detection of the inspiral. Event 2 has no alert of
-its own under either whitening. Its merger follows event 1's by 29.5
-hours, the two label spans overlap, and every alarmed window in its span
-lies in the cluster of alarm runs from 27 hours before to 26 hours after
-event 1's merger; none lies within 3.6 hours of its own merger. The
-replay therefore detects five coalescences, not six, and the batch
-metric's "5 of 5 label spans" is unaffected only because the two spans
-merge into one.
+causal whitening every coalescence is alerted on its own, each after its
+merger, 0.1 to 42 hours later: a window becomes available for scoring only
+once the 1.16 days of data after it have been delivered, so even a window
+at the signal onset is scored at the earliest around the merger. The
+alerts first published with this release, 25.6 and 16.1 hours before the
+mergers of events 1 and 4, rest on windows that end 67 and 63 hours before
+the merger, where the window SNR of the source is about 2; they were noise
+alarms inside the label span. Event 2, whose label span was filled with
+the alarms of event 1, is alerted on its own 17 hours after its merger.
 
-The full-record PSD changes three alerts: event 1 is alerted 1.9 hours after
-its merger instead of 25.6 hours before it, and events 4 and 5 are
-alerted 64 and 51 hours *before* their mergers, on runs of two windows in
-the inspiral that the causal whitening does not produce; the false-alarm
-rate is 0.58 per 30 days lower. Two early alerts where 0.9 chance episodes are expected inside
-the spans are not evidence of a detection of the inspiral (Poisson
-``p \approx 0.2``); the year-long look-ahead sharpens the inspiral excess,
-and a mission does not have access to it. At a persistence of three the
-causal replay would count 0.74 episodes per 30 days and alert events 1
-and 4 1.9 and 7.5 hours after their mergers, but the shortest alarm run
-of a calibration event is exactly three windows, so a persistence of three
-leaves no margin and the protocol retains two.
+The full-record PSD alerts the same coalescences to within half an hour,
+at 1.90 false-alarm episodes per 30 days. Credited over the label spans it
+had alerted events 4 and 5 64 and 51 hours before their mergers, on runs
+of two windows where the window SNR of the source is below 2; those alerts
+were noise alarms as well.
 
 ![Replay of the blind year under the full-record PSD](assets/benchmark_telemetry_alerts.png)
 
@@ -654,13 +670,14 @@ coalescences 1 and 2 — and the same pass schedule; each mission differs
 from a lossless reference in one property of the channel or of the
 spacecraft and was replayed once by the selected model under the causal
 whitening of `configs/experiments/q8_b6.toml` (persistence 2,
-`context_windows = 20`) and, for five of them, under the full-record PSD
-of the whole blind year. The reference replay scores 4,945 windows, alerts
-on both coalescences and counts 11.5 false-alarm episodes per 30 days;
-under the full-record PSD it counts 3.1. The difference arises from the
-initial interval of the trailing estimate on a 30-day record, before one
-Welch segment of delivered data exists (over the year the causal replay
-delivers 1.90 against 1.32 under the full-record PSD), and it is the
+`context_windows = 20`; alerts credited from the signal onset) and, for
+five of them, under the full-record PSD of the whole blind year. The
+reference replay scores 4,945 windows, alerts both coalescences, each after
+its merger, and counts 11.5 false-alarm episodes per 30 days; under the
+full-record PSD it counts 3.1. The difference arises from the initial
+interval of the trailing estimate on a 30-day record, before one Welch
+segment of delivered data exists (over the year the causal replay
+delivers 2.31 against 1.90 under the full-record PSD), and it is the
 scale against which the rows below are read.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, false-alarm episodes per 30 days under causal whitening](assets/benchmark_gap_study.png)
@@ -668,24 +685,24 @@ scale against which the rows below are read.
 | Channel or spacecraft | Batches lost | Windows scored | Events | False alarms per 30 d | Full-record PSD |
 |---|---|---|---|---|---|
 | lossless reference | 0 | 4945 | 2 of 2 | 11.5 | 3.1 |
-| scattered permanent loss, 0.04 % realised | 2 | 4285 | 2 of 2 | 19.4 | |
-| scattered permanent loss, 0.08 % | 4 | 3772 | 2 of 2 | 15.1 | 2.7, 2 of 2 |
+| scattered permanent loss, 0.04 % realised | 2 | 4285 | 2 of 2 | 21.8 | |
+| scattered permanent loss, 0.08 % | 4 | 3772 | 2 of 2 | 23.4 | 2.7, 2 of 2 |
 | scattered permanent loss, 0.19 % | 10 | 2120 | 0 of 2 | 12.2 | 2.4, 2 of 2 |
 | scattered permanent loss, 0.43 % | 22 | 426 | 2 of 2 | 12.2 | |
 | bursty loss, mean 0.3 %, bursts of 4 | 21 | 3485 | 2 of 2 | 16.4 | 3.0, 2 of 2 |
 | bursty loss, mean 0.3 %, bursts of 20 | 9 | 4475 | 2 of 2 | 12.7 | |
 | bursty loss, mean 0.3 %, bursts of 50 | 0 | 4945 | 2 of 2 | 11.5 | |
-| 3 % loss, one retransmission | 6 | 2475 | 1 of 2 | 10.5 | 4.2, 2 of 2 |
+| 3 % loss, one retransmission | 6 | 2475 | 0 of 2 | 12.6 | 4.2, 2 of 2 |
 | 3 % loss, three retransmissions | 0 | 4946 | 2 of 2 | 11.5 | |
 | link outage 6 h, day 3 | 0 | 4946 | 2 of 2 | 11.5 | |
 | link outage 24 h, day 3 | 0 | 4946 | 2 of 2 | 11.5 | |
-| link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 6.3 | |
+| link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 15.7 | |
 | link outage 24 h astride merger 1 | 0 | 4946 | 2 of 2 | 11.5 | |
-| no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 14.9 | |
+| no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 19.4 | |
 | no data produced for 2 h astride merger 1 | 0 | 4521 | 1 of 2 | 13.8 | |
-| two-day recorder with a 72 h outage | 0 | 4277 | 2 of 2 | 6.1 | |
-| 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5028 | 2 of 2 | 5.2 | |
-| 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5030 | 2 of 2 | 10.3 | |
+| two-day recorder with a 72 h outage | 0 | 4277 | 2 of 2 | 14.5 | |
+| 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5028 | 2 of 2 | 10.3 | |
+| 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5030 | 2 of 2 | 12.4 | |
 
 **Scattered permanent loss is the property that reduces the scored
 record, and its effect is not proportional to the loss.** A window is
@@ -715,20 +732,20 @@ the number of batches.
 
 **Retransmission removes the effect.** A 3 % channel with one retry leaves
 six permanent holes, and the replay scores half the windows and detects
-one coalescence; with three retries it leaves none, and the replay
-reproduces the reference to within one window.
+neither coalescence (the one alert first published preceded the signal
+onset); with three retries it leaves none, and the replay reproduces the
+reference to within one window.
 
 **A link outage increases the latency and removes no window.** The
 recorder holds the backlog, and every window is scored once its stretch
 has been delivered.
 An outage of 24 h astride merger 1 delays its alert to 73 h after the
 merger — the data reached the ground after the outage and its backlog —
-and shifts the second alert to 20 h after merger 2, which is then alerted
-on its own. The delivery order after an outage does change the causal
-estimate, which is a function of what has been delivered: the 72 h outage
-replay differs from the reference in every score (6.3 false alarms per
-30 days, an alarm run 50 h before merger 1), although it received the same
-batches.
+and the second alert to 20 h after merger 2. The delivery order after an
+outage does change the causal estimate, which is a function of what has
+been delivered: the 72 h outage replay differs from the reference in every
+score (15.7 false alarms per 30 days, among them an alarm run 50 h before
+merger 1), although it received the same batches.
 
 **A generation gap removes the stretch around it and the event inside
 it.** Fifteen minutes without data remove 412 windows, the stretch around
@@ -738,15 +755,14 @@ in the gap. A two-day recorder that overflows during a 72 h outage
 discards 260 batches of production and removes 668 windows, and both
 events are still detected.
 
-**Admitting a partially delivered stretch scores every window, with an
-effect on the alerts that this replay cannot quantify.** With the stretch
-admitted at 75 or 50 % delivered the replay scores 5,028 and 5,030
-windows (more than the reference, because edge windows now qualify) at
-5.2 and 10.3 false alarms per 30 days, and detects both coalescences; the
-alerts, however, move to 53 and 76 h before merger 1, on windows
-conditioned on a partial stretch. Those alarms fall inside the label spans
-and count as detections; whether they arise from the inspiral or from the
-conditioning cannot be determined from this replay.
+**Admitting a partially delivered stretch scores every window and brings
+the alerts forward.** With the stretch admitted at 75 or 50 % delivered
+the replay scores 5,028 and 5,030 windows (more than the reference,
+because edge windows now qualify) at 10.3 and 12.4 false alarms per 30
+days, and alerts both coalescences, event 1 8.3 and 27.5 h before its
+merger, after its signal onset, on windows conditioned on a partial
+stretch. The alarms 53 and 76 h before merger 1 first published as
+detections precede the signal onset and are false alarms.
 
 The operating requirement is on **scattered permanent** loss, and it is
 strict: about a fifth of a per cent for scoring most of the record, and
@@ -811,38 +827,44 @@ applied to the calibration block of the smoothed model, gives three
 consecutive alarmed windows: two leave 1.10 false alarms per 30 days,
 three bring the block to 0.28 and keep a window of margin on the shortest
 alarmed calibration event. One of the four calibration events, the one in
-the test block, is not alarmed at any persistence.
+the test block, is not alarmed at any persistence. Credited from the
+signal onsets of the training year, two leave 1.65 false alerts per 30
+days and three 0.83, so three meets the standard under that crediting as
+well.
 
 **Year replay.** The lossless year-long mission of the previous sections,
-replayed with the smoothed model; alert time minus merger time [h], with
-the alert time the arrival at the ground station of the batch that
-completes the alert:
+replayed with the smoothed model and credited from the signal onset;
+alert time minus merger time [h], with the alert time the arrival at the
+ground station of the batch that completes the alert:
 
-| Event | Causal PSD, persistence 3 | Causal PSD, persistence 2 | Full-record PSD, persistence 3 |
-|---|---|---|---|
-| 1 | **−71.1** | −71.3 | −22.8, shared with event 2 |
-| 2 | **−52.3** | −52.4 | −52.3, shared with event 1 |
-| 3 | **−27.8** | −27.9 | −22.0 |
-| 4 | **−21.1** | −21.2 | −17.3 |
-| 5 | not alerted | +17.9 | −9.9 |
-| 6 | **−12.0** | −12.2 | −11.1 |
-| False-alarm episodes (per 30 d) | **2 (0.16)** | 9 (0.74) | 4 (0.33) |
+| Event | Signal onset | Causal PSD, persistence 3 | Causal PSD, persistence 2 | Full-record PSD, persistence 3 |
+|---|---|---|---|---|
+| 1 | −34.8 | **−22.8** | −22.9 | −22.8 |
+| 2 | −29.1 | **−11.4** | −11.4 | −11.4 |
+| 3 | −27.8 | **−24.3** | −24.4 | −22.0 |
+| 4 | −32.2 | **−21.1** | −21.2 | −17.3 |
+| 5 | −7.4 | not alerted | +17.9 | not alerted |
+| 6 | −27.4 | **−12.0** | −12.2 | −11.1 |
+| False-alarm episodes (per 30 d) | | **6 (0.49)** | 14 (1.15) | 5 (0.41) |
 
 ![Replay of the blind year under causal whitening by the smoothed-whitening model q8_b6_s001_pi](assets/benchmark_telemetry_alerts_smoothed.png)
 
 Under causal whitening at the persistence the rule fixes, five of the six
 coalescences are alerted on their own, each before its merger in ground
-time, 12.0 to 71.1 hours ahead, at two false-alarm episodes in the year;
-event 5 is not alerted. The conditioning stretches of the alarmed windows
-end 12 to 71 hours before the respective merger, so the merger is not in
-the data that raised the alert. At 0.16 episodes per 30 days about 0.12
-chance episodes are expected inside the label spans, which cover 21 days
-of the year, and the Poisson probability of five or more is below
-10⁻⁶: the alerts are a detection of the inspiral, not chance
-coincidences. At a persistence of two every coalescence is alerted on its
-own, five of them before the merger, at 0.74 per 30 days. The non-causal
-replay under the full-record PSD counts more false alarms than the causal
-one and alerts events 1 and 2 with one shared alert. The score baseline of
+time, 11.4 to 24.3 hours ahead and 3.5 to 17.7 hours after its signal
+onset, at six false-alarm episodes in the year; event 5, whose window SNR
+reaches 5 only 7.4 hours before its merger, is not alerted. The alerts
+first published with this release put event 1 71 hours ahead, on a run of
+three windows 74 hours before the merger where the window SNR of the
+source is 2.0, and event 2 52 hours ahead, on alarms of event 1; both were
+credited over the label span. The published argument that such early
+alerts were significant, from the number of chance episodes expected
+inside the label spans, was wrong: the false-alarm rate of this model is
+not uniform over the year, and a comparison of rates cannot show that a
+particular alarm was raised by the signal. At a persistence of two every
+coalescence is alerted on its own, five of them before the merger, at 1.15
+per 30 days. The non-causal replay under the full-record PSD alerts the
+same five coalescences at 0.41 per 30 days. The score baseline of
 the smoothed model follows the annual modulation of the noise level, which
 that of the selected model does not: under the full-record PSD it falls
 towards 0.1 at the beginning and at the end of the year and approaches the
@@ -850,24 +872,24 @@ threshold between days 200 and 300; the trailing estimate follows part of
 this modulation.
 
 **Lossy link.** The seventeen 30-day missions of the previous section,
-replayed with the smoothed model; at the persistence of two used there,
-against the selected model:
+replayed with the smoothed model at the persistence of two used there and
+credited from the signal onset, against the selected model:
 
 | Mission | Permanent loss | Windows scored, selected | Windows scored, smoothed | Coalescences alerted, selected | Coalescences alerted, smoothed |
 |---|---|---|---|---|---|
-| Lossless reference | 0 | 4,945 | 5,125 | 2, one shared alert | 2 |
+| Lossless reference | 0 | 4,945 | 5,125 | 2, after the mergers | 2, before the mergers |
 | Bernoulli 0.1 % | 0.04 % | 4,285 (0.87) | 5,024 (0.98) | 2 | 2 |
-| Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,926 (0.96) | 2 | 2, one shared alert |
+| Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,926 (0.96) | 2 | 2 |
 | Bernoulli 0.3 % | 0.19 % | 2,120 (0.43) | 4,636 (0.90) | 0 | 2 |
-| Bernoulli 0.5 % | 0.43 % | 426 (0.09) | 4,142 (0.81) | 2, one shared alert | 2 |
+| Bernoulli 0.5 % | 0.43 % | 426 (0.09) | 4,142 (0.81) | 2 | 2 |
 
 The fraction of the reference record the smoothed model scores follows the
 independent-batch estimate `(1 − p)^50` (0.98, 0.96, 0.91, 0.81). Over all
-seventeen missions it alerts both coalescences at 0 to 2.5 false-alarm
-episodes per 30 days, where the selected model counts 6.1 to 19.4 and
-misses at least one coalescence in three missions; at a persistence of
-three both coalescences stay alerted in every mission, in five of them by
-one alert shared by the two. The false alarms fall because the long kernel
+seventeen missions it alerts both coalescences on their own and before
+their merger at 0 to 8.1 false-alarm episodes per 30 days, where the
+selected model counts 11.5 to 23.4, alerts after the merger, and misses at
+least one coalescence in three missions; at a persistence of three both
+coalescences stay alerted on their own in every mission, at 0 to 4.0. The false alarms fall because the long kernel
 of the unsmoothed whitening produced the alarm tails after each merger.
 The tables are rebuilt from the replays by `alert_latency_table` at either
 persistence; the replay results are those of the
@@ -909,12 +931,13 @@ be scored.
   the first event, includes the nine months not yet delivered; that replay
   is an upper reference for the causal replay. The latencies quoted are
   those of the causal replay, which a mission could run.
-- **Five coalescences are detected on their own, not six.** In the
-  causal replay of the selected model event 2 is alarmed only by windows
-  that belong to the alarm cluster of event 1.
-- **The smoothed configuration rests on one seed.** Its early alerts are
-  significant against the false-alarm rate it delivers, but the spread of
-  that rate under re-initialisation is measured only for the selected
+- **Six coalescences are alerted on their own, all after the merger.**
+  Credited from the signal onset, the causal replay of the selected model
+  alerts event 2 on its own 17 hours after its merger; credited over the
+  label span, as first published, its span held only the alarms of event 1.
+- **The smoothed configuration rests on one seed.** Its alerts follow the
+  signal onsets of their coalescences, but the spread of its false-alarm
+  rate under re-initialisation is measured only for the selected
   configuration.
 
 ## Reproducing

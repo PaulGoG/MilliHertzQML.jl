@@ -179,6 +179,9 @@ touching its label span and:
   windows outside every span that reach the persistence. Shorter runs
   raise no alert and are not counted.
 
+The alert table of this release credits the whole label span; the
+benchmark page quotes the replays credited from the signal onset instead
+(see the [correction](benchmark.md#Telemetry-replay-and-alert-latency)).
 The benchmark page counts an event whose only alert is shared as not
 detected on its own. In live mode (`follow_run`, `[telemetry] mode =
 "live"` or `--live`) the feed is polled every `poll_interval_sec` and

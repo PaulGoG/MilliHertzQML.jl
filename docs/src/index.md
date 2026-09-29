@@ -12,8 +12,23 @@ thresholds fitted on the training year and applied unchanged:
 | | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year | 5 of 5 labelled events, 1.57 false alarms per 30 days | 5 of 5, 2.97 per 30 days |
-| Streamed year, causal whitening | 5 of 6 coalescences alerted, 1.90 per 30 days | 5 of 6, each 12 to 71 hours before its merger, 0.16 per 30 days |
+| Streamed year, causal whitening | 6 of 6 coalescences alerted, each after its merger, 2.31 per 30 days | 5 of 6, each 11 to 24 hours before its merger, 0.49 per 30 days |
 | Record scored at 0.43 % scattered batch loss | 9 % | 81 % |
+
+!!! warning "Correction, 29 September 2026"
+    The streamed-year alert times first published with this release
+    credited an alert to a coalescence from the start of its four-day label
+    span, and so counted alarm runs 60 to 95 hours before a merger, where
+    the matched-filter SNR of the source in a single window is about 2, as
+    early detections. This manual has been rebuilt with every alert credited
+    only from the signal onset, the first window in which the signal-only
+    truth reaches the labelling SNR of 5, 7 to 35 hours before the merger
+    on the blind year; alarms before the onset count as false alarms. The
+    persistence settings of the release are unchanged, and the
+    completed-record results are not affected. The [development
+    manual](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
+    gives the reasoning; the package implements the crediting from the
+    release after 1.2.0.
 
 The selected configuration, eight qubits, four re-uploading layers and six
 sub-mHz band powers, was chosen on the training year by a rule fixed

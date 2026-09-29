@@ -8,11 +8,26 @@ are fitted on the training year and applied unchanged to the blind year.
 | | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted on their own | 5 of 6 | 5 of 6 |
-| Alerts reaching the ground more than an hour before the merger | 2, consistent with chance | **5, 12 to 71 h ahead** |
-| Streamed year: false alarms per 30 d | 1.90 | **0.16** |
+| Streamed year, causal whitening: coalescences alerted on their own | 6 of 6 | 5 of 6 |
+| Alerts reaching the ground before the merger | none | **5, 11 to 24 h ahead** |
+| Streamed year: false alarms per 30 d | 2.31 | **0.49** |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+
+!!! warning "Correction, 29 September 2026"
+    The streamed-year alert times first published with this release
+    credited an alert to a coalescence from the start of its four-day label
+    span, and so counted alarm runs 60 to 95 hours before a merger, where
+    the matched-filter SNR of the source in a single window is about 2, as
+    early detections. This manual has been rebuilt with every alert credited
+    only from the signal onset, the first window in which the signal-only
+    truth reaches the labelling SNR of 5, 7 to 35 hours before the merger
+    on the blind year; alarms before the onset count as false alarms. The
+    persistence settings of the release are unchanged, and the
+    completed-record results are not affected. The [development
+    manual](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
+    gives the reasoning; the package implements the crediting from the
+    release after 1.2.0.
 
 ## The completed blind year
 
@@ -59,8 +74,8 @@ seeds](benchmark.md#The-grid-over-four-seeds).
 
 *The blind year streamed through a simulated telemetry mission with daily
 ground-station passes and whitened causally, from data already delivered.
-Five coalescences are alerted on their own at 1.90 false-alarm episodes
-per 30 days; the lower panel gives the alert time of every coalescence at
+All six coalescences are alerted on their own, each after its merger, at
+2.31 false-alarm episodes per 30 days; the lower panel gives the alert time of every coalescence at
 the ground station against the availability latency of every window, the
 wait for its conditioning stretch plus the downlink delay.* See the
 [telemetry replay](benchmark.md#Telemetry-replay-and-alert-latency).
@@ -74,7 +89,7 @@ of the received data is the availability latency.*
 ![Classifier output and alarms over the year-long replay whitened by the full-record PSD](assets/benchmark_telemetry_alerts.png)
 
 *The same mission whitened by the full-record PSD of the blind year, which
-no mission has while it observes: a non-causal upper reference, at 1.32
+no mission has while it observes: a non-causal upper reference, at 1.90
 false-alarm episodes per 30 days.*
 
 ## A lossy link
@@ -100,9 +115,9 @@ collapses beyond about 0.2 % of permanently lost batches.*
 *The model retrained on a Welch whitening spectrum smoothed by 0.01 dex in
 log-frequency needs a conditioning stretch of 50 batches instead of 410.
 Streamed under causal whitening it alerts five of the six coalescences at
-the ground station 12 to 71 hours before their merger, at two false-alarm
-episodes in the year, where about 0.1 are expected by chance inside the
-label spans; at 0.43 % scattered loss it still scores 81 % of the
+the ground station 11 to 24 hours before their merger, each after the
+signal onset of its coalescence, at six false-alarm episodes in the year;
+at 0.43 % scattered loss it still scores 81 % of the
 record.* See [smoothed whitening](benchmark.md#Smoothed-whitening).
 
 ## Training
