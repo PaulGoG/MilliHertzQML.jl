@@ -123,6 +123,7 @@
             merger_time_s = [9500 / fs],
             label_start_index = [first(burst)],
             label_end_index = [last(burst)],
+            signal_start_index = [first(burst)],
         )
         latency = alert_latency_table(windows, events_table, geometry)
         @test nrow(latency) == 1 && latency.merger_time_s[1] == 9500 / fs

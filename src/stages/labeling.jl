@@ -4,7 +4,8 @@
 # analytic TDI PSD; mergers come from the source catalogue when the product
 # carries one and from SNR peaks otherwise; the positive span of every
 # merger is either the fixed window of Isfan et al. (2025) or the union of
-# windows in which the source is detectable.
+# windows in which the source is detectable; with fixed spans the event
+# table also records the signal onset from which alerts are credited.
 
 """
     read_truth_csv(path) -> NamedTuple
@@ -124,7 +125,10 @@ Writes, under the `inputs` root, `<output_prefix>_labels.csv` (`Label`,
 `SNR`: the peak windowed SNR of the event a sample belongs to),
 `<output_prefix>_events.csv` (one row per merger with its sample index,
 time, window SNR, catalogue parameters, and — for fixed spans — the label
-range and peak SNR), `<output_prefix>_spans.csv`, and the snapshot
+range, its peak SNR, and the signal onset `signal_start_index`, the first
+window inside the span and past the preceding event's span that reaches
+`label_snr_threshold` ([`signal_onsets`](@ref)), from which alerts are
+credited), `<output_prefix>_spans.csv`, and the snapshot
 `<output_prefix>_labels.toml` with the labelling parameters and the
 provenance sections of [`write_toml`](@ref). Existing files are backed up
 first.
@@ -254,6 +258,21 @@ function label_truth_stream(
             events.label_start_index = first.(spans)
             events.label_end_index = last.(spans)
             events.label_peak_snr = peak_snr
+            # The onset search starts at the span start, or past the preceding
+            # event's span when that ends later: the 96-h spans of mergers a
+            # day apart overlap, and the earlier source must not supply the
+            # onset of the later one.
+            lower = [
+                min(m, max(first(spans[i]), i == 1 ? 1 : last(spans[i-1]) + 1)) for
+                (i, m) in enumerate(merger_indices)
+            ]
+            events.signal_start_index = signal_onsets(
+                starts,
+                snr,
+                merger_indices,
+                lower;
+                threshold = settings.label_snr_threshold,
+            )
         end
         write_csv(events_path, events)
         write_csv(
@@ -278,6 +297,10 @@ function label_truth_stream(
                     "label_before_sec" => settings.label_before_sec,
                     "label_after_sec" => settings.label_after_sec,
                     "label_snr_threshold" => settings.label_snr_threshold,
+                    "signal_onset" =>
+                        settings.label_span == "fixed" ?
+                        "first window reaching label_snr_threshold inside the span and past the preceding span" :
+                        "",
                     "merger_snr_threshold" => settings.merger_snr_threshold,
                     "precursor_ratio" => settings.precursor_ratio,
                     "peak_min_separation_sec" => settings.peak_min_separation_sec,

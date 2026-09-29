@@ -95,9 +95,10 @@ poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [
 producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
 alert_persistence = 2           # consecutive alarmed windows that raise an alert; >= 1
+alert_crediting = "signal"      # start of the span an alert is credited to; one of: "signal" (signal onset of the event table) | "label" (label span start)
 psd_mode = "trailing"           # whitening PSD of the replay; one of: "sidecar" (psd_sidecar, else the training run's) | "trailing" (median Welch estimate of the delivered record behind each window)
 psd_trailing_days = 30.0        # delivered record behind a window used by the "trailing" estimate [days]; > 0
 psd_refresh_days = 1.0          # advance of the delivered record after which the "trailing" estimate is redone [days]; > 0
 psd_segment_length = 65536      # segment of the "trailing" estimate [samples]; >= 2
 psd_edge_periods = 3.0          # cutoff periods of the record high-pass trimmed from each end of a delivered run before the "trailing" estimate; >= 0
-events_csv = ""                 # event table (merger_time_s, label spans) for the alert-latency table; "" disables
+events_csv = ""                 # event table (merger_time_s, label spans, signal onsets) for the alert-latency table; "" disables

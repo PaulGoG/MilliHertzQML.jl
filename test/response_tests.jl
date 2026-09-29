@@ -241,6 +241,12 @@
             @test all(catalog.snr .== catalog.snr_a)        # label_channel = "A"
             @test all(catalog.snr_a .> 0) && all(catalog.snr_e .> 0)
             @test all(catalog.label_start_index .>= 1)
+            @test all(
+                r ->
+                    r.label_start_index > r.label_end_index ||
+                    r.signal_start_index == r.label_start_index,
+                eachrow(catalog),
+            )
             snapshot = TOML.parsefile(result.snapshot_file)["generation"]
             @test snapshot["response"] == "lisa"
             @test snapshot["channels"] == ["A", "E"]

@@ -290,6 +290,7 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         merger_time_s = [3500 / fs, 5500 / fs],
         label_start_index = [3001, 5401],
         label_end_index = [4000, 5600],
+        signal_start_index = [3001, 5401],
     )
     latency =
         alert_latency_table(forced, events_table, geometry; processing_latency_hours = 1.0)
@@ -342,6 +343,7 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         merger_time_s = [3500 / fs, 3600 / fs],
         label_start_index = [3001, 3201],
         label_end_index = [4000, 4100],
+        signal_start_index = [3001, 3201],
     )
     shared = alert_latency_table(forced, twin, geometry; persistence = 3)
     @test shared.alarm_window == [27, 27] && all(shared.shared_alert)
@@ -351,6 +353,41 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
     shuffled.complete_at[26] = maximum(forced.complete_at) + Dates.Hour(1)
     late = alert_latency_table(shuffled, events_table, geometry; persistence = 3)
     @test late.alarm_window[1] == 26 && late.t_alarm[1] == shuffled.complete_at[26]
+    # Crediting from the signal onset: the run 25–28 (rows 2401:3700) lies
+    # in the first label span but before an onset at row 3801, so it is a
+    # false-alarm episode, not an early detection; crediting the whole
+    # label span counts it as the event's alert
+    late_onset = copy(events_table)
+    late_onset.signal_start_index = [3801, 5401]
+    signal = alert_latency_table(forced, late_onset, geometry; persistence = 3)
+    @test signal.detected == [false, false]
+    @test signal.false_alarm_episodes[1] == 1
+    @test all(signal.alert_crediting .== "signal")
+    label = alert_latency_table(
+        forced,
+        late_onset,
+        geometry;
+        persistence = 3,
+        crediting = :label,
+    )
+    @test label.detected == [true, false] && label.alarm_window[1] == 27
+    @test label.false_alarm_episodes[1] == 0
+    @test all(label.alert_crediting .== "label")
+    # A table with spans but no onsets is refused under signal crediting
+    no_onset = DataFrames.select(events_table, DataFrames.Not(:signal_start_index))
+    @test_throws ArgumentError alert_latency_table(forced, no_onset, geometry)
+    @test alert_latency_table(forced, no_onset, geometry; crediting = :label).detected ==
+          [true, true]
+    # Onsets outside their span, and unknown criteria, are refused
+    outside = copy(events_table)
+    outside.signal_start_index = [2000, 5401]
+    @test_throws ArgumentError alert_latency_table(forced, outside, geometry)
+    @test_throws ArgumentError alert_latency_table(
+        forced,
+        events_table,
+        geometry;
+        crediting = :merger,
+    )
 
     # Detector reconstruction from a training run directory
     mktempdir() do dir

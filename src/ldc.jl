@@ -625,6 +625,57 @@ function fixed_spans(
 end
 
 """
+    signal_onsets(starts, snr, merger_indices, lower; threshold) -> Vector{Int}
+
+Signal onset of every merger of a windowed SNR scan (windows starting at
+`starts` with SNR `snr`, as returned by [`windowed_snr`](@ref)): the first
+sample of the earliest window that starts in `lower[i]:merger_indices[i]`
+and reaches `threshold`, or `merger_indices[i]` when none does (the source
+stays below the per-window threshold before its merger). `lower[i]` bounds
+the search from below; the labelling stage sets it to the start of the
+event's label span or, when that is later, to the sample after the
+preceding event's span, so that one source's signal is never taken for the
+onset of the next.
+
+Alerts are credited to an event only from its onset
+([`alert_latency_table`](@ref) with `crediting = :signal`).
+
+# Examples
+```julia
+starts, snr = windowed_snr(A, fs; window_size = 1000, step = 10, psd = psd)
+onsets = signal_onsets(starts, snr, [1342411], [1273291]; threshold = 5.0)
+```
+"""
+function signal_onsets(
+    starts::AbstractRange{<:Integer},
+    snr::AbstractVector{<:Real},
+    merger_indices::AbstractVector{<:Integer},
+    lower::AbstractVector{<:Integer};
+    threshold::Real,
+)
+    length(starts) == length(snr) || throw(
+        DimensionMismatch("$(length(starts)) window starts for $(length(snr)) values."),
+    )
+    length(merger_indices) == length(lower) || throw(
+        DimensionMismatch(
+            "$(length(merger_indices)) mergers for $(length(lower)) lower bounds.",
+        ),
+    )
+    threshold > 0 || throw(ArgumentError("threshold = $threshold; must be positive."))
+    onsets = Vector{Int}(undef, length(merger_indices))
+    for (i, (m, lo)) in enumerate(zip(merger_indices, lower))
+        lo <= m || throw(
+            ArgumentError("lower bound $lo of event $i lies after its merger sample $m."),
+        )
+        k_lo = searchsortedfirst(starts, lo)
+        k_hi = searchsortedlast(starts, m)
+        k = k_lo <= k_hi ? findfirst(>=(threshold), view(snr, k_lo:k_hi)) : nothing
+        onsets[i] = k === nothing ? Int(m) : Int(starts[k_lo+k-1])
+    end
+    return onsets
+end
+
+"""
     span_labels(n, spans) -> Vector{Int}
 
 Point-wise labels of length `n`: 1 inside any of the sample ranges `spans`,

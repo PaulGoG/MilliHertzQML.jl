@@ -89,15 +89,15 @@ function replay_geometry(windows::DataFrame)
 end
 
 """
-    replay_spans(results_dir, geometry) -> Union{Nothing, Vector{Tuple{DateTime,DateTime}}}
+    replay_spans(results_dir, geometry, crediting) -> Union{Nothing, Vector{Tuple{DateTime,DateTime}}}
 
-Labelled spans of a replay, in mission time: the payload rows
-`label_start_index` and `label_end_index` of the event table recorded in
-`config_telemetry.toml`, or, when that table is out of reach, the hour
-before every merger of `alert_latency.csv`. `nothing` when the results
-directory holds neither.
+Spans a replay credits alerts to, in mission time: the payload rows from
+the signal onset (`crediting = :signal`) or the label start (`:label`) to
+`label_end_index` of the event table recorded in `config_telemetry.toml`,
+or, when that table is out of reach, the hour before every merger of
+`alert_latency.csv`. `nothing` when the results directory holds neither.
 """
-function replay_spans(results_dir::AbstractString, geometry::NamedTuple)
+function replay_spans(results_dir::AbstractString, geometry::NamedTuple, crediting::Symbol)
     settings = section(
         MilliHertzQML.TOML.parsefile(joinpath(results_dir, "config_telemetry.toml")),
         "telemetry",
@@ -108,10 +108,11 @@ function replay_spans(results_dir::AbstractString, geometry::NamedTuple)
         Millisecond(round(Int, 1000 * geometry.sample_interval * (index - 1)))
     if !isempty(events_path) && isfile(resolvepath(events_path))
         events = MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame)
-        if all(c -> c in names(events), ("label_start_index", "label_end_index"))
+        starts = MilliHertzQML.credited_span_starts(events, crediting)
+        if starts !== nothing
             return [
-                (row_time(Int(r.label_start_index)), row_time(Int(r.label_end_index))) for
-                r in eachrow(events)
+                (row_time(s), row_time(Int(e))) for
+                (s, e) in zip(starts, events.label_end_index)
             ]
         end
     end
@@ -148,7 +149,9 @@ function replay_animation(
     isfinite(threshold) ||
         throw(ArgumentError("config_telemetry.toml of $results_dir records no threshold."))
     geometry = replay_geometry(windows)
-    spans = replay_spans(results_dir, geometry)
+    # Replays written before the key existed credited the whole label span
+    crediting = Symbol(cfgget(settings, "alert_crediting", "label"; type = String))
+    spans = replay_spans(results_dir, geometry, crediting)
     return save_animation(joinpath(out_dir, "mission_replay"); run_id = run_id) do path
         animate_mission_replay(
             windows,
@@ -156,6 +159,7 @@ function replay_animation(
             path;
             epoch = geometry.epoch,
             label_spans = spans,
+            span_label = MilliHertzQML.credited_span_label(crediting),
         )
     end
 end

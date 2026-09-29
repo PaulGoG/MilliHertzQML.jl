@@ -790,6 +790,7 @@ function figure_telemetry_alerts(
     epoch::DateTime,
     label_spans::Union{Nothing,AbstractVector{<:Tuple{DateTime,DateTime}}} = nothing,
     latencies::Union{Nothing,DataFrame} = nothing,
+    span_label::AbstractString = "Labelled span",
 )
     nrow(windows) >= 1 || throw(ArgumentError("the windows table is empty."))
     t_days = [days_since(epoch, t) for t in windows.content_end]
@@ -938,7 +939,7 @@ function figure_telemetry_alerts(
         handles = Any[]
         labels = String[]
         for (h, l) in (
-            (span_handle, "Labelled span"),
+            (span_handle, span_label),
             (score_handle, "Classifier output"),
             (alarm_handle, "Alarm"),
             (threshold_handle, "Threshold $(round(threshold; digits = 3))"),
@@ -1169,6 +1170,7 @@ function animate_mission_replay(
     path::AbstractString;
     epoch::DateTime = minimum(windows.content_end),
     label_spans::Union{Nothing,AbstractVector{<:Tuple{DateTime,DateTime}}} = nothing,
+    span_label::AbstractString = "Labelled span",
     n_frames::Integer = 200,
     framerate::Integer = 20,
     hold_frames::Integer = 20,
@@ -1345,7 +1347,7 @@ function animate_mission_replay(
         handles = Any[]
         labels = String[]
         for (h, l) in (
-            (span_handle, "Labelled span"),
+            (span_handle, span_label),
             (score_handle, "Classifier output"),
             (alarm_handle, "Alarm"),
             (threshold_handle, "Threshold $(round(threshold; digits = 3))"),

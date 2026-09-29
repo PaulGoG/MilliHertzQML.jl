@@ -30,7 +30,7 @@ function parse_commandline()
         help = "Run identifier of the outputs (default: generated)"
         default = ""
         "--events"
-        help = "Event table CSV (merger_time_s and label spans) for the alert-latency table"
+        help = "Event table CSV (merger_time_s, label spans and signal onsets) for the alert-latency table"
         default = nothing
         "--live"
         help = "Follow the arrival feed until the run ends instead of replaying it"
@@ -40,22 +40,24 @@ function parse_commandline()
 end
 
 """
-    label_span_times(events, geometry) -> Vector{Tuple{DateTime,DateTime}}
+    label_span_times(events, geometry; crediting) -> Vector{Tuple{DateTime,DateTime}}
 
-Mission-time intervals of the label spans of an event table (payload rows
-`label_start_index`/`label_end_index`), or one window around each merger
-when the table carries no spans.
+Mission-time intervals of the spans alerts are credited to under
+`crediting` (payload rows from `signal_start_index` or `label_start_index`
+to `label_end_index`), or one window around each merger when the table
+carries no spans.
 """
-function label_span_times(events::DataFrame, geometry::RunGeometry)
+function label_span_times(events::DataFrame, geometry::RunGeometry; crediting::Symbol)
     spans = Tuple{DateTime,DateTime}[]
-    has_span = "label_start_index" in names(events) && "label_end_index" in names(events)
+    starts = MilliHertzQML.credited_span_starts(events, crediting)
+    has_span = starts !== nothing
     times = event_merger_times(events)
     for (i, row) in enumerate(eachrow(events))
         if has_span
             push!(
                 spans,
                 (
-                    row_time(geometry, Int(row.label_start_index)),
+                    row_time(geometry, starts[i]),
                     row_time(geometry, Int(row.label_end_index)),
                 ),
             )
@@ -170,9 +172,11 @@ function main()
             geometry;
             processing_latency_hours = settings.processing_latency_hours,
             persistence = settings.alert_persistence,
+            crediting = Symbol(settings.alert_crediting),
         )
         write_csv(joinpath(results_dir, "alert_latency.csv"), latencies)
-        spans = label_span_times(events, geometry)
+        spans =
+            label_span_times(events, geometry; crediting = Symbol(settings.alert_crediting))
         for row in eachrow(latencies)
             if row.detected
                 @info "event detected" label = row.label latency_data_h =
@@ -203,6 +207,7 @@ function main()
                 "psd_segment_length" => settings.psd_segment_length,
                 "processing_latency_hours" => settings.processing_latency_hours,
                 "alert_persistence" => settings.alert_persistence,
+                "alert_crediting" => settings.alert_crediting,
                 "events_csv" =>
                     isempty(events_path) ? "" : rootrelative(resolvepath(events_path)),
                 "run_id" => run_id,
@@ -219,6 +224,9 @@ function main()
                 epoch = geometry.start_sim_time,
                 label_spans = spans,
                 latencies = latencies,
+                span_label = MilliHertzQML.credited_span_label(
+                    Symbol(settings.alert_crediting),
+                ),
             ),
             joinpath(plot_dir, "telemetry_alerts");
             run_id = run_id,

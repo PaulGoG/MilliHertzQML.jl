@@ -95,7 +95,8 @@ Empty MBHB event catalogue with the column schema filled by
 [`inject_mbhb!`](@ref): event identifier, coalescence time [s] and sample,
 matched-filter SNR of the injected samples, detector-frame total mass
 [M⊙], mass ratio, symmetric mass ratio, IMRPhenomA merger, ringdown, and
-cut-off frequencies [Hz], injected sample span, and positive-label span.
+cut-off frequencies [Hz], injected sample span, positive-label span, and
+the signal onset from which alerts are credited ([`signal_onset`](@ref)).
 """
 function event_catalog()
     return DataFrame(
@@ -113,6 +114,7 @@ function event_catalog()
         end_index = Int[],
         label_start_index = Int[],
         label_end_index = Int[],
+        signal_start_index = Int[],
     )
 end
 
@@ -191,6 +193,7 @@ function inject_mbhb!(
 
     placed[covered] .= segment
     lbl_start, lbl_end = label_bounds(settings, (placed,), covered, k_c, fs, psd)
+    onset = signal_onset(settings, (placed,), covered, k_c, lbl_start, lbl_end, fs, psd)
     if lbl_start <= lbl_end
         labels[lbl_start:lbl_end] .= 1
         snrs[lbl_start:lbl_end] .= Float32(ρ_target)
@@ -212,6 +215,7 @@ function inject_mbhb!(
             last(covered),
             lbl_start,
             lbl_end,
+            onset,
         ),
     )
     return true
@@ -257,6 +261,46 @@ function label_bounds(
         clamp(k_c + round(Int, settings.label_after_sec * fs), 1, n_total)
     end
     throw(ArgumentError("label_span = $(repr(settings.label_span)); unknown criterion."))
+end
+"""
+    signal_onset(settings, series, covered, k_c, label_start, label_end, fs, psd) -> Int
+
+Signal onset of an injection, the start of the span from which alerts are
+credited: the first sample of the earliest window of `label_window_size`
+samples (stride `label_step`) between the label start and the coalescence
+sample `k_c` whose matched-filter SNR of `series` (the injection alone,
+zero outside `covered`) against `psd` reaches `label_snr_threshold`
+([`detectable_span`](@ref)), or `k_c` when none does. With
+`label_span = "detectable"` the label span already starts there, and its
+start is returned.
+"""
+function signal_onset(
+    settings::NamedTuple,
+    series::Tuple{Vararg{AbstractVector{<:Real}}},
+    covered::AbstractUnitRange{<:Integer},
+    k_c::Integer,
+    label_start::Integer,
+    label_end::Integer,
+    fs::Real,
+    psd,
+)
+    if settings.label_span == "detectable"
+        return label_start <= label_end ? Int(label_start) : Int(k_c)
+    end
+    lo = max(first(covered), label_start)
+    hi = min(last(covered), k_c)
+    lo <= hi || return Int(k_c)
+    span = detectable_span(
+        series,
+        lo:hi,
+        fs,
+        settings.label_window_size,
+        settings.label_snr_threshold;
+        step = settings.label_step,
+        psd = psd,
+    )
+    span === nothing && return Int(k_c)
+    return clamp(first(span), Int(label_start), Int(k_c))
 end
 
 """
@@ -519,6 +563,7 @@ function inject_mbhb!(
         ρ_label, series = hypot(ρ_A, ρ_E), (placed_A, placed_E)
     end
     lbl_start, lbl_end = label_bounds(settings, series, covered, k_c, fs, psd)
+    onset = signal_onset(settings, series, covered, k_c, lbl_start, lbl_end, fs, psd)
     if lbl_start <= lbl_end
         labels[lbl_start:lbl_end] .= 1
         snrs[lbl_start:lbl_end] .= Float32(ρ_label)
@@ -540,6 +585,7 @@ function inject_mbhb!(
             last(covered),
             lbl_start,
             lbl_end,
+            onset,
             distance_gpc,
             source.longitude,
             source.latitude,

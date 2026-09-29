@@ -58,6 +58,9 @@
             isapprox.(labels.SNR[positive], fixed.events.label_peak_snr[1]; rtol = 1e-6),
         )
         @test all(isfile, (fixed.events_path, fixed.spans_path, fixed.snapshot_path))
+        # The signal onset lies inside the span, before the merger
+        onset = fixed.events.signal_start_index[1]
+        @test merger - 4000 < onset < merger
 
         # Detectable spans: the union of the windows reaching the threshold,
         # one run around the burst and nothing at the record ends
@@ -69,6 +72,31 @@
         @test labels_d[centre] == 1 && labels_d[1] == 0 && labels_d[end] == 0
         @test spans.n_label_runs == 1
         @test !("label_start_index" in DataFrames.names(spans.events))
+        # The fixed-span onset is where the detectable span of the same scan starts
+        @test onset == findfirst(==(1), labels_d)
+
+        # Two mergers 5000 samples apart with overlapping spans: the later
+        # event's onset is sought past the earlier span (which covers the first
+        # burst to 3σ), and equals the onset of the burst on its own
+        second = centre + 5000
+        s2 = s .+ circshift(s, 5000)
+        truth2 = joinpath(dir, "truth2.csv")
+        CSV.write(
+            truth2,
+            DataFrame(t = 5.0 .* k, X = -s2 ./ sqrt(2), Y = zeros(n), Z = s2 ./ sqrt(2)),
+        )
+        pair = deepcopy(base)
+        pair["ldc"]["output_prefix"] = "synthetic_pair"
+        pair["ldc"]["peak_min_separation_sec"] = 20_000.0
+        pair["ldc"]["label_after_sec"] = 6_000.0
+        two = label_truth_stream(pair; truth_csv = truth2)
+        @test nrow(two.events) == 2
+        @test abs(two.events.merger_index[2] - second) <= 20
+        @test two.events.label_start_index[2] < two.events.label_end_index[1]
+        @test two.events.signal_start_index[2] > two.events.label_end_index[1]
+        lead(i) = two.events.signal_start_index[i] - two.events.merger_index[i]
+        @test abs(lead(1) - (onset - merger)) <= 30
+        @test abs(lead(2) - (onset - merger)) <= 30
 
         # Arguments and malformed truth
         @test_throws ArgumentError label_truth_stream(

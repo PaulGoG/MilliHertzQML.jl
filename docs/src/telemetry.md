@@ -163,8 +163,27 @@ pads with zeros afterwards, are not scored.
 alert is a run of `alert_persistence` consecutive alarmed windows,
 consecutive in window index whatever the order of arrival, raised by the
 arrival that completes the run; with a persistence of one, every alarmed
-window is an alert. For every event the table gives the earliest alert
-touching its label span and:
+window is an alert.
+
+An alert is credited to an event only from the event's **signal onset**
+(`[telemetry] alert_crediting = "signal"`, the default): the first window
+of the signal-only truth stream, inside the label span and past the
+preceding event's span, whose matched-filter SNR reaches the labelling
+threshold (`label_snr_threshold`, 5). The labelling and generation stages
+write it as `signal_start_index` beside the label span. The credited span
+runs from the onset to the end of the label span; an alarm earlier in the
+label span falls where no single window of the source reaches the
+threshold, is not attributable to it, and counts as a false alarm. The label span itself, four days before to 27 minutes after the
+merger for the Sangria labels, is the training convention of Isfan et al.
+[IsfanEtAl2025](@cite) and is much wider than the stretch in which a coalescence is visible: on
+the Sangria blind year the onsets lie 7 to 35 hours before the merger.
+Crediting the whole label span (`alert_crediting = "label"`) counts noise
+alarms of its first days as early detections; it reproduces the alert
+tables of releases up to 1.2.0. An event table with label spans
+but without onsets is refused under signal crediting.
+
+For every event the table gives the earliest alert touching its credited
+span and:
 
 - `t_alarm`, the **alert time**: the arrival at the ground station of the
   batch that completes the alert, which includes the conditioning lag and
@@ -174,10 +193,11 @@ touching its label span and:
 - `latency_total_h`, the same with the ground processing budget
   `processing_latency_hours` added;
 - whether the event was detected, and whether its alert is shared with
-  another event whose label span overlaps;
+  another event whose credited span overlaps;
 - the false-alarm episodes per 30 days of scored data: runs of alarmed
-  windows outside every span that reach the persistence. Shorter runs
-  raise no alert and are not counted.
+  windows outside every credited span that reach the persistence. Shorter
+  runs raise no alert and are not counted;
+- `alert_persistence` and `alert_crediting`, the criteria applied.
 
 The benchmark page counts an event whose only alert is shared as not
 detected on its own. In live mode (`follow_run`, `[telemetry] mode =
@@ -199,7 +219,7 @@ stretch; bursts, retransmission, outages and gaps in the data itself
 remove far less.
 
 `figure_telemetry_alerts` stacks the score trace, with the threshold, the
-alarmed windows and the labelled spans, over the availability latency of
+alarmed windows and the credited spans, over the availability latency of
 every window (the wait for its conditioning stretch plus the downlink
 delay) and the alert time of every detected event. `animate_mission_replay`
 sweeps the same replay across four panels in the order in which the ground

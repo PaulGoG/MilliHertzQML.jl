@@ -1227,13 +1227,24 @@ end
 
 """
     alert_latency_table(windows, events, geometry; processing_latency_hours = 1.0,
-                        persistence = 1) -> DataFrame
+                        persistence = 1, crediting = :signal) -> DataFrame
 
 Per event of `events` (columns `merger_time_s` [s after the mission epoch]
 and, when present, `label_start_index`/`label_end_index` payload rows; a
 `label` or `event` column names it): the earliest alert of `windows` (the
-table of [`replay_run`](@ref)) touching the event's label span (rows, or
+table of [`replay_run`](@ref)) touching the event's credited span (rows, or
 the window containing the merger when no span is given).
+
+`crediting` fixes where the credited span starts. With `:signal` it starts
+at the signal onset `signal_start_index` written by the labelling and
+generation stages (the first window in which the source reaches the
+labelling SNR threshold, [`signal_onsets`](@ref)) and ends with the label
+span: an alarm earlier in the label span cannot be caused by the source and
+counts as a false alarm. With `:label` the whole label span is credited,
+the convention of the training labels (96 h before to 27 min after the
+merger for the Isfan et al. (2025) spans), which credits noise alarms
+preceding the signal as early detections. A table with spans but without
+`signal_start_index` is refused under `:signal`.
 
 An alert is a run of `persistence` consecutive alarmed windows —
 consecutive in window index, whatever order they reached the ground — at
@@ -1249,7 +1260,7 @@ spans that overlap). Runs of
 alarmed windows outside every label span that reach `persistence` are
 false-alarm episodes, reported as `false_alarms_per_30d` in every row;
 shorter runs raise no alert and are not counted. `alert_persistence`
-records the criterion.
+and `alert_crediting` record the criteria.
 """
 function alert_latency_table(
     windows::DataFrame,
@@ -1257,17 +1268,21 @@ function alert_latency_table(
     geometry::RunGeometry;
     processing_latency_hours::Real = 1.0,
     persistence::Integer = 1,
+    crediting::Symbol = :signal,
 )
     processing_latency_hours >= 0 ||
         throw(ArgumentError("processing_latency_hours must be non-negative."))
     persistence >= 1 || throw(ArgumentError("persistence must be at least 1."))
+    crediting in (:signal, :label) ||
+        throw(ArgumentError("crediting = :$crediting; one of :signal, :label."))
     times = event_merger_times(events)
     n_events = nrow(events)
-    has_span = "label_start_index" in names(events) && "label_end_index" in names(events)
+    starts = credited_span_starts(events, crediting)
+    has_span = starts !== nothing
     spans = UnitRange{Int}[]
     for i in 1:n_events
         if has_span
-            push!(spans, Int(events.label_start_index[i]):Int(events.label_end_index[i]))
+            push!(spans, Int(starts[i]):Int(events.label_end_index[i]))
         else
             row = round(Int, times[i] * geometry.sample_rate) + 1
             push!(spans, row:row)
@@ -1374,7 +1389,48 @@ function alert_latency_table(
     out.false_alarms_per_30d =
         fill(observation_days == 0 ? NaN : n_false / observation_days * 30, n_events)
     out.alert_persistence = fill(Int(persistence), n_events)
+    out.alert_crediting = fill(String(crediting), n_events)
     return out
+end
+
+"""
+    credited_span_label(crediting) -> String
+
+Legend name of the spans alerts are credited to under `crediting`.
+"""
+credited_span_label(crediting::Symbol) =
+    crediting === :signal ? "Signal span" : "Labelled span"
+
+"""
+    credited_span_starts(events, crediting) -> Union{Nothing,Vector{Int}}
+
+First payload rows of the credited spans of an event table: the column
+`signal_start_index` under `crediting = :signal`, `label_start_index` under
+`:label`; `nothing` when the table carries no label spans. Refuses a table
+with spans but without the signal onset under `:signal`, and onsets outside
+their label span.
+"""
+function credited_span_starts(events::DataFrame, crediting::Symbol)
+    cols = names(events)
+    ("label_start_index" in cols && "label_end_index" in cols) || return nothing
+    crediting === :label && return Int.(events.label_start_index)
+    "signal_start_index" in cols || throw(
+        ArgumentError(
+            "the event table has label spans but no signal_start_index column; " *
+            "regenerate it with the labelling or generation stage, or credit the " *
+            "whole label span with crediting = :label.",
+        ),
+    )
+    starts = Int.(events.signal_start_index)
+    for (i, (s, lo, hi)) in
+        enumerate(zip(starts, events.label_start_index, events.label_end_index))
+        lo <= s <= hi || throw(
+            ArgumentError(
+                "signal_start_index $s of event $i lies outside its label span $lo:$hi.",
+            ),
+        )
+    end
+    return starts
 end
 
 """

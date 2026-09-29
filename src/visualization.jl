@@ -178,7 +178,7 @@ function animate_training_history end
 
 """
     animate_mission_replay(windows, threshold, path; epoch, label_spans = nothing,
-                           n_frames = 200, framerate = 20, hold_frames = 20,
+                           span_label = "Labelled span", n_frames = 200, framerate = 20, hold_frames = 20,
                            max_points = 6000, size = figure_size(2, 2),
                            px_per_unit = 2) -> String
 
@@ -186,8 +186,9 @@ Four stacked panels of a telemetry replay, two main panels and two strips
 on a canvas of `size` [pt], on a shared mission-time axis
 [days since `epoch`, by default the content end of the first window]:
 window coverage, classifier score with the decision `threshold` as a dashed
-rule, the alarmed windows marked, and the labelled spans (`label_spans`,
-pairs of `DateTime`) shaded, the count of alarm episodes accumulated along
+rule, the alarmed windows marked, and the spans alerts are credited to
+(`label_spans`, pairs of `DateTime`, named `span_label` in the legend)
+shaded, the count of alarm episodes accumulated along
 mission time, and the availability latency of every window (`complete_at −
 content_end` [h]: the wait for its conditioning stretch and the downlink
 delay of the batch that completes it).
@@ -269,12 +270,13 @@ function figure_score_distribution end
 
 """
     figure_telemetry_alerts(windows, threshold; epoch, label_spans = nothing,
-                            latencies = nothing) -> Figure
+                            latencies = nothing, span_label = "Labelled span") -> Figure
 
 Two stacked panels on a shared mission-time axis [days since `epoch`] for
 the windows table of a replay: the classifier score of every window at its
 content end with the decision threshold, alarmed windows marked, and the
-labelled spans (`label_spans`, pairs of `DateTime`) shaded; below, the
+spans alerts are credited to (`label_spans`, pairs of `DateTime`, named
+`span_label` in the legend) shaded; below, the
 ground-availability latency of every window (`complete_at − content_end`
 [h]) with the alert latencies of the detected events (`latencies`, the
 table of `alert_latency_table`) annotated. Requires CairoMakie.

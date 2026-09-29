@@ -1023,6 +1023,62 @@ end
     @test count(==(1), labels) == 21 && labels[9] == 0 && labels[31] == 0
     @test_throws ArgumentError span_labels(10, [5:12])
     @test_throws ArgumentError fixed_spans([0], fs, n; before = 1.0, after = 1.0)
+    # Signal onsets: the first window from the lower bound that reaches the
+    # threshold, the merger sample when none does before it
+    @test signal_onsets(starts, ρ, [9000], [1]; threshold = 5.0) == [first(spans[1])]
+    @test signal_onsets(starts, ρ, [9000], [first(spans[1]) + 1]; threshold = 5.0)[1] >
+          first(spans[1])
+    @test signal_onsets(starts, ρ, [2000], [1]; threshold = 5.0) == [2000]
+    @test_throws ArgumentError signal_onsets(starts, ρ, [100], [200]; threshold = 5.0)
+    @test_throws ArgumentError signal_onsets(starts, ρ, [100], [1]; threshold = 0.0)
+    @test_throws DimensionMismatch signal_onsets(
+        starts,
+        ρ,
+        [100, 200],
+        [1];
+        threshold = 5.0,
+    )
+    # The generator's onset of one injection: a window reaching the threshold
+    # between the label start and the coalescence, its predecessor below it
+    onset_settings = (
+        label_span = "fixed",
+        label_window_size = 1000,
+        label_step = 100,
+        label_snr_threshold = 5.0,
+    )
+    k_on = MilliHertzQML.signal_onset(
+        onset_settings,
+        (sig,),
+        burst,
+        8900,
+        7001,
+        9100,
+        fs,
+        lisa_noise_psd,
+    )
+    @test 7001 <= k_on <= 8900
+    @test matched_filter_snr(view(sig, k_on:(k_on+999)), fs; psd = lisa_noise_psd) >= 5
+    @test matched_filter_snr(view(sig, (k_on-100):(k_on+899)), fs; psd = lisa_noise_psd) < 5
+    @test MilliHertzQML.signal_onset(
+        onset_settings,
+        (zeros(n),),
+        burst,
+        8900,
+        7001,
+        9100,
+        fs,
+        lisa_noise_psd,
+    ) == 8900
+    @test MilliHertzQML.signal_onset(
+        merge(onset_settings, (label_span = "detectable",)),
+        (sig,),
+        burst,
+        8900,
+        7500,
+        9100,
+        fs,
+        lisa_noise_psd,
+    ) == 7500
     @test_throws ArgumentError windowed_snr(
         sig,
         fs;
@@ -1130,6 +1186,10 @@ end
         Dict{String,Any}("training" => Dict{String,Any}("min_fit_episodes" => -1)),
     )
     @test telemetry_settings(empty).alert_persistence == 3
+    @test telemetry_settings(empty).alert_crediting == "signal"
+    @test_throws ArgumentError telemetry_settings(
+        Dict{String,Any}("telemetry" => Dict{String,Any}("alert_crediting" => "merger")),
+    )
     @test telemetry_settings(empty).psd_mode == "sidecar"
     @test telemetry_settings(empty).psd_segment_length == 65536
     @test telemetry_settings(
@@ -1712,6 +1772,13 @@ include("response_tests.jl")
         @test all(1e5 .<= events.total_mass_msun .<= 1e7)
         @test all(events.label_start_index .>= events.start_index .- 999)
         @test all(events.label_end_index .<= events.end_index .+ 999)
+        # Detectable spans start at the signal onset itself
+        @test all(
+            r ->
+                r.label_start_index > r.label_end_index ||
+                r.signal_start_index == r.label_start_index,
+            eachrow(events),
+        )
 
         stage("preprocess_ldc.jl", "--h5-file", h5, "--label-file", raw_labels) || return
         @test nrow(CSV.read(feats, DataFrame)) == n_kept
