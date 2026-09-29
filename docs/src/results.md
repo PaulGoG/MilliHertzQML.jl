@@ -5,14 +5,19 @@ The figures on this page summarise the results on the LISA Data Challenge
 protocol, every run, and the limits of each result; the decision thresholds
 are fitted on the training year and applied unchanged to the blind year.
 
-| | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
+| | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted on their own | 5 of 6 | 5 of 6 |
-| Alerts reaching the ground more than an hour before the merger | 2, consistent with chance | **5, 12 to 71 h ahead** |
-| Streamed year: false alarms per 30 d | 1.90 | **0.16** |
+| Streamed year, causal whitening: coalescences alerted before the merger | none; all six after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 0.1 to 42 h after the merger | **11 to 24 h before** |
+| Streamed year: false alarms per 30 d | 0.99 | **0.49** (1.15 to 1.56 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+
+Alerts are credited to a coalescence only from its signal onset, the first
+window in which its signal reaches a matched-filter SNR of 5; the figures
+of release 1.2.0 credited the whole four-day label span (see the
+[correction](benchmark.md#Telemetry-replay-and-alert-latency)).
 
 ## The completed blind year
 
@@ -55,15 +60,19 @@ seeds](benchmark.md#The-grid-over-four-seeds).
 
 ## The streamed year
 
-![Classifier output and alarms over the year-long replay under causal whitening](assets/benchmark_telemetry_alerts_causal.png)
+![Classifier output and alarms over the year-long replay of the streaming configuration](assets/benchmark_telemetry_alerts_smoothed.png)
 
 *The blind year streamed through a simulated telemetry mission with daily
-ground-station passes and whitened causally, from data already delivered.
-Five coalescences are alerted on their own at 1.90 false-alarm episodes
-per 30 days; the lower panel gives the alert time of every coalescence at
-the ground station against the availability latency of every window, the
-wait for its conditioning stretch plus the downlink delay.* See the
-[telemetry replay](benchmark.md#Telemetry-replay-and-alert-latency).
+ground-station passes and whitened causally, from data already delivered,
+by the streaming configuration, trained on a Welch whitening spectrum
+smoothed by 0.01 dex in log-frequency. Five of the six coalescences are
+alerted at the ground station 11 to 24 hours before their merger, at six
+false-alarm episodes in the year; the shaded spans run from the signal
+onset of each coalescence to 27 minutes after its merger. The lower panel
+gives the alert time of every coalescence against the availability
+latency of every window, the wait for its conditioning stretch of 2.8
+hours plus the downlink delay.* See [smoothed
+whitening](benchmark.md#Smoothed-whitening).
 
 ![A year of telemetry replay: coverage, classifier score, cumulative alarm episodes, and window availability](assets/mission_replay.gif)
 
@@ -71,10 +80,19 @@ wait for its conditioning stretch plus the downlink delay.* See the
 windows. The dotted line is the ground clock; its distance from the edge
 of the received data is the availability latency.*
 
-![Classifier output and alarms over the year-long replay whitened by the full-record PSD](assets/benchmark_telemetry_alerts.png)
+![Classifier output and alarms over the year-long replay of the selected configuration under causal whitening](assets/benchmark_telemetry_alerts_causal.png)
 
-*The same mission whitened by the full-record PSD of the blind year, which
-no mission has while it observes: a non-causal upper reference, at 1.32
+*The selected configuration on the same mission. Its conditioning stretch
+of 1.16 days delays every alert past the merger: all six coalescences are
+alerted, 0.1 to 42 hours after it, at 0.99 false-alarm episodes per 30
+days.* See the [telemetry
+replay](benchmark.md#Telemetry-replay-and-alert-latency).
+
+![Classifier output and alarms over the year-long replay of the selected configuration whitened by the full-record PSD](assets/benchmark_telemetry_alerts.png)
+
+*The selected configuration whitened by the full-record PSD of the blind
+year, which no mission has while it observes: a non-causal upper
+reference, with the same alerts to within half an hour, at 0.74
 false-alarm episodes per 30 days.*
 
 ## A lossy link
@@ -84,26 +102,17 @@ false-alarm episodes per 30 days.*
 *Seventeen 30-day missions, each differing from a lossless reference in
 one property of the channel or the spacecraft, replayed with the selected
 model. Scattered permanent loss is what removes windows; bursts,
-retransmission and outages remove few or none.* See the [effect of a
-lossy link](benchmark.md#Effect-of-a-lossy-link).
+retransmission and outages remove few or none. The streaming
+configuration, whose conditioning stretch is 50 batches, scores 81 % of
+the record at 0.43 % loss and alerts both coalescences in every
+mission.* See the [effect of a lossy
+link](benchmark.md#Effect-of-a-lossy-link).
 
 ![Windows a replay can score, and the events it still detects, against the permanent batch loss](assets/benchmark_loss_survival.png)
 
 *A window is scored only once its whole conditioning stretch of 410
 batches has arrived, so the scorable fraction follows `(1 − p)^410` and
 collapses beyond about 0.2 % of permanently lost batches.*
-
-## Smoothed whitening
-
-![Classifier output and alarms over the year-long replay of the smoothed-whitening model](assets/benchmark_telemetry_alerts_smoothed.png)
-
-*The model retrained on a Welch whitening spectrum smoothed by 0.01 dex in
-log-frequency needs a conditioning stretch of 50 batches instead of 410.
-Streamed under causal whitening it alerts five of the six coalescences at
-the ground station 12 to 71 hours before their merger, at two false-alarm
-episodes in the year, where about 0.1 are expected by chance inside the
-label spans; at 0.43 % scattered loss it still scores 81 % of the
-record.* See [smoothed whitening](benchmark.md#Smoothed-whitening).
 
 ## Training
 

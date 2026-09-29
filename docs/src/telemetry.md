@@ -226,7 +226,7 @@ sweeps the same replay across four panels in the order in which the ground
 received the windows; the dotted rule is the ground clock, and its
 distance from the edge of the data is the availability latency.
 
-![A year of telemetry replay: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and window availability](assets/mission_replay.gif)
+![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](assets/mission_replay.gif)
 
 ## Testing
 

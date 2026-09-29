@@ -6,7 +6,56 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Alerts of a streamed replay are credited to a coalescence only from its
+signal onset, and the smoothed-whitening configuration `q8_b6_s001`,
+now trained at four seeds, becomes the streaming configuration. Release
+1.2.0 credited the whole four-day label span and so counted noise alarms
+up to 95 hours before a merger as early detections; the corrected numbers
+are under Fixed.
+
+### Added
+- `signal_onsets` and the event-table column `signal_start_index`,
+  written by the labelling stage for fixed label spans and by the
+  generation stage for every injection: the first window, inside the span
+  and past the preceding event's span, whose matched-filter SNR of the
+  signal-only truth reaches `label_snr_threshold`.
+- `[telemetry] alert_crediting` (`"signal"` by default, or `"label"`) and
+  the `crediting` keyword of `alert_latency_table`; the alert table records
+  the criterion in `alert_crediting`, and the alert figure and the replay
+  animation shade the credited span (`span_label`).
+- The streaming configuration trained at the three further seeds of the
+  grid, with its year replays and lossy-link replays.
+
+### Changed
+- Alerts are credited from the signal onset; alarm runs earlier in a label
+  span count as false alarms. An event table with label spans but without
+  onsets is refused under signal crediting; `scripts/label_ldc.jl` writes
+  the onsets.
+- The persistence of an alert is the smallest value that brings the
+  calibration block, credited from the signal onset and pooled over the
+  trained seeds, below one false alert per 30 days; the margin required on
+  every calibration event is no longer applied. `q8_b6` moves from two to
+  three; `q8_b6_s001` keeps three.
+- `q8_b6_s001` is the streaming configuration of the manual and the
+  README, and the replay animation shows it.
+- CSV compatibility admits 1.1 beside 0.10.
+
+### Fixed
+- The alert times published with 1.2.0. Credited from the signal onset,
+  `q8_b6_s001` alerts five of the six Sangria coalescences 11 to 24 hours
+  before their merger at 0.49 false-alarm episodes per 30 days (seed 9999;
+  at the three further seeds six of six, 2 to 29 hours ahead, at 1.15 to
+  1.56), where 1.2.0 reported 12 to 71 hours at 0.16; `q8_b6` alerts all
+  six after their merger at 0.99 per 30 days, where 1.2.0 reported two
+  alerts before it. The earliest alerts of 1.2.0 fell where the window SNR
+  of the source is about 2.
+
 ## [1.2.0] — 2026-09-28
+
+*Correction, 29 September 2026: the lead times quoted in this section
+credit alerts from the start of the four-day label span; credited from the
+signal onset they are 11 to 24 hours, at 0.49 false-alarm episodes per 30
+days (see Fixed under Unreleased).*
 
 The streamed detector becomes usable on a real link. A Welch whitening
 estimate smoothed in log-frequency shortens the stretch of data each

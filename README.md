@@ -23,28 +23,37 @@ reimplemented in Julia in place of the original Python and Qiskit code.
 On the LISA Data Challenge 2a "Sangria" blind year, with decision
 thresholds fitted on the training year and applied unchanged:
 
-| | Selected configuration, `q8_b6` | Smoothed whitening, `q8_b6_s001` |
+| | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted on their own | 5 of 6 | 5 of 6 |
-| Alerts reaching the ground more than an hour before the merger | 2, consistent with chance | **5, 12 to 71 h ahead** |
-| Streamed year: false alarms per 30 d | 1.90 | **0.16** |
+| Streamed year, causal whitening: coalescences alerted before the merger | none; all six after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 0.1 to 42 h after the merger | **11 to 24 h before** |
+| Streamed year: false alarms per 30 d | 0.99 | **0.49** (1.15 to 1.56 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
-![Classifier output and alarms over the year-long replay of the smoothed-whitening model, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
+An alert counts for a coalescence only from its signal onset, the first
+window in which the signal of the source reaches a matched-filter SNR of
+5, 7 to 35 hours before the merger on this year; earlier alarms count as
+false alarms. Release 1.2.0 credited the whole four-day label span and
+quoted leads of up to 71 hours; the earliest of those alerts fell where
+the signal of the source does not reach a window SNR of 3, and were noise
+alarms (see the [correction](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
+on the benchmark page).
+
+![Classifier output and alarms over the year-long replay of the streaming configuration, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
 
 *The blind year streamed through a simulated telemetry mission and
-whitened causally, from data already delivered to the ground. Retrained
-on a Welch whitening spectrum smoothed in log-frequency, the classifier
-alerts five of the six coalescences at the ground station 12 to 71 hours
-before their merger, at two false-alarm episodes in the year, where about
-0.1 are expected by chance inside the labelled spans.*
+whitened causally, from data already delivered to the ground. The
+streaming configuration, trained on a Welch whitening spectrum smoothed in
+log-frequency, alerts five of the six coalescences at the ground station
+11 to 24 hours before their merger, 4 to 18 hours after the signal onset,
+at six false-alarm episodes in the year.*
 
-![A year of telemetry replay: coverage, classifier score against the threshold with the labelled spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
+![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
-*The replay of the selected model in the order in which the ground
-station received the windows; the dotted line is the ground clock.*
+*The same replay in the order in which the ground station received the
+windows; the dotted line is the ground clock.*
 
 Every figure and animation, with captions, is on the
 [Results](https://PaulGoG.github.io/MilliHertzQML.jl/stable/results/) page of
@@ -134,7 +143,7 @@ from the latest release and at
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
 | Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, threaded gradients, threshold fitted by a false-alarm criterion |
 | LDC products | Native reader, analytic TDI noise PSD, truth-stream labels; validated on Sangria |
-| Telemetry coupling | Replay and live modes, causal whitening from delivered data, alert table with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
+| Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
 | Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
 
 ## Pipeline
@@ -172,12 +181,13 @@ of the simulator and the features.
 - **Four initialisations per configuration.** They settle the recall of
   the band partitions, but not a ranking by false-alarm rate: the rate of
   the selected configuration spans 1.57 to 8.74 per 30 days over its
-  seeds. The smoothed configuration was trained at one seed.
+  seeds, that of the streaming configuration in the streamed year 0.49 to
+  1.56.
 - **Single channel.** Only A is used; E and T would allow a null-channel
   veto.
 - **Scattered permanent loss.** A window whose conditioning stretch
   contains a delivery hole is not scored: the selected configuration
-  tolerates about 0.2 % of lost batches, the smoothed one 0.43 % with 81 %
+  tolerates about 0.2 % of lost batches, the streaming one 0.43 % with 81 %
   of the record scored. The classifier has never been trained on gapped
   data.
 - **One year, one direction.** The threshold comes from the earlier year of
@@ -186,6 +196,10 @@ of the simulator and the features.
   features score below the threshold in their merger bin.
 - **The completed-record result is non-causal.** It whitens the blind year
   by the PSD of the whole year; the streamed results are causal.
+- **Signal onsets from the combined truth stream.** The onset of a
+  coalescence is where the sum of all MBHB signals first reaches a window
+  SNR of 5, sought past the preceding coalescence; an alert after it may
+  still have been raised by a neighbouring source.
 
 ## Full file tree
 
