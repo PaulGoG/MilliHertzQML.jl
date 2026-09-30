@@ -12,5 +12,5 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
 CurvatureDistinguishability = {rev = "bf82733675f386698bd5966b65e24e8868e1c0be", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
-DeepSpaceTelemetry = {rev = "139dd3047e710515e09c744e05904d1f2454bf90", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
+DeepSpaceTelemetry = {rev = "7af7e4647ace73e2932397cbba33a299249e2495", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
 MilliHertzQML = {path = ".."}

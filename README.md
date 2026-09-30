@@ -107,7 +107,7 @@ entry points below run as written. `Manifest.toml` files are not tracked.
 The script and test environments pin two unregistered packages of mine at
 the commits of their release tags:
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.0.0`, the telemetry producer, and
+`v2.1.1`, the telemetry producer, and
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
 `v2.0.1`, the constellation response of the simulator. Where git rewrites
 GitHub URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true`.

@@ -128,5 +128,138 @@
         latency = alert_latency_table(windows, events_table, geometry)
         @test nrow(latency) == 1 && latency.merger_time_s[1] == 9500 / fs
         @test latency.t_merger[1] == epoch + Dates.Second(9500 * 5)
+
+        # A scheduled generation gap: every delivered batch holds the payload
+        # rows of its content epoch, and the gap's rows are never delivered.
+        gapped = deepcopy(scenario)
+        gapped["disruption"] = Dict{String,Any}(
+            "events" => [
+                Dict{String,Any}(
+                    "type" => "antenna_repointing",
+                    "label" => "repointing",
+                    "start_day" => 0.1,
+                    "duration_hours" => 1.0,
+                ),
+            ],
+        )
+        TelemetryCore.DATA_ROOT[] = joinpath(dir, "producer")
+        gap_dir = try
+            Supervisor.run_mission(gapped; run_id = "coupling_gap", orig_stdout = devnull)
+        finally
+            TelemetryCore.DATA_ROOT[] = previous_root
+        end
+        gap_run = open_telemetry_run(gap_dir)
+        # Batches past the payload end carry the producer's zero padding.
+        gap_delivered =
+            filter(b -> b.state == :ground && last(b.rows) <= n_rows, list_batches(gap_run))
+        @test !isempty(gap_delivered)
+        @test all(
+            b -> read_batch(gap_run, b.name) == Float32.(payload[b.rows]),
+            gap_delivered,
+        )
+        gap_rows =
+            time_row(geometry, epoch+Dates.Minute(144)):(time_row(
+                geometry,
+                epoch+Dates.Minute(204),
+            )-1)
+        @test all(b -> isempty(intersect(b.rows, gap_rows)), gap_delivered)
+        @test any(b -> first(b.rows) > last(gap_rows), gap_delivered)
+    end
+end
+
+@testset "Payload alignment of producer runs" begin
+    fs = 0.2
+    epoch = Dates.DateTime(2035, 1, 1)
+    function fake_run(
+        dir;
+        version = "2.0.1",
+        source = "external",
+        downtime = 0.0,
+        origin = nothing,
+        tx = String[],
+        components = String[],
+    )
+        mkpath(dir)
+        touch(joinpath(dir, "RUN_COMPLETE"))
+        provenance =
+            Dict{String,Any}("platform" => Dict{String,Any}("package_version" => version))
+        origin === nothing || (provenance["payload_origin"] = origin)
+        open(joinpath(dir, "config_snapshot.toml"), "w") do io
+            TOML.print(
+                io,
+                Dict{String,Any}(
+                    "physics" => Dict{String,Any}(
+                        "sample_rate" => fs,
+                        "segment_duration_sec" => 50.0,
+                        "batch_size" => 10,
+                        "data_source" => source,
+                    ),
+                    "simulation" => Dict{String,Any}(
+                        "start_sim_time" => string(epoch),
+                        "initial_downtime_days" => downtime,
+                    ),
+                    "provenance" => provenance,
+                ),
+            )
+        end
+        isempty(tx) || write(
+            joinpath(dir, "events_tx.csv"),
+            join(["SimTime,Batch,Event"; tx], "\n") * "\n",
+        )
+        isempty(components) || write(
+            joinpath(dir, "component_events.csv"),
+            join(["SimTime,Component,Event"; components], "\n") * "\n",
+        )
+        return dir
+    end
+    gap = [
+        "2035-01-01T02:00:00.0,SCHEDULED,gap_start",
+        "2035-01-01T03:00:00.0,SCHEDULED,gap_end",
+    ]
+    restart = ["2035-01-01T04:00:00.0,emitter,restart"]
+    mktempdir() do dir
+        # Producers up to 2.0.1 misplace an external payload after a scheduled
+        # gap or a restart; such runs are refused, others open.
+        @test_throws ArgumentError open_telemetry_run(
+            fake_run(joinpath(dir, "a"); tx = gap),
+        )
+        @test_throws ArgumentError open_telemetry_run(
+            fake_run(joinpath(dir, "b"); components = restart),
+        )
+        @test_throws ArgumentError open_telemetry_run(
+            fake_run(joinpath(dir, "c"); version = "unknown", tx = gap),
+        )
+        @test open_telemetry_run(
+            fake_run(joinpath(dir, "d"); version = "2.1.1", tx = gap),
+        ) isa AbstractTelemetryRun
+        @test open_telemetry_run(
+            fake_run(joinpath(dir, "e"); source = "synthetic", tx = gap),
+        ) isa AbstractTelemetryRun
+        @test open_telemetry_run(
+            fake_run(joinpath(dir, "f"); tx = ["2035-01-01T02:00:00.0,RECORDER,gap_start"]),
+        ) isa AbstractTelemetryRun
+        # Payload row 1 must lie at the mission epoch.
+        @test_throws ArgumentError open_telemetry_run(
+            fake_run(joinpath(dir, "g"); downtime = 0.5),
+        )
+        @test_throws ArgumentError open_telemetry_run(
+            fake_run(joinpath(dir, "h"); version = "2.1.1", origin = "2034-12-31T12:00:00"),
+        )
+        # A stamped payload row sets the rows of a batch and must agree with
+        # its content epoch.
+        run_dir = fake_run(joinpath(dir, "i"); version = "2.1.1", origin = string(epoch))
+        batch = joinpath(run_dir, "ground", "LIVE_batch_7")
+        mkpath(batch)
+        write(
+            joinpath(batch, "metadata.json"),
+            """{"segment_count":10,"content_epoch":"2035-01-01T00:50:00","payload_row":601,"batch_id":7}""",
+        )
+        run = open_telemetry_run(run_dir)
+        @test only(list_batches(run)).rows == 601:700
+        write(
+            joinpath(batch, "metadata.json"),
+            """{"segment_count":10,"content_epoch":"2035-01-01T00:50:00","payload_row":501,"batch_id":7}""",
+        )
+        @test_throws ArgumentError list_batches(run)
     end
 end

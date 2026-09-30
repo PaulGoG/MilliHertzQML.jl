@@ -66,10 +66,17 @@ rate, segment length, batch size, samples per batch, mission epoch,
 producer version), its batches (`list_batches`: delivered, lost or pruned,
 each with the payload rows it covers), the payload of a delivered batch
 (`read_batch`), the arrival feed in mission-time order (`arrival_events`),
-and the lifecycle state (`run_state`). The rows of a batch are taken from
-the content epoch the producer stamps on it rather than from its stored
-index, since the two differ once the producer discards production;
-`list_batches` warns when they do.
+and the lifecycle state (`run_state`). The rows of a batch are the payload
+row the producer stamps on it (`payload_row`, from DeepSpaceTelemetry
+2.1.0), checked against its content epoch, or else the row of that epoch;
+never its stored index, since the two differ once the producer discards
+production (`list_batches` warns when they do). Payload rows are counted
+from the mission epoch, and a run whose payload starts elsewhere (an
+initial downtime) is refused. So is an external-payload run of
+DeepSpaceTelemetry 2.0.1 or earlier that holds a scheduled generation gap
+or an emitter restart: those versions read the payload sequentially, so
+after such an event every batch carries rows other than those of its
+content epoch.
 
 ### Scheduling and conditioning
 

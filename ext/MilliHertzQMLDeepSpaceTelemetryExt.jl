@@ -10,7 +10,7 @@ using DeepSpaceTelemetry: DeepSpaceTelemetry
 using DeepSpaceTelemetry.TelemetryCore: TelemetryCore
 using CSV: CSV
 using DataFrames: DataFrame, nrow
-using Dates: DateTime
+using Dates: DateTime, Millisecond
 using MilliHertzQML
 using MilliHertzQML:
     AbstractTelemetryRun,
@@ -54,6 +54,78 @@ function producer_version(config::AbstractDict)
     return String(string(version))
 end
 
+"""
+    payload_origin(config, start_sim_time) -> DateTime
+
+Mission time of payload row 1: `[provenance] payload_origin` where the
+producer records it (from 2.1.0), otherwise `start_sim_time` less
+`[simulation] initial_downtime_days`, where earlier producers anchored the
+instrument.
+"""
+function payload_origin(config::AbstractDict, start_sim_time::DateTime)
+    provenance = get(config, "provenance", Dict{String,Any}())
+    if provenance isa AbstractDict && haskey(provenance, "payload_origin")
+        origin = tryparse(DateTime, String(string(provenance["payload_origin"])))
+        origin === nothing && throw(
+            ArgumentError(
+                "payload_origin = $(repr(provenance["payload_origin"])) is not an ISO-8601 datetime.",
+            ),
+        )
+        return origin
+    end
+    simulation = get(config, "simulation", Dict{String,Any}())
+    downtime = simulation isa AbstractDict ? get(simulation, "initial_downtime_days", 0) : 0
+    downtime isa Real ||
+        throw(ArgumentError("initial_downtime_days = $(repr(downtime)) is not numeric."))
+    return start_sim_time - Millisecond(round(Int, downtime * 86_400_000))
+end
+
+"""
+    check_payload_alignment(run_dir, config, version)
+
+Refuses an external-payload run of DeepSpaceTelemetry 2.0.1 or earlier
+that holds a scheduled generation gap or an emitter restart. Those
+producers read the payload sequentially: after a `SCHEDULED` gap the
+content epoch jumps to the gap end while the payload resumes where it
+stopped, and a restarted emitter reads it again from row 1, so every later
+batch carries rows other than those of its content epoch. Fixed in
+DeepSpaceTelemetry 2.1.0; a run of unknown version is treated as affected.
+"""
+function check_payload_alignment(run_dir::AbstractString, config::AbstractDict, version)
+    physics = get(config, "physics", Dict{String,Any}())
+    get(physics, "data_source", "synthetic") == "external" || return nothing
+    version != "unknown" && VersionNumber(version) >= v"2.1.0" && return nothing
+    first_affected = nothing
+    tx = joinpath(run_dir, "events_tx.csv")
+    if isfile(tx)
+        table = CSV.read(tx, DataFrame; types = String)
+        for row in eachrow(table)
+            row.Batch in ("SCHEDULED", "STREAM") && row.Event == "gap_start" || continue
+            first_affected = something(first_affected, row.SimTime)
+            break
+        end
+    end
+    components = joinpath(run_dir, "component_events.csv")
+    if isfile(components)
+        table = CSV.read(components, DataFrame; types = String)
+        for row in eachrow(table)
+            row.Component == "emitter" && row.Event == "restart" || continue
+            first_affected =
+                first_affected === nothing ? row.SimTime : min(first_affected, row.SimTime)
+            break
+        end
+    end
+    first_affected === nothing && return nothing
+    throw(
+        ArgumentError(
+            "$run_dir is an external-payload run of DeepSpaceTelemetry $version with a " *
+            "generation gap or an emitter restart (first at $first_affected); producers " *
+            "up to 2.0.1 misplace the payload from that instant on. Regenerate the run " *
+            "with DeepSpaceTelemetry 2.1.0 or later.",
+        ),
+    )
+end
+
 function open_telemetry_run(
     run_dir::AbstractString;
     producer_compat::AbstractString = "1.0",
@@ -87,6 +159,18 @@ function open_telemetry_run(
             ),
         )
     end
+    check_payload_alignment(run_dir, config, version)
+    # Rows are counted from the mission epoch, as the payload export writes
+    # them; a producer that anchors payload row 1 elsewhere (an initial
+    # downtime) would shift every row against the event tables.
+    start = DateTime(String(simulation["start_sim_time"]))
+    origin = payload_origin(config, start)
+    origin == start || throw(
+        ArgumentError(
+            "payload row 1 of $run_dir lies at $origin, not at the mission epoch $start " *
+            "(initial downtime); the consumer counts payload rows from the mission epoch.",
+        ),
+    )
     # The producer records the ingested external payload under [provenance];
     # windows beyond its rows would score the zero-padded stream.
     provenance = get(config, "provenance", Dict{String,Any}())
@@ -97,7 +181,7 @@ function open_telemetry_run(
         physics["sample_rate"],
         physics["segment_duration_sec"],
         physics["batch_size"],
-        DateTime(String(simulation["start_sim_time"])),
+        start,
         version;
         payload_rows = max(payload_rows, 0),
     )
@@ -128,16 +212,29 @@ function list_batches(run::DeepSpaceTelemetryRun)
                 continue      # a foreign directory
             end
             meta = TelemetryCore.read_batch_metadata(batch_dir)
-            # The batch's first row comes from the content epoch the producer
-            # stamps on it. Reconstructing it from the index is only correct
-            # while the producer stores every batch it produces; when its
-            # recorder overflows it discards production and keeps numbering
-            # what it stores, so the index drifts behind the content.
+            # The batch's first row is the payload row the producer stamps on
+            # it (from 2.1.0), or else the row of its content epoch.
+            # Reconstructing it from the index is only correct while the
+            # producer stores every batch it produces; when its recorder
+            # overflows it discards production and keeps numbering what it
+            # stores, so the index drifts behind the content.
             stamped =
                 haskey(meta, "content_epoch") ?
                 tryparse(DateTime, String(meta["content_epoch"])) : nothing
             rows = batch_rows(k, P)
-            if stamped !== nothing
+            if haskey(meta, "payload_row")
+                row0 = Int(meta["payload_row"])
+                stamped === nothing ||
+                    time_row(run.geometry, stamped) == row0 ||
+                    throw(
+                        ArgumentError(
+                            "batch $name carries payload_row $row0 but content epoch " *
+                            "$stamped, which is row $(time_row(run.geometry, stamped)).",
+                        ),
+                    )
+                row0 >= 1 || throw(ArgumentError("batch $name carries payload_row $row0."))
+                rows = row0:(row0+P-1)
+            elseif stamped !== nothing
                 row0 = time_row(run.geometry, stamped)
                 if row0 >= 1
                     rows = row0:(row0+P-1)

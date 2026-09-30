@@ -11,7 +11,19 @@ versioning follows [Semantic Versioning](https://semver.org/).
   toolbox, whose equal-arm analytic TDI noise model and Galactic-confusion
   fit `src/ldc.jl` ports.
 
+### Changed
+- The script and test environments pin DeepSpaceTelemetry.jl `v2.1.1`.
+
 ### Fixed
+- The telemetry replay placed the payload of a DeepSpaceTelemetry run
+  wherever the producer's content epoch put it. Producers up to 2.0.1 read
+  an external payload sequentially, so after a scheduled generation gap or
+  an emitter restart every batch carried rows other than those of its
+  content epoch (DeepSpaceTelemetry 2.1.0 fixed this). The run adapter now
+  refuses such runs, takes the rows of a batch from the `payload_row` that
+  producers from 2.1.0 stamp on it and checks it against the content
+  epoch, and refuses a run whose payload row 1 does not lie at the mission
+  epoch.
 - The physics page described every LDC product as first-generation TDI;
   Sangria is TDI 1.5 with equal arm lengths, Spritz TDI 2 with Keplerian
   orbits.
