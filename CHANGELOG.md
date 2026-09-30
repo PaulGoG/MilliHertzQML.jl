@@ -15,6 +15,14 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The script and test environments pin DeepSpaceTelemetry.jl `v2.1.1`.
 
 ### Fixed
+- Benchmark: the two generation-gap missions of the lossy-link study were
+  regenerated with DeepSpaceTelemetry 2.1.1 and replayed (see the
+  correction notes under 2.0.0 and 1.2.0). Fifteen minutes without data
+  on day 3: 8.0 false-alarm episodes per 30 days (published 6.9), both
+  coalescences alerted. Two hours without data, now centred on merger 1:
+  neither coalescence is alerted by the selected model (published one of
+  two), since its conditioning stretch around the hole reaches past
+  merger 2; the smoothed model alerts both at every seed.
 - The telemetry replay placed the payload of a DeepSpaceTelemetry run
   wherever the producer's content epoch put it. Producers up to 2.0.1 read
   an external payload sequentially, so after a scheduled generation gap or
@@ -29,6 +37,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   orbits.
 
 ## [2.0.0] — 2026-09-30
+
+*Correction, 30 September 2026: the two generation-gap missions of the
+lossy-link study were recorded with DeepSpaceTelemetry 2.0.0, which
+misplaced an external payload after a scheduled gap, and the two-hour gap
+was placed 4.9 h before merger 1 instead of astride it; the missions were
+regenerated with 2.1.1 (see Fixed under Unreleased). The fix of the
+payload rows listed below, keyed by the content epoch, holds only for runs
+without a scheduled gap or emitter restart, or from DeepSpaceTelemetry
+2.1.0 on.*
 
 Alerts of a streamed replay are credited to a coalescence only from its
 signal onset, the first window in which its signal reaches the labelling
@@ -85,6 +102,11 @@ the corrected numbers are under Fixed.
 credit alerts from the start of the four-day label span; credited from the
 signal onset they are 11 to 24 hours, at 0.49 false-alarm episodes per 30
 days (see Fixed under 2.0.0).*
+
+*Correction, 30 September 2026: the two generation-gap missions of the
+lossy-link study introduced here misplaced the payload after the gap (a
+DeepSpaceTelemetry 2.0.0 defect) and were regenerated with 2.1.1 (see
+Fixed under Unreleased).*
 
 The streamed detector becomes usable on a real link. A Welch whitening
 estimate smoothed in log-frequency shortens the stretch of data each

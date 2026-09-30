@@ -672,7 +672,8 @@ shorter kernel can be used only by a model trained on smoothed features.
 
 The year-long mission delivered every batch, so the handling of delivery
 holes was not exercised. Seventeen 30-day missions on DeepSpaceTelemetry.jl
-2.0.0 measure the effect of a link that does lose data. They share the
+2.0.0 (the two generation-gap missions on 2.1.1; see the correction below)
+measure the effect of a link that does lose data. They share the
 same payload window — days 65 to 95 of the blind year, which contains
 coalescences 1 and 2 — and the same pass schedule; each mission differs
 from a lossless reference in one property of the channel or of the
@@ -706,8 +707,8 @@ scale against which the rows below are read.
 | link outage 24 h, day 3 | 0 | 4946 | 2 of 2 | 3.1 | |
 | link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 9.4 | |
 | link outage 24 h astride merger 1 | 0 | 4946 | 2 of 2 | 2.1 | |
-| no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 6.9 | |
-| no data produced for 2 h astride merger 1 | 0 | 4521 | 1 of 2 | 3.4 | |
+| no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 8.0 | |
+| no data produced for 2 h astride merger 1 | 0 | 4521 | 0 of 2 | 3.4 | |
 | two-day recorder with a 72 h outage | 0 | 4277 | 2 of 2 | 3.6 | |
 | 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5028 | 2 of 2 | 4.1 | |
 | 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5030 | 2 of 2 | 2.1 | |
@@ -755,13 +756,35 @@ been delivered: the 72 h outage replay differs from the reference in every
 score (9.4 false alarms per 30 days, among them an alarm run 50 h before
 merger 1), although it received the same batches.
 
-**A generation gap removes the stretch around it and the event inside
-it.** Fifteen minutes without data remove 412 windows, the stretch around
-the hole, and nothing else; two hours without data astride merger 1
-remove about as many, 425 windows, and the coalescence itself, which fell
-in the gap. A two-day recorder that overflows during a 72 h outage
-discards 260 batches of production and removes 668 windows, and both
-events are still detected.
+**A generation gap removes the stretch around it, and with the selected
+model's long stretch a neighbouring coalescence too.** Fifteen minutes
+without data on day 3 remove 412 windows, the stretch around the hole;
+the hole also enters the 30-day trailing estimate of every later window
+and shifts the later scores by 0.02 in the median, so that the replay
+counts 8.0 false alarms per 30 days against 3.1 and alerts event 1 2.7 h
+before its merger instead of 1.8 h after. Two hours without data centred
+on merger 1 remove 424 windows and both coalescences: the stretch of
+twenty window lengths (27.8 h) on each side of the hole reaches past
+merger 2, 29.5 h later, and contains the windows that carried both alerts
+of the reference. The smoothed model of the next section, whose stretch
+is two window lengths on each side, alerts both. A two-day recorder that overflows
+during a 72 h outage discards 260 batches of production and removes 668
+windows, and both events are still detected.
+
+**Correction, 30 September 2026.** The two generation-gap missions first
+published with releases 1.2.0 and 2.0.0 were recorded with
+DeepSpaceTelemetry.jl 2.0.0, which in external-payload mode resumed the
+payload where it had stopped after a scheduled gap while stamping the
+following batches with the epoch of the gap's end: every later sample was
+replayed 1.99 h (15 min) after its content time, and merger 1 reached the
+replay outside its credited span. The two-hour gap had, moreover, been
+placed 4.9 h before merger 1 instead of astride it. Both missions were
+regenerated with DeepSpaceTelemetry.jl 2.1.1, which addresses the payload
+by content time, and the rows above replace the published ones (15 min:
+6.9 false alarms per 30 days; 2 h: one coalescence of two, the other said
+to have fallen in the gap). The replay now refuses runs of the affected
+producer versions. The other fifteen missions contain no scheduled gap
+and are unaffected.
 
 **Admitting a partially delivered stretch scores every window and brings
 the alerts forward.** With the stretch admitted at 75 or 50 % delivered
