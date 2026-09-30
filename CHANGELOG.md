@@ -4,7 +4,15 @@ Notable changes to MilliHertzQML since its public release. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.1] — 2026-09-30
+
+The telemetry replay refuses runs of DeepSpaceTelemetry 2.0.1 and
+earlier whose external payload the producer misplaced after a scheduled
+generation gap or an emitter restart, and takes the rows of a batch from
+the payload row that the producer stamps on it from 2.1.0. The two
+generation-gap missions of the lossy-link study, recorded with the
+affected version, are regenerated, and the benchmark rows built on them are
+corrected.
 
 ### Added
 - `THIRD_PARTY_NOTICES.md` with the MIT notice of the LISA Data Challenge
@@ -42,7 +50,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 lossy-link study were recorded with DeepSpaceTelemetry 2.0.0, which
 misplaced an external payload after a scheduled gap, and the two-hour gap
 was placed 4.9 h before merger 1 instead of astride it; the missions were
-regenerated with 2.1.1 (see Fixed under Unreleased). The fix of the
+regenerated with 2.1.1 (see Fixed under 2.0.1). The fix of the
 payload rows listed below, keyed by the content epoch, holds only for runs
 without a scheduled gap or emitter restart, or from DeepSpaceTelemetry
 2.1.0 on.*
@@ -106,7 +114,7 @@ days (see Fixed under 2.0.0).*
 *Correction, 30 September 2026: the two generation-gap missions of the
 lossy-link study introduced here misplaced the payload after the gap (a
 DeepSpaceTelemetry 2.0.0 defect) and were regenerated with 2.1.1 (see
-Fixed under Unreleased).*
+Fixed under 2.0.1).*
 
 The streamed detector becomes usable on a real link. A Welch whitening
 estimate smoothed in log-frequency shortens the stretch of data each
@@ -338,7 +346,8 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.1
 [2.0.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.0
 [1.2.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.2.0
 [1.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.1.0
