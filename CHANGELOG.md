@@ -167,6 +167,14 @@ Results page.
 
 ## [1.1.0] — 2026-09-26
 
+*Correction, 30 September 2026: the alert results quoted in this section
+credit alerts over the four-day label span. Credited from the signal onset
+(see 2.0.0), the causal replay alerts all six coalescences on their own,
+each after its merger, at 1.57 false-alarm episodes per 30 days, and the
+lossy-link study of this release alerts neither coalescence at 0.14 %
+permanent loss and one at 0.45 %; the v1.1.0 manual has been rebuilt with
+these numbers.*
+
 First public version of the repository. The models are retrained on the half-period encoding and the benchmark
 page is rewritten from those runs. The selected run is `q8_b6_pi`: the
 configuration of the 1.0.0 tag, chosen again on the validation block
