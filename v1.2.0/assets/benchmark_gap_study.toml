@@ -1,7 +1,7 @@
-written_at = "2026-09-29T10:53:43.668"
+written_at = "2026-09-30T23:42:05.474"
 
 [environment]
-manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
+manifest_sha256 = "b8c7d2a3421224c12a9fae6afb5f895e13afd5afeee407510110ce628662c65f"
 active_project = "test/Project.toml"
 
 [figure]
@@ -17,12 +17,12 @@ blas_threads = 6
 distributed_workers = 1
 machine_id = "10f031174590"
 kernel = "Linux"
-versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
+versioninfo = """Julia Version 1.13.1\nCommit 96ca370cf0e (2026-09-25 19:34 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
 julia_threads = 12
 cpu_threads_logical = 22
-julia_version = "1.13.0"
+julia_version = "1.13.1"
 
 [git]
-git_commit = "v1.2.0-5-g5612225"
+git_commit = "v2.0.0-5-gc122b94"
 git_dirty = false
-package_version = "1.2.0"
+package_version = "2.0.0"
