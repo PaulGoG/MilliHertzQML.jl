@@ -9,7 +9,7 @@
     rng = StableRNG(41)
     fs = 0.2
     n_rows = 17_280                       # one mission day at 0.2 Hz
-    payload = synthesize_noise(rng, n_rows, fs; f_min = 1e-5)
+    payload = synthesize_noise(rng, n_rows, fs; f_min = 1e-5, psd = lisa_noise_psd)
     burst = 9001:10000
     payload[burst] .+= 3e-19 .* sin.(2π * 5e-3 .* (0:999) ./ fs)
     epoch = Dates.DateTime(2035, 1, 1, 6)

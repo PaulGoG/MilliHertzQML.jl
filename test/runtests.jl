@@ -323,13 +323,13 @@ end
     rng = StableRNG(2026)
     fs = 0.2
     n = 2^15
-    x = synthesize_noise(rng, n, fs)
+    x = synthesize_noise(rng, n, fs; psd = lisa_noise_psd)
     @test length(x) == n
     @test eltype(x) == Float64
     @test isapprox(mean(x), 0.0; atol = 3 * std(x) / sqrt(n))
     # Whitening the record turns the noise into unit-variance white noise;
     # 655 bins in 1-5 mHz give a 4 % standard error on the mean power
-    w = whiten_record(x, fs)
+    w = whiten_record(x, fs; psd = lisa_noise_psd)
     @test isapprox(var(w), 1.0; atol = 0.05)
     power = tapered_periodogram(w; taper = :none)
     freqs = rfftfreq(n, fs)
@@ -337,15 +337,22 @@ end
     @test isapprox(mean(power[inband]), 1.0; atol = 0.15)
     @test power[1] == 0
     # Seeded synthesis is reproducible
-    @test synthesize_noise(StableRNG(5), 64, fs) == synthesize_noise(StableRNG(5), 64, fs)
+    @test synthesize_noise(StableRNG(5), 64, fs; psd = lisa_noise_psd) ==
+          synthesize_noise(StableRNG(5), 64, fs; psd = lisa_noise_psd)
     # Bins below the synthesis floor carry no power
-    floored = synthesize_noise(StableRNG(5), 4096, fs; f_min = 1e-3)
+    floored = synthesize_noise(StableRNG(5), 4096, fs; f_min = 1e-3, psd = lisa_noise_psd)
     spectrum = abs.(rfft(floored))
     low_bins = rfftfreq(4096, fs) .< 1e-3
     @test maximum(spectrum[low_bins]) < 1e-10 * maximum(spectrum)
-    @test_throws ArgumentError synthesize_noise(rng, 64, fs; f_min = -1.0)
-    @test_throws ArgumentError synthesize_noise(rng, 1, fs)
-    @test_throws ArgumentError synthesize_noise(rng, 64, 0.0)
+    @test_throws ArgumentError synthesize_noise(
+        rng,
+        64,
+        fs;
+        f_min = -1.0,
+        psd = lisa_noise_psd,
+    )
+    @test_throws ArgumentError synthesize_noise(rng, 1, fs; psd = lisa_noise_psd)
+    @test_throws ArgumentError synthesize_noise(rng, 64, 0.0; psd = lisa_noise_psd)
 end
 
 @testset "Tapered periodogram" begin
@@ -372,12 +379,24 @@ end
     A = 1e-20
     h = A .* cos.(2π * f0 .* t)
     ρ_expected = A * sqrt(T / lisa_noise_psd(f0))
-    @test isapprox(matched_filter_snr(h, fs), ρ_expected; rtol = 1e-6)
+    @test isapprox(matched_filter_snr(h, fs; psd = lisa_noise_psd), ρ_expected; rtol = 1e-6)
     # Linear in amplitude and rescalable to a target
-    @test isapprox(matched_filter_snr(3h, fs), 3ρ_expected; rtol = 1e-6)
-    @test isapprox(matched_filter_snr(scale_to_snr(h, fs, 12.0), fs), 12.0; rtol = 1e-6)
-    @test_throws ArgumentError scale_to_snr(zeros(n), fs, 10.0)
-    @test_throws ArgumentError scale_to_snr(h, fs, 0.0)
+    @test isapprox(
+        matched_filter_snr(3h, fs; psd = lisa_noise_psd),
+        3ρ_expected;
+        rtol = 1e-6,
+    )
+    @test isapprox(
+        matched_filter_snr(
+            scale_to_snr(h, fs, 12.0; psd = lisa_noise_psd),
+            fs;
+            psd = lisa_noise_psd,
+        ),
+        12.0;
+        rtol = 1e-6,
+    )
+    @test_throws ArgumentError scale_to_snr(zeros(n), fs, 10.0; psd = lisa_noise_psd)
+    @test_throws ArgumentError scale_to_snr(h, fs, 0.0; psd = lisa_noise_psd)
 end
 
 @testset "Signal placement" begin
@@ -402,8 +421,12 @@ end
     rng = StableRNG(11)
     fs = 0.2
     # Unit-mean band powers for noise, independent of the window length
-    record = highpass_record(synthesize_noise(rng, 40000, fs), fs; cutoff = 5e-4)
-    long = whiten_record(record, fs)
+    record = highpass_record(
+        synthesize_noise(rng, 40000, fs; psd = lisa_noise_psd),
+        fs;
+        cutoff = 5e-4,
+    )
+    long = whiten_record(record, fs; psd = lisa_noise_psd)
     p_low_long, p_high_long, ent_long, lstd_long = extract_features(long, fs)
     @test isapprox(p_low_long, 1.0; atol = 0.15)
     @test isapprox(p_high_long, 1.0; atol = 0.15)
@@ -535,7 +558,7 @@ end
     covered = 8001:9000
     placed[covered] .= cos.(2π * 3e-3 .* t[covered])
     # Scale so that a window holding the whole burst has SNR 20
-    ρ_full = matched_filter_snr(view(placed, 8001:9000), fs)
+    ρ_full = matched_filter_snr(view(placed, 8001:9000), fs; psd = lisa_noise_psd)
     placed .*= 20 / ρ_full
     span = detectable_span(placed, covered, fs, 1000, 5.0; step = 10)
     @test span !== nothing
@@ -938,7 +961,8 @@ end
     fw2, sw2 = welch_psd(white, fs; segment_length = 1024, average = :mean)
     @test isapprox(mean(sw2), 2σ^2 / fs; rtol = 0.03)
     # Coloured noise synthesised from the model PSD is recovered in band
-    colored = synthesize_noise(StableRNG(6), 400_000, fs; f_min = 1e-5)
+    colored =
+        synthesize_noise(StableRNG(6), 400_000, fs; f_min = 1e-5, psd = lisa_noise_psd)
     fc, sc = welch_psd(colored, fs; segment_length = 8192)
     inband = (fc .>= 1e-3) .& (fc .<= 5e-2)
     @test isapprox(median(sc[inband] ./ lisa_noise_psd.(fc[inband])), 1.0; rtol = 0.1)
@@ -1363,7 +1387,7 @@ end
     @test figure_sensitivity(snrs, zeros(Int, n), decisions) === nothing
     @test figure_score_distribution(probs, 0.55; labels = labels) isa CairoMakie.Figure
     @test figure_score_distribution(probs, 0.55) isa CairoMakie.Figure
-    strain = synthesize_noise(rng, 4000, 0.2; f_min = 1e-5)
+    strain = synthesize_noise(rng, 4000, 0.2; f_min = 1e-5, psd = lisa_noise_psd)
     t_days = ((0:3999) ./ 0.2) ./ 86400
     lab = zeros(Int, 4000)
     lab[1500:1800] .= 1
@@ -1372,7 +1396,7 @@ end
         t_days,
         strain,
         lab;
-        whitened = whiten_record(strain, 0.2),
+        whitened = whiten_record(strain, 0.2; psd = lisa_noise_psd),
     ) isa CairoMakie.Figure
     # Alert figure: of two alerts close in mission time and in latency, the
     # lower one is labelled beneath its marker; labels give the data latency

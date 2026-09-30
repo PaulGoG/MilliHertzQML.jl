@@ -132,7 +132,7 @@ MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) 
     rng = StableRNG(31)
     fs = 0.2
     n_rows = 6000
-    payload = synthesize_noise(rng, n_rows, fs; f_min = 1e-5)
+    payload = synthesize_noise(rng, n_rows, fs; f_min = 1e-5, psd = lisa_noise_psd)
     burst = 3001:4000
     payload[burst] .+= 3e-19 .* sin.(2π * 5e-3 .* (0:999) ./ fs)
     n_batches = div(n_rows, 100)
@@ -511,8 +511,15 @@ MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) 
         fs = 0.2
         gap_after, gap_rows = 20, 37
         n_batches = 60
-        payload =
-            Float32.(synthesize_noise(rng, n_batches * 100 + gap_rows, fs; f_min = 1e-5))
+        payload = Float32.(
+            synthesize_noise(
+                rng,
+                n_batches * 100 + gap_rows,
+                fs;
+                f_min = 1e-5,
+                psd = lisa_noise_psd,
+            ),
+        )
         drift_geometry =
             RunGeometry(fs, 50.0, 10, epoch, "2.0.0"; payload_rows = length(payload))
         events = [

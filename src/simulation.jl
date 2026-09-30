@@ -135,7 +135,7 @@ function lisa_noise_psd(f::Real; observation_years::Real = 1.0)
 end
 
 """
-    synthesize_noise(rng, n, fs; psd = lisa_noise_psd, f_min = 0.0) -> Vector{Float64}
+    synthesize_noise(rng, n, fs; psd, f_min = 0.0) -> Vector{Float64}
 
 `n` samples of zero-mean stationary Gaussian noise at sampling frequency
 `fs` [Hz] whose one-sided power spectral density is `psd(f)` [Hz⁻¹]. The
@@ -143,17 +143,12 @@ spectral coefficients are drawn as complex normals scaled to
 ``E|X_k|^2 = S(f_k) f_s n / 2`` (the unnormalised `rfft` convention), the DC
 bin is zeroed, and the Nyquist bin of an even `n` is forced real, so the
 inverse transform is a real series with the correct absolute amplitude.
-Bins below `f_min` [Hz] are left empty: the sensitivity model is a fit over
-the LISA band, and its extrapolation towards zero frequency would put a
-drift many orders of magnitude above the in-band level into the record.
+Bins below `f_min` [Hz] are left empty: a sensitivity model fitted over a
+band (such as [`lisa_noise_psd`](@ref)) would, extrapolated towards zero
+frequency, put a drift many orders of magnitude above the in-band level
+into the record.
 """
-function synthesize_noise(
-    rng::AbstractRNG,
-    n::Integer,
-    fs::Real;
-    psd = lisa_noise_psd,
-    f_min::Real = 0.0,
-)
+function synthesize_noise(rng::AbstractRNG, n::Integer, fs::Real; psd, f_min::Real = 0.0)
     n >= 2 || throw(ArgumentError("n = $n; at least 2 samples are required."))
     fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
     f_min >= 0 || throw(ArgumentError("f_min = $f_min; must be non-negative."))
@@ -168,7 +163,7 @@ function synthesize_noise(
 end
 
 """
-    matched_filter_snr(h, fs; psd = lisa_noise_psd)
+    matched_filter_snr(h, fs; psd)
 
 Optimal matched-filter signal-to-noise ratio of the strain series `h`
 sampled at `fs` [Hz] against the one-sided noise PSD `psd(f)`:
@@ -181,7 +176,7 @@ sampled at `fs` [Hz] against the one-sided noise PSD `psd(f)`:
 with ``\\tilde h(f_k) = \\Delta t \\sum_j h_j e^{-2\\pi i f_k t_j}`` and
 ``\\Delta f = f_s / n``. The DC bin is excluded.
 """
-function matched_filter_snr(h::AbstractVector{<:Real}, fs::Real; psd = lisa_noise_psd)
+function matched_filter_snr(h::AbstractVector{<:Real}, fs::Real; psd)
     length(h) >= 2 || throw(ArgumentError("the series must hold at least 2 samples."))
     fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
     n = length(h)
@@ -195,16 +190,11 @@ function matched_filter_snr(h::AbstractVector{<:Real}, fs::Real; psd = lisa_nois
 end
 
 """
-    scale_to_snr(h, fs, ρ_target; psd = lisa_noise_psd)
+    scale_to_snr(h, fs, ρ_target; psd)
 
 `h` rescaled so that its [`matched_filter_snr`](@ref) equals `ρ_target`.
 """
-function scale_to_snr(
-    h::AbstractVector{<:Real},
-    fs::Real,
-    ρ_target::Real;
-    psd = lisa_noise_psd,
-)
+function scale_to_snr(h::AbstractVector{<:Real}, fs::Real, ρ_target::Real; psd)
     ρ_target > 0 || throw(ArgumentError("ρ_target = $ρ_target; must be positive."))
     ρ = matched_filter_snr(h, fs; psd = psd)
     ρ > 0 ||
@@ -213,7 +203,7 @@ function scale_to_snr(
 end
 
 """
-    whiten_record(x, fs; psd = lisa_noise_psd) -> Vector{Float64}
+    whiten_record(x, fs; psd) -> Vector{Float64}
 
 Frequency-domain whitening of the whole record `x` sampled at `fs` [Hz] by
 the one-sided noise PSD `psd(f)`: ``X_k \\to X_k \\sqrt{2 / (f_s S_n(f_k))}``
@@ -225,7 +215,7 @@ whereas the periodogram of a separately whitened window is the PSD smoothed
 by the taper's main lobe. The filter is circular; on real records the first
 and last windows are edge-affected.
 """
-function whiten_record(x::AbstractVector{<:Real}, fs::Real; psd = lisa_noise_psd)
+function whiten_record(x::AbstractVector{<:Real}, fs::Real; psd)
     n = length(x)
     n >= 2 || throw(ArgumentError("the record must hold at least 2 samples."))
     fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))

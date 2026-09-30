@@ -20,6 +20,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   high-pass, context); the feature set and bands moved to the scorer's
   `FeatureMap` (`detector.scorer.features`). The constructor
   `StreamingDetector(model, scaler, threshold; ...)` is unchanged.
+- **Breaking:** `synthesize_noise`, `whiten_record`, `matched_filter_snr`
+  and `scale_to_snr` require the `psd` keyword; they no longer default to
+  the LISA noise model (`psd = lisa_noise_psd` restores the former call).
 
 ## [2.0.1] — 2026-09-30
 

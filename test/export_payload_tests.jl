@@ -41,7 +41,7 @@
     mktempdir() do dir
         fs = 0.2
         n = 3000
-        noise = synthesize_noise(StableRNG(2035), n, fs)
+        noise = synthesize_noise(StableRNG(2035), n, fs; psd = lisa_noise_psd)
         t = collect((0:(n-1)) ./ fs)
         X = zeros(n)
         Z = sqrt(2.0) .* noise
