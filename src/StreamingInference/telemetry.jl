@@ -607,6 +607,8 @@ function score_window(
     return window_score(detector.scorer, window, detector.sample_rate)
 end
 
+# --- Replay ------------------------------------------------------------
+
 """
     WindowRecord
 
@@ -1050,6 +1052,8 @@ function follow_run(
     end
     return windows_table(state)
 end
+
+# --- Alert latency -----------------------------------------------------
 
 """
     event_merger_times(events) -> Vector{Float64}

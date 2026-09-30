@@ -1138,6 +1138,9 @@ end
     @test rootrelative(joinpath(project_root(), "data", "x.csv")) ==
           joinpath("data", "x.csv")
     @test rootrelative("/elsewhere/x.csv") == "/elsewhere/x.csv"
+    # A sibling directory whose name extends the root's lies outside it
+    @test rootrelative(project_root() * "x/data.csv") == project_root() * "x/data.csv"
+    @test rootrelative(project_root()) == "."
     # Provenance paths: relative inside the root, bare file name outside,
     # so that no snapshot carries the account name of the running machine
     @test provenance_path(joinpath(PROJECT_ROOT, "data", "x.csv")) ==
@@ -1824,6 +1827,10 @@ include("response_tests.jl")
         @test sidecar["first_window"] == margin + 1 &&
               sidecar["edge_margin_windows"] == margin
         @test sidecar["n_windows_record"] == n_windows && margin == 10
+        # The analytic whitening PSD is rebuilt from the sidecar alone
+        @test sidecar["psd"] == "model" && haskey(sidecar, "observation_years")
+        @test whitening_psd_from_sidecar(replace(feats, ".csv" => ".toml"))(2e-3) ==
+              lisa_noise_psd(2e-3; observation_years = sidecar["observation_years"])
 
         stage("train.jl", "--run-id", "smoke") || return
         run_dir = joinpath(dir, "models", "run_smoke")

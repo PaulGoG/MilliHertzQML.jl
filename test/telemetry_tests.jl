@@ -501,6 +501,41 @@ MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) 
         @test_throws ArgumentError detector_from_run(joinpath(dir, "absent.jld2"))
         @test whitening_psd_from_sidecar(joinpath(dir, "feat_features.toml"))(1e-3) ==
               lisa_noise_psd(1e-3)
+        # Every analytic kind is rebuilt from its recorded parameters, and a
+        # sidecar that lacks them is refused rather than defaulted
+        function analytic_sidecar(name; entries...)
+            path = joinpath(dir, "$(name)_features.toml")
+            open(
+                io -> TOML.print(
+                    io,
+                    Dict("features" => Dict(string(k) => v for (k, v) in entries)),
+                ),
+                path,
+                "w",
+            )
+            return path
+        end
+        channel = analytic_sidecar("channel"; psd = "channel", observation_years = 2.0)
+        @test whitening_psd_from_sidecar(channel)(3e-3) ==
+              sky_averaged_response(3e-3) * lisa_noise_psd(3e-3; observation_years = 2.0)
+        ldc = analytic_sidecar(
+            "ldc";
+            psd = "ldc",
+            ldc_model = "SciRDv1",
+            ldc_tdi2 = false,
+            ldc_observation_years = 0.0,
+        )
+        @test whitening_psd_from_sidecar(ldc)(3e-3) ==
+              ldc_tdi_psd(3e-3; channel = :A, model = "SciRDv1")
+        @test_throws ArgumentError whitening_psd_from_sidecar(
+            analytic_sidecar("m"; psd = "model"),
+        )
+        @test_throws ArgumentError whitening_psd_from_sidecar(
+            analytic_sidecar("l"; psd = "ldc", ldc_model = "SciRDv1"),
+        )
+        @test_throws ArgumentError whitening_psd_from_sidecar(
+            analytic_sidecar("n"; window_size = 1000),
+        )
     end
 
     @testset "Index drift" begin

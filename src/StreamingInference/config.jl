@@ -27,7 +27,10 @@ provenance snapshots so that run artifacts stay portable across machines.
 function rootrelative(p::AbstractString)
     ap = abspath(p)
     root = project_root()
-    return startswith(ap, root) ? relpath(ap, root) : ap
+    # A path inside the root starts with the root and a separator, so that a
+    # sibling directory whose name extends the root's is not taken for it
+    inside = ap == root || startswith(ap, joinpath(root, ""))
+    return inside ? relpath(ap, root) : ap
 end
 
 """

@@ -33,6 +33,17 @@ versioning follows [Semantic Versioning](https://semver.org/).
   and `scale_to_snr` require the `psd` keyword; they no longer default to
   the LISA noise model (`psd = lisa_noise_psd` restores the former call).
 
+### Fixed
+- A feature sidecar records the parameters of an analytic whitening PSD
+  (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`),
+  and `whitening_psd_from_sidecar` refuses a sidecar that lacks the PSD
+  kind or its parameters instead of substituting defaults; it also rebuilds
+  the `"channel"` kind, which it did not know. The parameter digest of the
+  products is unchanged.
+- `rootrelative` took a sibling directory whose name extends the root's
+  (`/ws/MilliHertzQMLx` against `/ws/MilliHertzQML`) for a path inside the
+  root.
+
 ## [2.0.1] — 2026-09-30
 
 The telemetry replay refuses runs of DeepSpaceTelemetry 2.0.1 and

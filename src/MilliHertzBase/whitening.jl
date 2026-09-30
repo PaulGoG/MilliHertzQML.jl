@@ -6,18 +6,34 @@
     whitening_psd_from_sidecar(sidecar_path) -> Union{Nothing, Function}
 
 The whitening PSD recorded in a feature sidecar written by the
-pre-processor: the Robson–Cornish–Liu model, the LDC analytic model, the
-persisted Welch table (`<stem>_psd.csv` beside the features), or `nothing`
-for `psd = "none"`.
+pre-processor: the Robson–Cornish–Liu model (`"model"`), that model times
+the sky-averaged response (`"channel"`), the LDC analytic model (`"ldc"`),
+the persisted Welch table (`<stem>_psd.csv` beside the features), or
+`nothing` for `psd = "none"`. The kind and the parameters of an analytic
+PSD (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`)
+must be recorded in the sidecar: a missing one is refused rather than
+replaced by a default that may not be the one the features were whitened
+with.
 """
 function whitening_psd_from_sidecar(sidecar_path::AbstractString)
     isfile(sidecar_path) || throw(ArgumentError("feature sidecar not found: $sidecar_path"))
     features = get(TOML.parsefile(sidecar_path), "features", Dict{String,Any}())
+    recorded(key) =
+        haskey(features, key) || throw(
+            ArgumentError(
+                "the sidecar $sidecar_path does not record `$key`, which the whitening " *
+                "PSD of its features depends on; regenerate the product.",
+            ),
+        )
+    recorded("psd")
     mode = cfgget(features, "psd", "model"; type = String)
-    if mode == "model"
+    if mode == "model" || mode == "channel"
+        recorded("observation_years")
         years = cfgget(features, "observation_years", 1.0; type = Float64)
-        return f -> lisa_noise_psd(f; observation_years = years)
+        mode == "model" && return f -> lisa_noise_psd(f; observation_years = years)
+        return f -> sky_averaged_response(f) * lisa_noise_psd(f; observation_years = years)
     elseif mode == "ldc"
+        foreach(recorded, ("ldc_model", "ldc_tdi2", "ldc_observation_years"))
         model = cfgget(features, "ldc_model", "sangria"; type = String)
         tdi2 = cfgget(features, "ldc_tdi2", false; type = Bool)
         years = cfgget(features, "ldc_observation_years", 0.0; type = Float64)
@@ -43,11 +59,11 @@ function whitening_psd_from_sidecar(sidecar_path::AbstractString)
         return nothing
     end
     throw(
-        ArgumentError("sidecar psd = $(repr(mode)); expected model, ldc, welch, or none."),
+        ArgumentError(
+            "sidecar psd = $(repr(mode)); expected model, channel, ldc, welch, or none.",
+        ),
     )
 end
-
-# --- Replay ------------------------------------------------------------
 
 """
     whitening_psd(settings, A, fs) -> (psd, description, table)

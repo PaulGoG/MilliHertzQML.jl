@@ -10,5 +10,3 @@ Implemented by the package extension that loads with DeepSpaceTelemetry;
 recorded in the run's configuration snapshot.
 """
 function open_telemetry_run end
-
-# --- Alert latency -----------------------------------------------------

@@ -32,6 +32,26 @@ function tdi_sample_count(path::AbstractString, group::AbstractString)
 end
 
 """
+    analytic_psd_parameters(settings) -> Vector{Pair{String,Any}}
+
+The parameters of the analytic whitening PSD of `settings.psd`: the
+confusion fit `observation_years` of `"model"` and `"channel"`, the model,
+TDI generation and confusion of `"ldc"`, none for an estimated PSD. They
+enter the product's parameter digest and its sidecar, from which a replay
+rebuilds the PSD ([`whitening_psd_from_sidecar`](@ref)).
+"""
+function analytic_psd_parameters(settings::NamedTuple)
+    settings.psd in ("model", "channel") &&
+        return Pair{String,Any}["observation_years"=>settings.observation_years]
+    settings.psd == "ldc" && return Pair{String,Any}[
+        "ldc_model"=>settings.ldc_model,
+        "ldc_tdi2"=>settings.ldc_tdi2,
+        "ldc_observation_years"=>settings.ldc_observation_years,
+    ]
+    return Pair{String,Any}[]
+end
+
+"""
     preprocessing_parameters(settings, h5_path, tdi_group, label_path) -> Dict{String, Any}
 
 Every parameter that determines the pre-processed product: the source
@@ -64,13 +84,8 @@ function preprocessing_parameters(
         "edge_margin" => settings.edge_margin,
         "feature_set" => String(settings.feature_set),
     )
-    if settings.psd == "model" || settings.psd == "channel"
-        parameters["observation_years"] = settings.observation_years
-    elseif settings.psd == "ldc"
-        parameters["ldc_model"] = settings.ldc_model
-        parameters["ldc_tdi2"] = settings.ldc_tdi2
-        parameters["ldc_observation_years"] = settings.ldc_observation_years
-    elseif settings.psd == "welch"
+    merge!(parameters, Dict(analytic_psd_parameters(settings)))
+    if settings.psd == "welch"
         parameters["welch_segment_length"] = settings.welch_segment_length
         # Recorded only when set, so that products made before the key
         # existed keep their identity
@@ -316,6 +331,7 @@ function preprocess_record(
                         "feature_set" => String(settings.feature_set),
                         "feature_names" => String.(names),
                         "psd" => settings.psd,
+                        analytic_psd_parameters(settings)...,
                         "psd_description" => psd_description,
                         "psd_smoothing_dex" => settings.psd_smoothing_dex,
                         "low_band_hz" => collect(settings.low_band_hz),
