@@ -55,7 +55,7 @@
         @test channel_noise_psd(response, lisa_noise_psd)(1e-3) ≈
               sky_averaged_response(1e-3) * lisa_noise_psd(1e-3)
         @test sky_averaged_response(1e-4) ≈ 0.3 rtol = 1e-4
-        @test sky_averaged_response(MilliHertzQML.F_STAR) ≈ 0.3 / 1.6
+        @test sky_averaged_response(MilliHertzQML.MilliHertzBase.F_STAR) ≈ 0.3 / 1.6
     end
 
     @testset "Doppler phase" begin

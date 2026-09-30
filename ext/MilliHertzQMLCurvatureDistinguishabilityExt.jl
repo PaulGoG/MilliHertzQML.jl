@@ -10,7 +10,8 @@ module MilliHertzQMLCurvatureDistinguishabilityExt
 using CurvatureDistinguishability: waveform_params
 using CurvatureDistinguishability.Detector: channel_patterns, doppler_phase
 using CurvatureDistinguishability.Physics: transfer_frequency
-using MilliHertzQML: AbstractDetectorResponse, L_ARM
+using MilliHertzQML: AbstractDetectorResponse
+using MilliHertzQML.MilliHertzBase: L_ARM
 import MilliHertzQML:
     channel_count, lisa_response, source_frame, project_spectrum, project_series
 

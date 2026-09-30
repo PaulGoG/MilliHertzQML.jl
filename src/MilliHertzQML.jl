@@ -1,25 +1,25 @@
 module MilliHertzQML
 
+include("StreamingInference/StreamingInference.jl")
+include("MilliHertzBase/MilliHertzBase.jl")
+
+using .StreamingInference
+using .MilliHertzBase
+import .StreamingInference: StreamingDetector, window_score, score_label
 using CSV: CSV
-using DataFrames: DataFrames, DataFrame, nrow
+using DataFrames: DataFrames, DataFrame
 using Dates: Dates
 using Distributed: Distributed
 using DrWatson: DrWatson
-using FFTW: irfft, rfft, rfftfreq
 using Flux: Flux
 using Functors: Functors
-using HDF5: HDF5, attributes, h5open
-using InteractiveUtils: InteractiveUtils
 using JLD2: JLD2, jldsave
 using LinearAlgebra: LinearAlgebra
-using Logging: NullLogger, with_logger
 using PrecompileTools: @compile_workload, @setup_workload
 using Random: Random, AbstractRNG, Xoshiro
-using SHA: sha256
-using Statistics: mean, median, quantile, std
+using Statistics: quantile
 using TOML: TOML
-using TimerOutputs: TimerOutput, @timeit, print_timer
-using UUIDs: uuid4
+using TimerOutputs: @timeit
 using Yao:
     Yao,
     AbstractBlock,
@@ -102,25 +102,13 @@ export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
 export event_merger_times
 export export_telemetry_payload, samples_per_batch, catalog_events
 
-include("config.jl")
-include("provenance.jl")
-include("simulation.jl")
-include("response.jl")
-include("waveforms.jl")
+include("settings.jl")
 include("model.jl")
 include("training.jl")
-include("data.jl")
+include("scaler.jl")
 include("persistence.jl")
-include("evaluation.jl")
-include("ldc.jl")
 include("visualization.jl")
-include("estimators.jl")
-include("telemetry.jl")
 include("vqc_scorer.jl")
-include("stages/generation.jl")
-include("stages/preprocessing.jl")
-include("stages/labeling.jl")
-include("stages/export_payload.jl")
 include("stages/training.jl")
 include("stages/inference.jl")
 

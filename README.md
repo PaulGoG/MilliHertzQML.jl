@@ -68,7 +68,7 @@ published method and a classical baseline, and the limits of each result.
 MilliHertzQML.jl/
 ├── activate.jl          # activates and instantiates the root environment
 ├── configs/             # default, Sangria, and experiment configurations
-├── src/                 # package: physics, model, stages, telemetry coupling
+├── src/                 # package in three layers: domain-general core, GW layer, classifier
 ├── ext/                 # CairoMakie, DeepSpaceTelemetry and CurvatureDistinguishability extensions
 ├── scripts/             # entry points, own environment
 ├── test/                # suite with static QA, own environment
@@ -211,27 +211,36 @@ MilliHertzQML.jl/
 ├── activate.jl             # Activates and instantiates the root environment
 ├── Project.toml            # Package metadata: only the dependencies of src/
 ├── src/
-│   ├── MilliHertzQML.jl    # Module definition and exports
-│   ├── config.jl           # TOML loading, validated key access, typed settings of every section, path resolution
-│   ├── provenance.jl       # Run identifiers, hardware and git provenance, overwrite-safe writing, memory guard, stage timer
-│   ├── stages/             # One typed stage function per pipeline step
-│   │   ├── generation.jl   #   generate_telemetry: simulated continuous telemetry, labels, event catalogue
-│   │   ├── labeling.jl     #   label_truth_stream: point-wise MBHB labels of an LDC product
-│   │   ├── export_payload.jl #  export_telemetry_payload: A-channel payload and scenario fragment for the telemetry producer
-│   │   ├── preprocessing.jl #  preprocess_record: whitening and window features with produce-or-load semantics
-│   │   ├── training.jl     #   train_classifier: chronological blocks, training, threshold fitted on the calibration block
-│   │   └── inference.jl    #   evaluate_classifier: scoring, event-level metrics
+│   ├── MilliHertzQML.jl    # Module: the two layers below, the classifier, re-exports of every public name
+│   ├── StreamingInference/ # Domain-general layer (submodule MilliHertzQML.StreamingInference)
+│   │   ├── config.jl       #   TOML loading, validated key access, path resolution, shared settings
+│   │   ├── provenance.jl   #   Run identifiers, hardware and git provenance, overwrite-safe writing, memory guard, stage timer
+│   │   ├── dsp.jl          #   Noise synthesis, matched-filter SNR, whitening, periodogram, high-pass, Welch PSD and smoothing
+│   │   ├── features.jl     #   Spectral window features, feature and label tables
+│   │   ├── spans.jl        #   Labelled spans around events and point-wise labels
+│   │   ├── evaluation.jl   #   Chronological block split, ROC, calibration-block threshold, event-level metrics
+│   │   ├── windows.jl      #   Sliding windows: count, edge margin, feature and label tables
+│   │   ├── estimators.jl   #   Estimator interface: scorers, memory trait, feature map
+│   │   ├── visualization.jl #  Figure interface: theme, geometry, palette, evaluation and replay figures
+│   │   └── telemetry.jl    #   Run interface, coverage, scheduler, streaming detector, trailing PSD, replay, alert table
+│   ├── MilliHertzBase/     # Gravitational-wave layer (submodule MilliHertzQML.MilliHertzBase)
+│   │   ├── config.jl       #   Settings of generation, pre-processing, LDC labelling, payload export
+│   │   ├── noise.jl        #   Noise model (Robson–Cornish–Liu 2019), detectable span of an injection
+│   │   ├── response.jl     #   Detector-response interface: sky-averaged response and the constellation hook the extension implements
+│   │   ├── waveforms.jl    #   IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
+│   │   ├── ldc.jl          #   LDC TDI noise PSD, HDF5 readers, A/E/T, truth-stream SNR scan and onsets
+│   │   ├── whitening.jl    #   Whitening PSD of a TDI record by kind, and from a feature sidecar
+│   │   ├── telemetry.jl    #   Coupling to the DeepSpaceTelemetry producer (implemented by the extension)
+│   │   ├── visualization.jl #  Figure interface of simulated and streamed strain
+│   │   └── stages/         #   generate_telemetry, preprocess_record, label_truth_stream, export_telemetry_payload
+│   ├── settings.jl         # Settings of the circuit and its training; training memory estimate
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
 │   ├── training.jl         # Forward pass, class-weighted BCE loss, threaded batch gradient
-│   ├── evaluation.jl       # Chronological block split, ROC, calibration-block threshold, event-level metrics
-│   ├── simulation.jl       # Noise model (Robson–Cornish–Liu 2019), synthesis, matched-filter SNR, whitening
-│   ├── waveforms.jl        # IMRPhenomA inspiral–merger–ringdown waveform on the sampling grid
-│   ├── response.jl         # Detector-response interface: sky-averaged response and the constellation hook the extension implements
-│   ├── data.jl             # Window features, train-fitted feature scaler, CSV loading
-│   ├── ldc.jl              # LDC TDI noise PSD, HDF5 readers, A/E/T, Welch PSD and its log-frequency smoothing, truth-stream labels
-│   ├── visualization.jl    # Figure interface: theme, export with provenance, one function per figure
-│   ├── telemetry.jl        # Telemetry coupling: run interface, coverage, scheduler, streaming detector, trailing PSD, replay, alert table
-│   └── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
+│   ├── scaler.jl           # Train-fitted feature scaler onto the phase-encoding interval
+│   ├── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
+│   ├── visualization.jl    # Figure interface of the classifier and its studies
+│   ├── vqc_scorer.jl       # The classifier as a window scorer; the detector of a training run
+│   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier
 ├── ext/
 │   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures and animations
 │   ├── MilliHertzQMLCurvatureDistinguishabilityExt.jl # Constellation response of the simulator
@@ -304,6 +313,6 @@ Cite the software through `CITATION.cff`, or with:
 
 ## License
 
-MIT; see `LICENSE`. The analytic TDI noise model in `src/ldc.jl` is a port
+MIT; see `LICENSE`. The analytic TDI noise model in `src/MilliHertzBase/ldc.jl` is a port
 of the LISA Data Challenge toolbox, which is MIT-licensed (Copyright (c)
 2019 LISA); its notice is in `THIRD_PARTY_NOTICES.md`.

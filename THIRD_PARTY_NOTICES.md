@@ -2,7 +2,7 @@
 
 ## LISA Data Challenge software (`ldc` package)
 
-`src/ldc.jl` contains a Julia port of the equal-arm analytic TDI noise model
+`src/MilliHertzBase/ldc.jl` contains a Julia port of the equal-arm analytic TDI noise model
 of the LISA Data Challenge toolbox, `lisa-data-challenge` 1.2.0
 (<https://lisa.pages.in2p3.fr/LDC>): the single-link noise levels of
 `ldc.lisa.noise.AnalyticNoise` (`LDC_NOISE_LEVELS`), its equal-arm

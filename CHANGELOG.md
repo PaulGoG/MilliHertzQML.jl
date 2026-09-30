@@ -15,6 +15,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `condition_window`. The classifier is one scorer, `VQCScorer`.
 
 ### Changed
+- The package is built in three layers: `MilliHertzQML.StreamingInference`
+  (domain-general: configuration, provenance, signal processing, features,
+  evaluation, the estimator interface, the streamed replay),
+  `MilliHertzQML.MilliHertzBase` (gravitational waves: noise model,
+  response, waveforms, LDC products, whitening PSDs, the generation,
+  pre-processing, labelling and payload-export stages), and the classifier.
+  `using MilliHertzQML` exports every public name as before; internal names
+  are reached through their layer (for example
+  `MilliHertzQML.MilliHertzBase.L_ARM`).
 - **Breaking:** `StreamingDetector` is generic over its scorer and holds
   the conditioning only (sampling rate, window geometry, whitening PSD,
   high-pass, context); the feature set and bands moved to the scorer's

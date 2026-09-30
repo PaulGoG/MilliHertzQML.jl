@@ -14,7 +14,11 @@ makedocs(
         canonical = "https://PaulGoG.github.io/MilliHertzQML.jl",
         size_threshold_ignore = ["api.md"],
     ),
-    modules = [MilliHertzQML],
+    modules = [
+        MilliHertzQML,
+        MilliHertzQML.StreamingInference,
+        MilliHertzQML.MilliHertzBase,
+    ],
     plugins = [bibliography],
     pages = [
         "Home" => "index.md",

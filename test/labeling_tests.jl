@@ -107,9 +107,11 @@
         @test_throws ArgumentError label_truth_stream(base)
         bad = joinpath(dir, "bad.csv")
         CSV.write(bad, DataFrame(t = [0.0, 5.0], X = [0.0, 0.0], Y = [0.0, 0.0]))
-        @test_throws ArgumentError MilliHertzQML.read_truth_csv(bad)
+        @test_throws ArgumentError MilliHertzQML.MilliHertzBase.read_truth_csv(bad)
         CSV.write(bad, DataFrame(t = [5.0, 5.0], X = zeros(2), Y = zeros(2), Z = zeros(2)))
-        @test_throws ArgumentError MilliHertzQML.read_truth_csv(bad)
-        @test_throws ArgumentError MilliHertzQML.read_truth_csv(joinpath(dir, "absent.csv"))
+        @test_throws ArgumentError MilliHertzQML.MilliHertzBase.read_truth_csv(bad)
+        @test_throws ArgumentError MilliHertzQML.MilliHertzBase.read_truth_csv(
+            joinpath(dir, "absent.csv"),
+        )
     end
 end

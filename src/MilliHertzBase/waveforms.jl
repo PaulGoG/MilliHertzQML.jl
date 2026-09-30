@@ -1,4 +1,4 @@
-# src/waveforms.jl — non-spinning phenomenological inspiral–merger–ringdown
+# Non-spinning phenomenological inspiral–merger–ringdown
 # waveform (IMRPhenomA; Ajith et al., Phys. Rev. D 77, 104017, 2008) generated
 # in the frequency domain on the sampling grid of the injection segment.
 

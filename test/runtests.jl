@@ -34,9 +34,16 @@ end
 end
 
 @testset "Static QA (JET)" begin
-    # Reports are restricted to this package; dependencies are analysed but
-    # not reported against.
-    JET.test_package(MilliHertzQML; target_modules = (MilliHertzQML,))
+    # Reports are restricted to this package and its two layers; dependencies
+    # are analysed but not reported against.
+    JET.test_package(
+        MilliHertzQML;
+        target_modules = (
+            MilliHertzQML,
+            MilliHertzQML.StreamingInference,
+            MilliHertzQML.MilliHertzBase,
+        ),
+    )
 end
 
 @testset "MilliHertzQML Tests (Multi-Qubit VQC)" begin
@@ -309,10 +316,10 @@ end
     @test confusion_psd(10.0; observation_years = 1.0) == 0.0
     @test all(isfinite, lisa_noise_psd.((0.05, 0.5, 2.0, 10.0)))
     # Agreement with the direct product where both are finite
-    p = MilliHertzQML.confusion_fit(1.0)
+    p = MilliHertzQML.MilliHertzBase.confusion_fit(1.0)
     f = 2e-3
     direct =
-        MilliHertzQML.CONFUSION_AMPLITUDE *
+        MilliHertzQML.MilliHertzBase.CONFUSION_AMPLITUDE *
         f^(-7 / 3) *
         exp(-f^p.α + p.β * f * sin(p.κ * f)) *
         (1 + tanh(p.γ * (p.f_k - f)))
@@ -895,7 +902,9 @@ end
     # A = E for equal arms; T is quieter than X in band; TDI 2 rescales by 4 sin²(2x)
     @test ldc_tdi_psd(2e-3; channel = :A) == ldc_tdi_psd(2e-3; channel = :E)
     @test ldc_tdi_psd(2e-3; channel = :T) < ldc_tdi_psd(2e-3; channel = :X)
-    x = 2π * 2e-3 * MilliHertzQML.L_ARM / MilliHertzQML.C_LIGHT
+    x =
+        2π * 2e-3 * MilliHertzQML.MilliHertzBase.L_ARM /
+        MilliHertzQML.MilliHertzBase.C_LIGHT
     @test isapprox(
         ldc_tdi_psd(2e-3; channel = :A, tdi2 = true),
         4 * sin(2x)^2 * ldc_tdi_psd(2e-3; channel = :A);
@@ -930,13 +939,13 @@ end
         rows = [(t = t[i], X = 1.0 * i, Y = 2.0 * i, Z = 3.0 * i) for i in 1:n]
         cat = [(Mass1 = 1e6, Mass2 = 5e5, CoalescenceTime = 100.0)]
         compound = joinpath(dir, "ldc.h5")
-        MilliHertzQML.h5open(compound, "w") do f
+        MilliHertzQML.MilliHertzBase.h5open(compound, "w") do f
             f["obs/tdi"] = rows
-            MilliHertzQML.attributes(f["obs/tdi"])["dt"] = 5.0
+            MilliHertzQML.MilliHertzBase.attributes(f["obs/tdi"])["dt"] = 5.0
             f["sky/mbhb/cat"] = cat
         end
         grouped = joinpath(dir, "sim.h5")
-        MilliHertzQML.h5open(grouped, "w") do f
+        MilliHertzQML.MilliHertzBase.h5open(grouped, "w") do f
             f["obs/tdi/t"] = t
             f["obs/tdi/X"] = [1.0 * i for i in 1:n]
             f["obs/tdi/Z"] = [3.0 * i for i in 1:n]
@@ -1070,7 +1079,7 @@ end
         label_step = 100,
         label_snr_threshold = 5.0,
     )
-    k_on = MilliHertzQML.signal_onset(
+    k_on = MilliHertzQML.MilliHertzBase.signal_onset(
         onset_settings,
         (sig,),
         burst,
@@ -1083,7 +1092,7 @@ end
     @test 7001 <= k_on <= 8900
     @test matched_filter_snr(view(sig, k_on:(k_on+999)), fs; psd = lisa_noise_psd) >= 5
     @test matched_filter_snr(view(sig, (k_on-100):(k_on+899)), fs; psd = lisa_noise_psd) < 5
-    @test MilliHertzQML.signal_onset(
+    @test MilliHertzQML.MilliHertzBase.signal_onset(
         onset_settings,
         (zeros(n),),
         burst,
@@ -1093,7 +1102,7 @@ end
         fs,
         lisa_noise_psd,
     ) == 8900
-    @test MilliHertzQML.signal_onset(
+    @test MilliHertzQML.MilliHertzBase.signal_onset(
         merge(onset_settings, (label_span = "detectable",)),
         (sig,),
         burst,
@@ -1140,7 +1149,7 @@ end
     @test !haskey(fp, "hostname")
     @test length(fp["machine_id"]) == 12 &&
           all(c -> c in "0123456789abcdef", fp["machine_id"])
-    @test fp["machine_id"] == MilliHertzQML.machine_id()
+    @test fp["machine_id"] == MilliHertzQML.StreamingInference.machine_id()
     @test !occursin(gethostname(), fp["machine_id"])
     @test !occursin(homedir(), fp["versioninfo"])
     @test_throws ArgumentError load_config(joinpath(project_root(), "absent.toml"))

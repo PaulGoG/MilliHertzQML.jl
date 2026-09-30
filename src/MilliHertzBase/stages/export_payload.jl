@@ -1,4 +1,4 @@
-# src/stages/export_payload.jl — payload-export stage of the telemetry
+# Payload-export stage of the telemetry
 # coupling: the A channel of an HDF5 TDI product written as the
 # single-column amplitude CSV that the telemetry producer ingests gaplessly,
 # beside a scenario fragment holding the external-data physics table, the

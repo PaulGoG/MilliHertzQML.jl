@@ -1,4 +1,4 @@
-# src/stages/labeling.jl — labelling stage: point-wise MBHB labels of an LDC
+# Labelling stage: point-wise MBHB labels of an LDC
 # product from its signal-only truth stream. The A channel of the truth
 # stream is scanned with the windowed matched-filter SNR against the
 # analytic TDI PSD; mergers come from the source catalogue when the product

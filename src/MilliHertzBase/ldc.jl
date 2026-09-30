@@ -1,7 +1,7 @@
-# src/ldc.jl — LISA Data Challenge products: the analytic TDI noise model of
+# LISA Data Challenge products: the analytic TDI noise model of
 # the `ldc` package (equal arms), readers of the compound HDF5 TDI datasets
-# and catalogues, the A/E/T combination, Welch PSD estimation of a record, and
-# event labelling from a truth stream. TDI variables are dimensionless
+# and catalogues, the A/E/T combination, and the windowed matched-filter SNR
+# scan, SNR peaks, detectable spans and signal onsets of a truth stream. TDI variables are dimensionless
 # fractional-frequency quantities; PSDs in Hz⁻¹. The analytic noise model is
 # ported from the LISA Data Challenge toolbox (MIT, Copyright (c) 2019 LISA);
 # see THIRD_PARTY_NOTICES.md.
@@ -297,198 +297,6 @@ function read_catalog(path::AbstractString; group::AbstractString = "sky/mbhb/ca
 end
 
 """
-    welch_psd(x, fs; segment_length, overlap = 0.5, taper = :hann, average = :median)
-        -> (freqs, psd)
-    welch_psd(records, fs; segment_length, overlap = 0.5, taper = :hann, average = :median)
-        -> (freqs, psd)
-
-One-sided PSD estimate [Hz⁻¹] of the record `x` sampled at `fs` [Hz] from
-tapered periodograms ([`tapered_periodogram`](@ref)) of segments of
-`segment_length` samples overlapping by the fraction `overlap`. `average`
-is `:mean` (Welch) or `:median` (robust to transients; the median of the
-exponentially distributed periodogram is corrected by ``1/\\ln 2``). The DC
-bin is dropped, so `freqs` starts at ``f_s / \\texttt{segment\\_length}``.
-
-Given a vector of `records` — the delivered runs of a record with holes —
-the segments of every record long enough to hold one are pooled into a
-single estimate, so that no segment spans a hole; a record shorter than a
-segment is skipped, and `ArgumentError` is thrown when none holds one.
-"""
-function welch_psd(
-    x::AbstractVector{<:Real},
-    fs::Real;
-    segment_length::Integer,
-    overlap::Real = 0.5,
-    taper::Symbol = :hann,
-    average::Symbol = :median,
-)
-    2 <= segment_length <= length(x) || throw(
-        ArgumentError(
-            "segment_length = $segment_length; must lie in [2, $(length(x))] for this record.",
-        ),
-    )
-    return welch_psd([x], fs; segment_length, overlap, taper, average)
-end
-
-function welch_psd(
-    records::AbstractVector{<:AbstractVector{<:Real}},
-    fs::Real;
-    segment_length::Integer,
-    overlap::Real = 0.5,
-    taper::Symbol = :hann,
-    average::Symbol = :median,
-)
-    fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
-    segment_length >= 2 ||
-        throw(ArgumentError("segment_length = $segment_length; must be at least 2."))
-    0 <= overlap < 1 || throw(ArgumentError("overlap = $overlap; must lie in [0, 1)."))
-    average in (:mean, :median) ||
-        throw(ArgumentError("average = $average; expected :mean or :median."))
-    long = filter(x -> length(x) >= segment_length, records)
-    isempty(long) &&
-        throw(ArgumentError("no record holds a segment of $segment_length samples."))
-    hop = max(1, round(Int, segment_length * (1 - overlap)))
-    n_freqs = div(segment_length, 2) + 1
-    columns = Vector{Vector{Float64}}()
-    for x in long
-        n_segments = div(length(x) - segment_length, hop) + 1
-        for s in 1:n_segments
-            lo = (s - 1) * hop + 1
-            push!(
-                columns,
-                tapered_periodogram(view(x, lo:(lo+segment_length-1)); taper = taper),
-            )
-        end
-    end
-    P = reduce(hcat, columns)
-    psd = Vector{Float64}(undef, n_freqs - 1)
-    for k in 2:n_freqs
-        row = view(P, k, :)
-        psd[k-1] = average == :mean ? mean(row) : median(row) / log(2)
-    end
-    psd .*= 2 / fs
-    freqs = rfftfreq(segment_length, fs)[2:end]
-    return collect(freqs), psd
-end
-
-"""
-    smooth_psd(freqs, psd, sigma_dex) -> Vector{Float64}
-
-The one-sided PSD `psd` tabulated at the strictly increasing positive
-frequencies `freqs`, smoothed in log-frequency: ``\\log_{10} S`` is
-averaged with Gaussian weights of standard deviation `sigma_dex` in
-``\\log_{10} f``, each bin weighted by the log-frequency interval it spans
-(``\\propto 1/f`` on a uniform frequency grid), evaluated on a uniform
-log-frequency grid of step `sigma_dex / 5` with the kernel truncated at
-four standard deviations, and read back at `freqs` by linear
-interpolation. Where the table is coarser than the kernel — its lowest
-bins — the grid interpolates the table instead. `sigma_dex = 0` returns
-the table unchanged.
-
-A Welch estimate carries line-to-line scatter and resolves sharp spectral
-features, the TDI transfer notches among them; the inverse square root of
-such a spectrum has a long, ringing impulse response, so whitening by it
-spreads every sample over many window lengths. Smoothing on scales
-narrower than any analysis band removes that fine structure and shortens
-the kernel accordingly.
-"""
-function smooth_psd(
-    freqs::AbstractVector{<:Real},
-    psd::AbstractVector{<:Real},
-    sigma_dex::Real,
-)
-    n = length(freqs)
-    n == length(psd) ||
-        throw(DimensionMismatch("$n frequencies for $(length(psd)) PSD values."))
-    n >= 2 || throw(ArgumentError("the table holds fewer than two frequencies."))
-    sigma_dex >= 0 || throw(ArgumentError("sigma_dex = $sigma_dex; must be non-negative."))
-    (first(freqs) > 0 && all(>(0), diff(freqs))) ||
-        throw(ArgumentError("the frequencies must be positive and strictly increasing."))
-    all(>(0), psd) || throw(ArgumentError("the PSD must be positive at every frequency."))
-    iszero(sigma_dex) && return Vector{Float64}(psd)
-    f = Vector{Float64}(freqs)
-    lf = log10.(f)
-    ls = log10.(Vector{Float64}(psd))
-    n_grid = max(2, ceil(Int, (lf[end] - lf[1]) / (sigma_dex / 5)) + 1)
-    grid = collect(range(lf[1], lf[end]; length = n_grid))
-    reach = 4 * sigma_dex
-    smooth = similar(grid)
-    lo, hi = 1, 0          # the bins within `reach` of the current grid point
-    for (i, g) in enumerate(grid)
-        while lo <= n && lf[lo] < g - reach
-            lo += 1
-        end
-        while hi < n && lf[hi+1] <= g + reach
-            hi += 1
-        end
-        if lo <= hi
-            acc = 0.0
-            weight = 0.0
-            for j in lo:hi
-                w = exp(-0.5 * ((lf[j] - g) / sigma_dex)^2) / f[j]
-                acc += w * ls[j]
-                weight += w
-            end
-            smooth[i] = acc / weight
-        else
-            smooth[i] = linear_interpolation(lf, ls, g)
-        end
-    end
-    return [exp10(linear_interpolation(grid, smooth, x)) for x in lf]
-end
-
-"""
-    linear_interpolation(x, y, xq) -> Float64
-
-Value at `xq` of the piecewise-linear interpolant of `y` over the strictly
-increasing abscissae `x`, constant beyond the ends.
-"""
-function linear_interpolation(
-    x::AbstractVector{<:Real},
-    y::AbstractVector{<:Real},
-    xq::Real,
-)
-    xq <= first(x) && return Float64(first(y))
-    xq >= last(x) && return Float64(last(y))
-    i = searchsortedlast(x, xq)
-    t = (xq - x[i]) / (x[i+1] - x[i])
-    return (1 - t) * y[i] + t * y[i+1]
-end
-
-"""
-    interpolated_psd(freqs, psd) -> Function
-
-Callable ``f \\mapsto S(f)`` interpolating the tabulated one-sided PSD
-`psd` at the strictly increasing positive frequencies `freqs` linearly in
-``\\log f``–``\\log S``, constant outside the tabulated range, and `Inf` for
-``f \\le 0`` (so whitening sets the DC bin to zero).
-"""
-function interpolated_psd(freqs::AbstractVector{<:Real}, psd::AbstractVector{<:Real})
-    length(freqs) == length(psd) || throw(
-        DimensionMismatch("$(length(freqs)) frequencies for $(length(psd)) PSD values."),
-    )
-    length(freqs) >= 2 ||
-        throw(ArgumentError("at least two tabulated points are required."))
-    (all(>(0), freqs) && issorted(freqs; lt = <=)) ||
-        throw(ArgumentError("frequencies must be positive and strictly increasing."))
-    all(p -> isfinite(p) && p > 0, psd) ||
-        throw(ArgumentError("PSD values must be positive and finite."))
-    log_f = log.(Float64.(freqs))
-    log_s = log.(Float64.(psd))
-    s_knots = Float64.(psd)
-    return function (f::Real)
-        f > 0 || return Inf
-        lf = log(f)
-        lf <= log_f[1] && return s_knots[1]
-        lf >= log_f[end] && return s_knots[end]
-        k = searchsortedlast(log_f, lf)
-        lf == log_f[k] && return s_knots[k]
-        w = (lf - log_f[k]) / (log_f[k+1] - log_f[k])
-        return exp(log_s[k] + w * (log_s[k+1] - log_s[k]))
-    end
-end
-
-"""
     windowed_snr(x, fs; window_size, step, psd) -> (starts, snr)
 
 Matched-filter SNR ([`matched_filter_snr`](@ref)) of every window of
@@ -602,31 +410,6 @@ function detectable_spans(
 end
 
 """
-    fixed_spans(merger_indices, fs, n; before, after) -> Vector{UnitRange{Int}}
-
-Sample ranges `[i - before·fs, i + after·fs]` around the merger sample
-indices, clipped to `1:n` (`before`, `after` in seconds): the label window
-of Isfan et al. (2025) is `before = 4 d`, `after = 27 min`.
-"""
-function fixed_spans(
-    merger_indices::AbstractVector{<:Integer},
-    fs::Real,
-    n::Integer;
-    before::Real,
-    after::Real,
-)
-    (before >= 0 && after >= 0) ||
-        throw(ArgumentError("before and after must be non-negative."))
-    fs > 0 || throw(ArgumentError("fs = $fs; the sampling frequency must be positive."))
-    spans = UnitRange{Int}[]
-    for i in merger_indices
-        1 <= i <= n || throw(ArgumentError("merger index $i lies outside 1:$n."))
-        push!(spans, max(1, i-round(Int, before*fs)):min(n, i+round(Int, after*fs)))
-    end
-    return spans
-end
-
-"""
     signal_onsets(starts, snr, merger_indices, lower; threshold) -> Vector{Int}
 
 Signal onset of every merger of a windowed SNR scan (windows starting at
@@ -675,21 +458,4 @@ function signal_onsets(
         onsets[i] = k === nothing ? Int(m) : Int(starts[k_lo+k-1])
     end
     return onsets
-end
-
-"""
-    span_labels(n, spans) -> Vector{Int}
-
-Point-wise labels of length `n`: 1 inside any of the sample ranges `spans`,
-0 elsewhere.
-"""
-function span_labels(n::Integer, spans::AbstractVector{<:AbstractUnitRange{<:Integer}})
-    labels = zeros(Int, n)
-    for s in spans
-        isempty(s) && continue
-        (first(s) >= 1 && last(s) <= n) ||
-            throw(ArgumentError("span $s lies outside 1:$n."))
-        labels[s] .= 1
-    end
-    return labels
 end

@@ -49,7 +49,7 @@ carries no spans.
 """
 function label_span_times(events::DataFrame, geometry::RunGeometry; crediting::Symbol)
     spans = Tuple{DateTime,DateTime}[]
-    starts = MilliHertzQML.credited_span_starts(events, crediting)
+    starts = MilliHertzQML.StreamingInference.credited_span_starts(events, crediting)
     has_span = starts !== nothing
     times = event_merger_times(events)
     for (i, row) in enumerate(eachrow(events))
@@ -224,7 +224,7 @@ function main()
                 epoch = geometry.start_sim_time,
                 label_spans = spans,
                 latencies = latencies,
-                span_label = MilliHertzQML.credited_span_label(
+                span_label = MilliHertzQML.StreamingInference.credited_span_label(
                     Symbol(settings.alert_crediting),
                 ),
             ),

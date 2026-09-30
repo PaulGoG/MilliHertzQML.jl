@@ -14,16 +14,9 @@ using CairoMakie.Makie: linkxaxes!, hidexdecorations!, rowgap!, xlims!, ylims!, 
 using CairoMakie.Makie.MathTeXEngine: texfont
 using CairoMakie.Makie: LaTeXStrings
 using MilliHertzQML
+using MilliHertzQML.StreamingInference: FIGURE_FONTSIZE, TICK_FONTSIZE, ANNOTATION_FONTSIZE
 using MilliHertzQML:
-    FIGURE_SIZE,
-    FIGURE_STROKES,
-    FIGURE_FONTSIZE,
-    TICK_FONTSIZE,
-    ANNOTATION_FONTSIZE,
-    figure_size,
-    FIGURE_COLORS,
-    backup_existing!,
-    write_toml
+    FIGURE_SIZE, FIGURE_STROKES, figure_size, FIGURE_COLORS, backup_existing!, write_toml
 using MilliHertzQML: contiguous_runs
 using CairoMakie.Makie: scatter!, stairs!, Observable, @lift, Point2f, record
 using CairoMakie.Makie: rowsize!, Auto, LinearTicks

@@ -1,4 +1,4 @@
-# src/evaluation.jl — chronological partitioning, ROC analysis, decision
+# Chronological partitioning, ROC analysis, decision
 # thresholds fitted on a held-out calibration block, and event-level
 # detection metrics with the operational false-alarm rate.
 

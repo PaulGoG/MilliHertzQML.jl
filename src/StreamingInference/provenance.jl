@@ -1,6 +1,6 @@
-# src/provenance.jl — run identifiers and directories, hardware and git
-# provenance of every artifact, overwrite-safe writing, memory-safety
-# thresholds with pre-flight estimates, and the stage timer.
+# Provenance and I/O safety: stage timing, run identity, hardware and
+# platform fingerprint, git and manifest snapshots, overwrite-safe writers,
+# and the memory pre-flight of a stage.
 
 """
     TIMER
@@ -115,7 +115,7 @@ function git_provenance()
     return Dict{String,Any}(
         "git_commit" => commit,
         "git_dirty" => dirty,
-        "package_version" => string(pkgversion(MilliHertzQML)),
+        "package_version" => string(pkgversion(@__MODULE__)),
     )
 end
 
@@ -288,28 +288,6 @@ function resource_settings(config::AbstractDict)
         ArgumentError("warn_memory_gib = $warn_gib exceeds max_memory_gib = $max_gib."),
     )
     return (max_memory_gib = max_gib, warn_memory_gib = warn_gib, total_memory_gib = total)
-end
-
-"""
-    training_memory_estimate_gib(n_qubits, n_layers, batch_size) -> Float64
-
-Pre-flight estimate of the memory of one training step: the statevector of
-``2^{n}`` complex single-precision amplitudes is copied at every gate
-application under the automatic-differentiation tape, ``n_\\mathrm{qubits}
-(2 + 2) + n_\\mathrm{qubits}`` gates per layer (feature map, rotations,
-CNOT ring), for every sample of the batch, plus the same again for the
-adjoint pass.
-"""
-function training_memory_estimate_gib(
-    n_qubits::Integer,
-    n_layers::Integer,
-    batch_size::Integer,
-)
-    (n_qubits >= 1 && n_layers >= 1 && batch_size >= 1) ||
-        throw(ArgumentError("n_qubits, n_layers, and batch_size must be positive."))
-    statevector_bytes = 2.0^n_qubits * 8
-    gates_per_layer = 5 * n_qubits
-    return 2 * batch_size * n_layers * gates_per_layer * statevector_bytes / 2^30
 end
 
 """

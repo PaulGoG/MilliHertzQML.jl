@@ -48,9 +48,9 @@
         h5 = joinpath(dir, "record.h5")
         # HDF5 is a package dependency, not a test dependency; the simulator's
         # group layout is written through the module.
-        MilliHertzQML.HDF5.h5open(h5, "w") do file
-            g_obs = MilliHertzQML.HDF5.create_group(file, "obs")
-            g_tdi = MilliHertzQML.HDF5.create_group(g_obs, "tdi")
+        MilliHertzQML.MilliHertzBase.HDF5.h5open(h5, "w") do file
+            g_obs = MilliHertzQML.MilliHertzBase.HDF5.create_group(file, "obs")
+            g_tdi = MilliHertzQML.MilliHertzBase.HDF5.create_group(g_obs, "tdi")
             g_tdi["t"] = t
             g_tdi["X"] = X
             g_tdi["Z"] = Z

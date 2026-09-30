@@ -1,11 +1,7 @@
-# src/telemetry.jl — consumer side of the telemetry coupling: the run
-# interface a producer adapter implements, batch-to-row geometry, the
-# coverage set of delivered samples, the window scheduler, the streaming
-# detector (record-context whitening of a complete window), the replay of
-# an arrival feed into scored windows, and the alert-latency table. The
-# DeepSpaceTelemetry adapter lives in the package extension
-# MilliHertzQMLDeepSpaceTelemetryExt; nothing here writes into a run
-# directory.
+# Streamed consumption of a delivered record: the run interface of a
+# producer, the coverage of delivered rows, window scheduling, the streaming
+# detector and its conditioning, the causal whitening estimate, the replay
+# and live-follow engine, and the alert tables of a replay.
 
 """
     RunGeometry
@@ -612,53 +608,6 @@ function score_window(
 end
 
 """
-    whitening_psd_from_sidecar(sidecar_path) -> Union{Nothing, Function}
-
-The whitening PSD recorded in a feature sidecar written by the
-pre-processor: the Robson–Cornish–Liu model, the LDC analytic model, the
-persisted Welch table (`<stem>_psd.csv` beside the features), or `nothing`
-for `psd = "none"`.
-"""
-function whitening_psd_from_sidecar(sidecar_path::AbstractString)
-    isfile(sidecar_path) || throw(ArgumentError("feature sidecar not found: $sidecar_path"))
-    features = get(TOML.parsefile(sidecar_path), "features", Dict{String,Any}())
-    mode = cfgget(features, "psd", "model"; type = String)
-    if mode == "model"
-        years = cfgget(features, "observation_years", 1.0; type = Float64)
-        return f -> lisa_noise_psd(f; observation_years = years)
-    elseif mode == "ldc"
-        model = cfgget(features, "ldc_model", "sangria"; type = String)
-        tdi2 = cfgget(features, "ldc_tdi2", false; type = Bool)
-        years = cfgget(features, "ldc_observation_years", 0.0; type = Float64)
-        return f -> ldc_tdi_psd(
-            f;
-            channel = :A,
-            model = model,
-            tdi2 = tdi2,
-            observation_years = years,
-        )
-    elseif mode == "welch"
-        stem = replace(sidecar_path, r"_features\.toml$" => "")
-        table_path = stem * "_psd.csv"
-        isfile(table_path) || throw(
-            ArgumentError("Welch PSD table not found beside the sidecar: $table_path"),
-        )
-        table = CSV.read(table_path, DataFrame)
-        return interpolated_psd(
-            Vector{Float64}(table.frequency_hz),
-            Vector{Float64}(table.psd),
-        )
-    elseif mode == "none"
-        return nothing
-    end
-    throw(
-        ArgumentError("sidecar psd = $(repr(mode)); expected model, ldc, welch, or none."),
-    )
-end
-
-# --- Replay ------------------------------------------------------------
-
-"""
     WindowRecord
 
 One scored window of a replay: `window` index, payload `row_start` and
@@ -1103,103 +1052,6 @@ function follow_run(
 end
 
 """
-    detector_from_run(model_path; threshold_path = joinpath(dirname(model_path), "threshold.toml"),
-                      config_path = joinpath(dirname(model_path), "config.toml"),
-                      psd_sidecar = "", context_windows = 4) -> StreamingDetector
-
-The [`StreamingDetector`](@ref) of a training run: model and scaler from
-the artifact, the fitted threshold from `threshold.toml`, and the
-conditioning — window geometry, whitening PSD, analysis bands, record
-high-pass, feature set — from the sidecar of the feature table the run was
-trained on (recorded in its `config.toml` snapshot).
-
-`psd_sidecar`, when given, supplies the whitening PSD from a different
-feature sidecar while everything else still comes from the training one.
-A whitening PSD is a calibration of the record being scored, not a
-property of the model: the persisted training PSD describes the noise of
-the training record, and where that noise is not stationary between
-records — the Galactic foreground is modulated over the year by the
-constellation's antenna pattern — whitening a later record with it
-mis-scales every band power, the feature scaler clips the result, and the
-scores fall. Give the sidecar of the record under analysis whenever
-one exists.
-
-`context_windows` must reach past the conditioning kernel. The kernel of
-the record high-pass followed by whitening decays as a power law, not
-exponentially, when the PSD resolves sharp spectral features; with the
-Sangria Welch estimate its envelope is still 7 % of the peak eight window
-lengths from the impulse and the streamed scores agree with the batch
-pipeline only from about twenty window lengths upward, not monotonically
-below that. Measure the agreement against the batch path for the record
-at hand rather than assuming a value is large enough.
-"""
-function detector_from_run(
-    model_path::AbstractString;
-    threshold_path::AbstractString = joinpath(dirname(model_path), "threshold.toml"),
-    config_path::AbstractString = joinpath(dirname(model_path), "config.toml"),
-    psd_sidecar::AbstractString = "",
-    context_windows::Integer = 4,
-)
-    isfile(model_path) || throw(ArgumentError("model artifact not found: $model_path"))
-    isfile(threshold_path) ||
-        throw(ArgumentError("threshold file not found: $threshold_path"))
-    isfile(config_path) || throw(ArgumentError("training snapshot not found: $config_path"))
-    model, _, scaler = load_model(model_path)
-    scaler === nothing &&
-        throw(ArgumentError("the model artifact carries no feature scaler."))
-    threshold = Float32(TOML.parsefile(threshold_path)["threshold"]["value"])
-    snapshot = TOML.parsefile(config_path)
-    features_path = resolvepath(
-        cfgget(section(snapshot, "training"), "train_features", ""; type = String),
-    )
-    sidecar_path = replace(features_path, r"\.csv$" => ".toml")
-    isfile(sidecar_path) || throw(
-        ArgumentError(
-            "the feature sidecar $sidecar_path of the training run is required to " *
-            "reproduce the conditioning.",
-        ),
-    )
-    features = get(TOML.parsefile(sidecar_path), "features", Dict{String,Any}())
-    low = cfgget(features, "low_band_hz", [1e-3, 5e-3]; type = AbstractVector)
-    high = cfgget(features, "high_band_hz", [5e-3, 1e-1]; type = AbstractVector)
-    edges = cfgget(features, "band_edges_hz", [1e-3, 5e-3, 1e-1]; type = AbstractVector)
-    if !isempty(psd_sidecar)
-        isfile(psd_sidecar) ||
-            throw(ArgumentError("whitening sidecar not found: $psd_sidecar"))
-        @info "whitening with a sidecar other than the training run's" psd_sidecar =
-            psd_sidecar training_sidecar = sidecar_path
-    end
-    return StreamingDetector(
-        model,
-        scaler,
-        threshold;
-        sample_rate = cfgget(features, "sample_rate", 0.2; type = Float64, min = 1e-6),
-        window_size = cfgget(features, "window_size", 1000; type = Int, min = 2),
-        step_size = cfgget(features, "step_size", 100; type = Int, min = 1),
-        psd = whitening_psd_from_sidecar(isempty(psd_sidecar) ? sidecar_path : psd_sidecar),
-        highpass_cutoff_hz = cfgget(features, "highpass_cutoff_hz", 5e-4; type = Float64),
-        highpass_order = cfgget(features, "highpass_order", 8; type = Int, min = 1),
-        low_band = (Float64(low[1]), Float64(low[2])),
-        high_band = (Float64(high[1]), Float64(high[2])),
-        band_edges = Float64.(edges),
-        feature_set = Symbol(cfgget(features, "feature_set", "whitened"; type = String)),
-        context_windows = context_windows,
-    )
-end
-
-"""
-    open_telemetry_run(run_dir; producer_compat = "1.0") -> AbstractTelemetryRun
-
-Open a DeepSpaceTelemetry run directory through the producer's own API.
-Implemented by the package extension that loads with DeepSpaceTelemetry;
-`producer_compat` is the accepted lower bound of the producer version
-recorded in the run's configuration snapshot.
-"""
-function open_telemetry_run end
-
-# --- Alert latency -----------------------------------------------------
-
-"""
     event_merger_times(events) -> Vector{Float64}
 
 Merger times [s after the mission epoch] of an event table: the column
@@ -1226,10 +1078,9 @@ table of [`replay_run`](@ref)) touching the event's credited span (rows, or
 the window containing the merger when no span is given).
 
 `crediting` fixes where the credited span starts. With `:signal` it starts
-at the signal onset `signal_start_index` written by the labelling and
-generation stages (the first window in which the source reaches the
-labelling SNR threshold, [`signal_onsets`](@ref)) and ends with the label
-span: an alarm earlier in the label span cannot be caused by the source and
+at the signal onset `signal_start_index` of the event table (the first
+window in which the source reaches the labelling SNR threshold) and ends
+with the label span: an alarm earlier in the label span cannot be caused by the source and
 counts as a false alarm. With `:label` the whole label span is credited,
 the convention of the training labels (96 h before to 27 min after the
 merger for the Isfan et al. (2025) spans), which credits noise alarms

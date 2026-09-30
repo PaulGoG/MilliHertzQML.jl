@@ -1,4 +1,4 @@
-# src/response.jl — detector response of the simulator: the sky-averaged
+# Detector response of the simulator: the sky-averaged
 # single strain that the sensitivity model refers to, and the interface of
 # the constellation response (A and E channels on the LISA orbits) that the
 # CurvatureDistinguishability extension implements.
@@ -59,6 +59,7 @@ One-sided noise PSD of each recorded channel for the sensitivity `psd(f)`
 constellation response, whose channel antenna patterns average to 3/10.
 """
 channel_noise_psd(::SkyAveragedResponse, psd) = psd
+
 channel_noise_psd(::AbstractDetectorResponse, psd) = f -> sky_averaged_response(f) * psd(f)
 
 """
@@ -175,7 +176,10 @@ package when the extension is not loaded.
 """
 function detector_response(settings::NamedTuple)
     settings.response == "sky_averaged" && return SkyAveragedResponse()
-    ext = Base.get_extension(@__MODULE__, :MilliHertzQMLCurvatureDistinguishabilityExt)
+    ext = Base.get_extension(
+        Base.moduleroot(@__MODULE__),
+        :MilliHertzQMLCurvatureDistinguishabilityExt,
+    )
     ext === nothing && throw(
         ArgumentError(
             "response = \"lisa\" needs the CurvatureDistinguishability extension: add the " *

@@ -1,4 +1,4 @@
-# src/estimators.jl — the interface between the conditioning chain of a
+# The interface between the conditioning chain of a
 # streamed or recorded time series and the method applied to each window:
 # estimators and their memory trait, scalar scorers for detection, and the
 # spectral feature map of a conditioned window.

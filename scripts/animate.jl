@@ -108,7 +108,7 @@ function replay_spans(results_dir::AbstractString, geometry::NamedTuple, crediti
         Millisecond(round(Int, 1000 * geometry.sample_interval * (index - 1)))
     if !isempty(events_path) && isfile(resolvepath(events_path))
         events = MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame)
-        starts = MilliHertzQML.credited_span_starts(events, crediting)
+        starts = MilliHertzQML.StreamingInference.credited_span_starts(events, crediting)
         if starts !== nothing
             return [
                 (row_time(s), row_time(Int(e))) for
@@ -159,7 +159,7 @@ function replay_animation(
             path;
             epoch = geometry.epoch,
             label_spans = spans,
-            span_label = MilliHertzQML.credited_span_label(crediting),
+            span_label = MilliHertzQML.StreamingInference.credited_span_label(crediting),
         )
     end
 end

@@ -1,4 +1,4 @@
-# src/stages/generation.jl — telemetry generation stage: calibrated LISA
+# Telemetry generation stage: calibrated LISA
 # noise (instrument plus confusion), resolvable galactic binaries and EMRIs
 # scaled to a matched-filter SNR over the record, MBHB injections aligned on
 # the coalescence sample with point-wise labels and an event catalogue, and
@@ -262,6 +262,7 @@ function label_bounds(
     end
     throw(ArgumentError("label_span = $(repr(settings.label_span)); unknown criterion."))
 end
+
 """
     signal_onset(settings, series, covered, k_c, label_start, label_end, fs, psd) -> Int
 
