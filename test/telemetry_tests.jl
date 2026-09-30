@@ -42,6 +42,11 @@ end
 MilliHertzQML.arrival_events(run::DriftedTelemetryRun) = run.events
 MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
 
+# A reference scorer outside the classifier: the RMS of the conditioned window.
+struct RMSScorer <: AbstractWindowScorer end
+MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) =
+    Float32(sqrt(sum(abs2, window) / length(window)))
+
 @testset "Telemetry coupling (core)" begin
     epoch = Dates.DateTime(2035, 1, 1)
     geometry = RunGeometry(0.2, 50.0, 10, epoch, "1.0.0")
@@ -170,6 +175,34 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
     windows = replay_run(run, detector)
     @test nrow(windows) == div(n_rows - 1000, 100) + 1
     @test windows.window == 1:nrow(windows)
+
+    # Any scorer runs through the same conditioning and replay: a scorer of
+    # the conditioned window's RMS, bounded by the detector's own convention
+    @test detector.scorer isa VQCScorer && estimator_memory(detector.scorer) == Stateless()
+    @test score_label(detector.scorer) == "MBHB probability"
+    @test score_bounds(detector.scorer) == (0.0, 1.0)
+    @test_throws ArgumentError FeatureMap(feature_set = :unknown)
+    @test_throws ArgumentError FeatureMap(feature_set = :bands, band_edges = [1e-3])
+    rms_detector = StreamingDetector(
+        RMSScorer(),
+        1.0;
+        sample_rate = fs,
+        window_size = 1000,
+        step_size = 100,
+        psd = lisa_noise_psd,
+        context_windows = 2,
+    )
+    @test score_label(RMSScorer()) == "Score" &&
+          estimator_memory(RMSScorer()) == Stateless()
+    rms_windows = replay_run(run, rms_detector)
+    @test rms_windows.window == windows.window
+    stretch = payload[1:5000]
+    conditioned = condition_window(rms_detector, stretch, 2001)
+    @test length(conditioned) == 1000
+    @test score_window(rms_detector, stretch, 2001) ==
+          Float32(sqrt(sum(abs2, conditioned) / length(conditioned)))
+    @test score_window(detector, stretch, 2001) ==
+          window_score(detector.scorer, condition_window(detector, stretch, 2001), fs)
     @test all(windows.coverage .== 1.0)
     @test all(0 .<= windows.score .<= 1)
     @test all(windows.decision .== Int.(windows.score .>= 0.5f0))
@@ -432,7 +465,7 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         end
         d = detector_from_run(model_path; context_windows = 3)
         @test d.threshold == 0.42f0 && d.window_size == 1000 && d.context_windows == 3
-        @test d.psd !== nothing && d.feature_set == :whitened
+        @test d.psd !== nothing && d.scorer.features.feature_set == :whitened
         @test isapprox(d.psd(1e-3), lisa_noise_psd(1e-3))
         # A whitening sidecar other than the training run's is honoured —
         # here one that whitens not at all, so the override is unambiguous —
@@ -460,7 +493,7 @@ MilliHertzQML.run_state(::DriftedTelemetryRun) = :complete
         @test d_other.psd === nothing
         @test d_other.threshold == d.threshold &&
               d_other.window_size == d.window_size &&
-              d_other.feature_set == d.feature_set
+              d_other.scorer.features.feature_set == d.scorer.features.feature_set
         @test_throws ArgumentError detector_from_run(
             model_path;
             psd_sidecar = joinpath(dir, "absent.toml"),

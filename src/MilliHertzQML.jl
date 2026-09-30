@@ -94,6 +94,9 @@ export arrival_events, run_state, MemoryTelemetryRun, Coverage, add!, remove!
 export covered_fraction, holes, covered_stretch, WindowScheduler, window_rows
 export conditioning_rows
 export windows_touching, newly_evaluable!, StreamingDetector, score_window, TrailingWelch
+export AbstractWindowEstimator, AbstractWindowScorer, EstimatorMemory, Stateless, Stateful
+export estimator_memory, window_score, score_label, score_bounds, FeatureMap
+export condition_window, VQCScorer
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
 export event_merger_times
@@ -111,7 +114,9 @@ include("persistence.jl")
 include("evaluation.jl")
 include("ldc.jl")
 include("visualization.jl")
+include("estimators.jl")
 include("telemetry.jl")
+include("vqc_scorer.jl")
 include("stages/generation.jl")
 include("stages/preprocessing.jl")
 include("stages/labeling.jl")

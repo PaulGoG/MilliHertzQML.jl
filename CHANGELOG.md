@@ -4,6 +4,23 @@ Notable changes to MilliHertzQML since its public release. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- An estimator interface between the conditioning chain and the method
+  applied to each window: `AbstractWindowEstimator`, the scalar
+  `AbstractWindowScorer` with `window_score`, `score_label` and
+  `score_bounds`, the memory trait `estimator_memory` (`Stateless`,
+  `Stateful`), the spectral `FeatureMap` of a conditioned window, and
+  `condition_window`. The classifier is one scorer, `VQCScorer`.
+
+### Changed
+- **Breaking:** `StreamingDetector` is generic over its scorer and holds
+  the conditioning only (sampling rate, window geometry, whitening PSD,
+  high-pass, context); the feature set and bands moved to the scorer's
+  `FeatureMap` (`detector.scorer.features`). The constructor
+  `StreamingDetector(model, scaler, threshold; ...)` is unchanged.
+
 ## [2.0.1] — 2026-09-30
 
 The telemetry replay refuses runs of DeepSpaceTelemetry 2.0.1 and

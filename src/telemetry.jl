@@ -502,24 +502,23 @@ end
 # --- Streaming detector ------------------------------------------------
 
 """
-    StreamingDetector(model, scaler, threshold; sample_rate, window_size, step_size,
+    StreamingDetector(scorer, threshold; sample_rate, window_size, step_size,
                       psd = nothing, highpass_cutoff_hz = 5e-4, highpass_order = 8,
-                      low_band = (1e-3, 5e-3), high_band = (5e-3, 1e-1),
-                      band_edges = [1e-3, 5e-3, 1e-1], feature_set = :whitened,
                       context_windows = 4)
 
 Scoring of complete windows out of a partially delivered record with the
 same conditioning as the batch pipeline. A window is cut from the delivered
 stretch around it — up to `context_windows` window lengths on each side —
 which is high-passed and, when `psd` is given, whitened as a whole
-([`highpass_record`](@ref), [`whiten_record`](@ref)); the window's features
-([`extract_features`](@ref)) are then encoded with the persisted `scaler`
-and scored with `model`. Isolated windows without context are scored on
-their own samples (edge-affected, as the first windows of any record).
+([`condition_window`](@ref)); the conditioned window is scored by `scorer`
+([`window_score`](@ref)) and alarms at `threshold`. Isolated windows
+without context are scored on their own samples (edge-affected, as the
+first windows of any record). The conditioning belongs to the detector,
+the method to the scorer, so any [`AbstractWindowScorer`](@ref) runs
+through the same replay.
 """
-struct StreamingDetector
-    model::VariationalQuantumClassifier
-    scaler::FeatureScaler
+struct StreamingDetector{S<:AbstractWindowScorer}
+    scorer::S
     threshold::Float32
     sample_rate::Float64
     window_size::Int
@@ -527,14 +526,9 @@ struct StreamingDetector
     psd::Any
     highpass_cutoff_hz::Float64
     highpass_order::Int
-    low_band::Tuple{Float64,Float64}
-    high_band::Tuple{Float64,Float64}
-    band_edges::Vector{Float64}
-    feature_set::Symbol
     context_windows::Int
     function StreamingDetector(
-        model::VariationalQuantumClassifier,
-        scaler::FeatureScaler,
+        scorer::S,
         threshold::Real;
         sample_rate::Real,
         window_size::Integer,
@@ -542,12 +536,8 @@ struct StreamingDetector
         psd = nothing,
         highpass_cutoff_hz::Real = 5e-4,
         highpass_order::Integer = 8,
-        low_band::Tuple{Real,Real} = (1e-3, 5e-3),
-        high_band::Tuple{Real,Real} = (5e-3, 1e-1),
-        band_edges::AbstractVector{<:Real} = [1e-3, 5e-3, 1e-1],
-        feature_set::Symbol = :whitened,
         context_windows::Integer = 4,
-    )
+    ) where {S<:AbstractWindowScorer}
         sample_rate > 0 || throw(ArgumentError("sample_rate must be positive."))
         window_size >= 2 || throw(ArgumentError("window_size must be at least 2."))
         1 <= step_size <= window_size ||
@@ -557,12 +547,8 @@ struct StreamingDetector
         highpass_cutoff_hz >= 0 ||
             throw(ArgumentError("highpass_cutoff_hz must be non-negative."))
         highpass_order >= 1 || throw(ArgumentError("highpass_order must be at least 1."))
-        feature_set in FEATURE_SETS || throw(
-            ArgumentError("feature_set = $feature_set; expected one of $(FEATURE_SETS)."),
-        )
-        return new(
-            model,
-            scaler,
+        return new{S}(
+            scorer,
             Float32(threshold),
             Float64(sample_rate),
             Int(window_size),
@@ -570,26 +556,23 @@ struct StreamingDetector
             psd,
             Float64(highpass_cutoff_hz),
             Int(highpass_order),
-            (Float64(low_band[1]), Float64(low_band[2])),
-            (Float64(high_band[1]), Float64(high_band[2])),
-            check_band_edges(band_edges),
-            feature_set,
             Int(context_windows),
         )
     end
 end
 
 """
-    score_window(detector, stretch, offset; psd = detector.psd) -> Float32
+    condition_window(detector, stretch, offset; psd = detector.psd) -> AbstractVector{Float64}
 
-Classifier probability of the window starting at `offset` (1-based) of the
-contiguous delivered `stretch`, conditioned as described for
-[`StreamingDetector`](@ref). `psd` replaces the detector's whitening PSD
-for this window — in a replay under [`TrailingWelch`](@ref), the causal
-PSD estimate, made only from data already delivered to the ground
-station — or `nothing` for no whitening.
+The window starting at `offset` (1-based) of the contiguous delivered
+`stretch`, conditioned as the batch pipeline conditions a record: the
+stretch high-passed ([`highpass_record`](@ref)) and, unless `psd` is
+`nothing`, whitened by `psd` ([`whiten_record`](@ref)) as a whole, then
+the window cut from it. `psd` replaces the detector's whitening PSD for
+this window — in a replay under [`TrailingWelch`](@ref), the causal PSD
+estimate, made only from data already delivered to the ground station.
 """
-function score_window(
+function condition_window(
     detector::StreamingDetector,
     stretch::AbstractVector{<:Real},
     offset::Integer;
@@ -608,17 +591,24 @@ function score_window(
         )
     end
     psd === nothing || (record = whiten_record(record, detector.sample_rate; psd = psd))
-    window = view(record, offset:(offset+W-1))
-    features = extract_features(
-        window,
-        detector.sample_rate;
-        low_band = detector.low_band,
-        high_band = detector.high_band,
-        band_edges = detector.band_edges,
-        feature_set = detector.feature_set,
-    )
-    encoded = encode_features(detector.scaler, reshape(collect(Float32.(features)), 1, :))
-    return predict_probability(detector.model, vec(encoded))
+    return view(record, offset:(offset+W-1))
+end
+
+"""
+    score_window(detector, stretch, offset; psd = detector.psd) -> Float32
+
+Score of the window starting at `offset` of the contiguous delivered
+`stretch`: the window conditioned ([`condition_window`](@ref)) and scored
+by the detector's scorer ([`window_score`](@ref)).
+"""
+function score_window(
+    detector::StreamingDetector,
+    stretch::AbstractVector{<:Real},
+    offset::Integer;
+    psd = detector.psd,
+)
+    window = condition_window(detector, stretch, offset; psd = psd)
+    return window_score(detector.scorer, window, detector.sample_rate)
 end
 
 """
