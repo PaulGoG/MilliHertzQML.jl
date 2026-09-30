@@ -6,6 +6,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `THIRD_PARTY_NOTICES.md` with the MIT notice of the LISA Data Challenge
+  toolbox, whose equal-arm analytic TDI noise model and Galactic-confusion
+  fit `src/ldc.jl` ports.
+
+### Fixed
+- The physics page described every LDC product as first-generation TDI;
+  Sangria is TDI 1.5 with equal arm lengths, Spritz TDI 2 with Keplerian
+  orbits.
+
 ## [2.0.0] — 2026-09-30
 
 Alerts of a streamed replay are credited to a coalescence only from its

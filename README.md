@@ -304,4 +304,6 @@ Cite the software through `CITATION.cff`, or with:
 
 ## License
 
-MIT; see `LICENSE`.
+MIT; see `LICENSE`. The analytic TDI noise model in `src/ldc.jl` is a port
+of the LISA Data Challenge toolbox, which is MIT-licensed (Copyright (c)
+2019 LISA); its notice is in `THIRD_PARTY_NOTICES.md`.

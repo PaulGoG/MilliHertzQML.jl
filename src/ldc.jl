@@ -2,7 +2,9 @@
 # the `ldc` package (equal arms), readers of the compound HDF5 TDI datasets
 # and catalogues, the A/E/T combination, Welch PSD estimation of a record, and
 # event labelling from a truth stream. TDI variables are dimensionless
-# fractional-frequency quantities; PSDs in Hz⁻¹.
+# fractional-frequency quantities; PSDs in Hz⁻¹. The analytic noise model is
+# ported from the LISA Data Challenge toolbox (MIT, Copyright (c) 2019 LISA);
+# see THIRD_PARTY_NOTICES.md.
 
 """
     LDC_NOISE_LEVELS
