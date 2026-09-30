@@ -89,7 +89,7 @@ release tag,
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v1.2.0")
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v2.0.0")
 ```
 
 or develops a clone by path. From a clone:
@@ -296,7 +296,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {1.2.0},
+  version = {2.0.0},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }

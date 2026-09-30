@@ -6,12 +6,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-09-30
+
 Alerts of a streamed replay are credited to a coalescence only from its
-signal onset, and the smoothed-whitening configuration `q8_b6_s001`,
-now trained at four seeds, becomes the streaming configuration. Release
-1.2.0 credited the whole four-day label span and so counted noise alarms
-up to 95 hours before a merger as early detections; the corrected numbers
-are under Fixed.
+signal onset, the first window in which its signal reaches the labelling
+SNR, and the smoothed-whitening configuration `q8_b6_s001`, now trained at
+four seeds, becomes the streaming configuration. The new default refuses
+event tables written without onsets, hence the major version (see
+Changed). Release 1.2.0 credited the whole four-day label span and so
+counted noise alarms up to 95 hours before a merger as early detections;
+the corrected numbers are under Fixed.
 
 ### Added
 - `signal_onsets` and the event-table column `signal_start_index`,
@@ -27,10 +31,13 @@ are under Fixed.
   grid, with its year replays and lossy-link replays.
 
 ### Changed
-- Alerts are credited from the signal onset; alarm runs earlier in a label
-  span count as false alarms. An event table with label spans but without
-  onsets is refused under signal crediting; `scripts/label_ldc.jl` writes
-  the onsets.
+- **Breaking.** Alerts are credited from the signal onset
+  (`alert_crediting = "signal"` by default); alarm runs earlier in a label
+  span count as false alarms. `alert_latency_table` and the telemetry
+  replay refuse an event table with label spans but without onsets:
+  regenerate it with `scripts/label_ldc.jl` or the generation stage, or set
+  `[telemetry] alert_crediting = "label"` (`crediting = :label`) to
+  reproduce the tables of 1.2.0.
 - The persistence of an alert is the smallest value that brings the
   calibration block, credited from the signal onset and pooled over the
   trained seeds, below one false alert per 30 days; the margin required on
@@ -55,7 +62,7 @@ are under Fixed.
 *Correction, 29 September 2026: the lead times quoted in this section
 credit alerts from the start of the four-day label span; credited from the
 signal onset they are 11 to 24 hours, at 0.49 false-alarm episodes per 30
-days (see Fixed under Unreleased).*
+days (see Fixed under 2.0.0).*
 
 The streamed detector becomes usable on a real link. A Welch whitening
 estimate smoothed in log-frequency shortens the stretch of data each
@@ -279,6 +286,7 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.0
 [1.2.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.2.0
 [1.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.1.0
