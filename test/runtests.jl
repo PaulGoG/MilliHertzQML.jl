@@ -17,6 +17,9 @@ using DeepSpaceTelemetry: DeepSpaceTelemetry
 using CurvatureDistinguishability: CurvatureDistinguishability
 
 const PROJECT_ROOT = dirname(@__DIR__)
+# The pipeline root of the whole run, child processes included: a sandboxed
+# test environment (Pkg.test) lies outside the repository
+ENV["STREAMINGINFERENCE_ROOT"] = PROJECT_ROOT
 
 @testset "Static QA (Aqua)" begin
     # Scripts, benchmarks, and tests carry their own environments, so the
@@ -1133,6 +1136,28 @@ end
 
 @testset "Configuration and provenance" begin
     @test isfile(joinpath(project_root(), "Project.toml"))
+    # The pipeline root: the scope, then the environment variable, then the
+    # active environment; a configuration's root from its [paths] root or the
+    # nearest Project.toml above it
+    @test project_root() == PROJECT_ROOT
+    mktempdir() do dir
+        @test with_pipeline_root(project_root, dir) == abspath(dir)
+        @test with_pipeline_root(() -> resolvepath("data"), dir) ==
+              joinpath(abspath(dir), "data")
+        config = joinpath(dir, "configs", "run.toml")
+        mkpath(dirname(config))
+        write(config, "[paths]\nroot = \"..\"\n")
+        @test config_root(config) == normpath(abspath(dir))
+        write(config, "[paths]\ninputs = \"in\"\n")
+        @test config_root(config) == project_root()
+        touch(joinpath(dir, "Project.toml"))
+        @test config_root(config) == abspath(dir)
+    end
+    @test config_root(joinpath(PROJECT_ROOT, "configs", "experiments", "q8_b6.toml")) ==
+          PROJECT_ROOT
+    if startswith(Base.active_project(), PROJECT_ROOT)
+        @test withenv(project_root, "STREAMINGINFERENCE_ROOT" => nothing) == PROJECT_ROOT
+    end
     @test resolvepath("data") == joinpath(project_root(), "data")
     @test resolvepath("/abs/x") == "/abs/x"
     @test rootrelative(joinpath(project_root(), "data", "x.csv")) ==

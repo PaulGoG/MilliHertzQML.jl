@@ -23,7 +23,7 @@ function parse_commandline()
         "config"
         help = "TOML configuration file"
         required = false
-        default = joinpath(project_root(), "configs", "default.toml")
+        default = DEFAULT_CONFIG
         "--h5-file"
         help = "HDF5 TDI product (simulator output or LDC file); default from [preprocessing] h5_file"
         default = nothing
@@ -61,4 +61,4 @@ function main()
     return nothing
 end
 
-main()
+with_pipeline_root(main, config_root(config_argument()))

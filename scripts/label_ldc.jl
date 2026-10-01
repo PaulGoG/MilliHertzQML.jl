@@ -17,7 +17,7 @@ function parse_commandline()
         "config"
         help = "Path to the configuration file"
         required = false
-        default = joinpath(project_root(), "configs", "default.toml")
+        default = DEFAULT_CONFIG
         "--h5-file"
         help = "LDC training product holding the truth stream and the source catalog; default from [ldc] h5_file"
         default = nothing
@@ -52,4 +52,4 @@ function main()
     return nothing
 end
 
-main()
+with_pipeline_root(main, config_root(config_argument()))

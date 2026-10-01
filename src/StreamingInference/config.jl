@@ -2,13 +2,92 @@
 # the pipeline root, and the settings of the sections every pipeline shares.
 
 """
+    PIPELINE_ROOT
+
+The pipeline root set for the current scope by [`with_pipeline_root`](@ref);
+`nothing` outside any.
+"""
+const PIPELINE_ROOT = ScopedValue{Union{Nothing,String}}(nothing)
+
+"""
+    with_pipeline_root(f, root)
+
+Run `f()` with `root` as the pipeline root ([`project_root`](@ref)) of
+every path resolved inside it, in this task and the tasks it spawns.
+Scripts run their stage inside it, with the root of their configuration
+([`config_root`](@ref)).
+"""
+with_pipeline_root(f, root::AbstractString) = with(f, PIPELINE_ROOT => abspath(root))
+
+"""
     project_root() -> String
 
-Directory of the package (the pipeline root): the parent of `src/`. Every
-relative path of a configuration resolves against it, whichever
-environment (`scripts/`, `test/`, `docs/`, `bench/`) is active.
+The pipeline root: the directory every relative path of a configuration
+resolves against and whose repository the provenance records. In order:
+the root set by [`with_pipeline_root`](@ref); the environment variable
+`STREAMINGINFERENCE_ROOT`; the nearest directory above the active
+environment whose `Project.toml` declares a package (the `scripts/`,
+`test/`, `docs/` and `bench/` environments of a pipeline resolve to its
+repository). Throws an `ArgumentError` when none applies, rather than
+resolving against the directory of an installed package.
 """
-project_root() = pkgdir(@__MODULE__)::String
+function project_root()
+    root = PIPELINE_ROOT[]
+    root === nothing || return root
+    variable = get(ENV, "STREAMINGINFERENCE_ROOT", "")
+    isempty(variable) || return abspath(variable)
+    active = Base.active_project()
+    found =
+        active === nothing ? nothing : ancestor_with_project(dirname(active); named = true)
+    found === nothing && throw(
+        ArgumentError(
+            "no pipeline root: run inside `with_pipeline_root(root) do … end`, set " *
+            "STREAMINGINFERENCE_ROOT, or activate an environment of the pipeline.",
+        ),
+    )
+    return found
+end
+
+"""
+    ancestor_with_project(dir; named = false) -> Union{Nothing,String}
+
+The nearest of `dir` and its ancestors holding a `Project.toml` (with
+`named = true`, one that declares a package `name`), or `nothing`.
+"""
+function ancestor_with_project(dir::AbstractString; named::Bool = false)
+    current = abspath(dir)
+    while true
+        project = joinpath(current, "Project.toml")
+        if isfile(project) && (!named || haskey(TOML.parsefile(project), "name"))
+            return current
+        end
+        parent = dirname(current)
+        parent == current && return nothing
+        current = parent
+    end
+end
+
+"""
+    config_root(path) -> String
+
+The pipeline root of the configuration file at `path`: its `[paths] root`
+(relative to the file's directory) when given, otherwise the nearest
+directory above the file holding a `Project.toml`, otherwise
+[`project_root`](@ref).
+"""
+function config_root(path::AbstractString)
+    file = abspath(path)
+    paths = section(load_config(file), "paths")
+    if haskey(paths, "root")
+        root = cfgget(paths, "root", "."; type = String)
+        resolved = normpath(isabspath(root) ? root : joinpath(dirname(file), root))
+        # `normpath` keeps the separator after a trailing `..`
+        return length(resolved) > 1 && endswith(resolved, Base.Filesystem.path_separator) ?
+               resolved[1:(end-1)] : resolved
+    end
+    found = ancestor_with_project(dirname(file))
+    return found === nothing ? project_root() : found
+end
 
 """
     resolvepath(p) -> String

@@ -21,6 +21,7 @@ using InteractiveUtils: InteractiveUtils
 using LinearAlgebra: LinearAlgebra
 using Logging: NullLogger, with_logger
 using Random: Random, AbstractRNG
+using Base.ScopedValues: ScopedValue, with
 using SHA: sha256
 using Statistics: mean, median, quantile, std
 using TOML: TOML
@@ -55,6 +56,7 @@ export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
 export finalize_replay!, gaps_table, replay_state
 export content_digest, parameter_digest, product_table
 export scored_at
+export with_pipeline_root, config_root
 
 include("config.jl")
 include("provenance.jl")

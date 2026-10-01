@@ -25,7 +25,7 @@ function parse_commandline()
         "config"
         help = "TOML configuration file"
         required = false
-        default = joinpath(project_root(), "configs", "default.toml")
+        default = DEFAULT_CONFIG
         "--run-id"
         help = "run identifier of the products and figures (default: a fresh identifier)"
         default = nothing
@@ -85,4 +85,4 @@ function main()
     return nothing
 end
 
-main()
+with_pipeline_root(main, config_root(config_argument()))

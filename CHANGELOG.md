@@ -24,7 +24,21 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `release_at` beside `complete_at`, and its alerts are timed by it
   (`scored_at`). A stateless replay is unchanged.
 
+- An explicit pipeline root: `with_pipeline_root(f, root)` sets it for a
+  scope, `config_root(path)` finds the root of a configuration file (its
+  `[paths] root`, else the nearest directory above it holding a
+  `Project.toml`), and every script runs its stage inside the root of its
+  configuration.
+
 ### Changed
+- **Breaking:** `project_root()` is the pipeline root, no longer the
+  directory of the installed package: the root of the current
+  `with_pipeline_root` scope, else the environment variable
+  `STREAMINGINFERENCE_ROOT`, else the nearest directory above the active
+  environment whose `Project.toml` declares a package (the `scripts/`,
+  `test/`, `docs/` and `bench/` environments resolve to the repository).
+  Outside all three it throws instead of resolving against a package
+  directory. Relative paths and provenance follow it.
 - The package is built in three layers: `MilliHertzQML.StreamingInference`
   (domain-general: configuration, provenance, signal processing, features,
   evaluation, the estimator interface, the streamed replay),

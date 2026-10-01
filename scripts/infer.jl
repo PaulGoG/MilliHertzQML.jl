@@ -15,7 +15,7 @@ function parse_commandline()
         "config"
         help = "Path to the configuration file"
         required = false
-        default = joinpath(project_root(), "configs", "default.toml")
+        default = DEFAULT_CONFIG
         "--run-id"
         help = "Run ID of the training run (locates the model unless --model is given) and of the outputs"
         default = ""
@@ -117,4 +117,4 @@ function main()
     return nothing
 end
 
-main()
+with_pipeline_root(main, config_root(config_argument()))
