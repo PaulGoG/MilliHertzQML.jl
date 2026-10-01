@@ -99,6 +99,33 @@ sidecar of the feature table it was trained on). The first windows of a
 record, and any isolated window, are scored on shorter context and are
 edge-affected, as in the batch pipeline.
 
+### Estimators and ordered release
+
+The detector separates the conditioning, which it owns, from the method
+applied to each conditioned window, which is an estimator
+(`AbstractWindowEstimator`); a detector needs a scalar one
+(`AbstractWindowScorer`, implementing `window_score`). The classifier is
+one such scorer (`VQCScorer`: its feature map, the train-fitted scaler,
+the circuit), and any other scorer runs through the same replay.
+
+An estimator declares its memory (`estimator_memory`). A `Stateless` one
+is scored as each window completes, in arrival order, which after an
+outage or a retransmission is not content order. A `Stateful` one — a
+reservoir, a sequential posterior — must see the windows in content order,
+each once, with every hole declared. For it the replay conditions each
+window when it completes, exactly as for a stateless scorer, holds it, and
+releases the held windows by increasing index (`OrderedCommit`): a run of
+windows that can never be scored, because a lost or pruned batch lies in
+its own rows or in more of its stretch than `min_coverage` admits, is
+declared by one `GapEvent` (cause `:lost`) passed to the estimator
+(`estimator_gap!`) before the window after it. A window still missing
+holds back every later one; at the end of the feed the missing windows are
+declared `:undelivered`, and an `order_horizon` bounds the wait during a
+replay (`:horizon`), after which a window that completes is late and is
+skipped and counted, or refused (`late_policy`). Every scored row then
+records `release_at` beside `complete_at`; `replay_state` returns the
+finalised replay, from which `windows_table` and `gaps_table` are read.
+
 ### Whitening PSD
 
 `[telemetry] psd_mode` selects the PSD that whitens each stretch.

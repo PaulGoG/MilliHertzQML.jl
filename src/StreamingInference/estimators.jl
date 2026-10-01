@@ -130,3 +130,55 @@ function extract_features(
         feature_set = map.feature_set,
     )
 end
+
+"""
+    reset_estimator!(estimator)
+
+Return a [`Stateful`](@ref) estimator to its initial state; a replay calls
+it once before its first window. A no-op unless an estimator implements it.
+"""
+reset_estimator!(::AbstractWindowEstimator) = nothing
+
+"""
+    GapEvent(first_window, last_window, cause, declared_at)
+
+A run of consecutive windows `first_window:last_window` that a
+[`Stateful`](@ref) estimator will not see, declared at mission time
+`declared_at` before the first window after it is released. `cause` is
+`:lost` (the window's own rows, or more of its conditioning stretch than
+the coverage bound admits, fell in a lost or pruned batch), `:undelivered`
+(not delivered by the end of the record), or `:horizon` (not delivered
+within the order horizon while later windows were waiting).
+"""
+struct GapEvent
+    first_window::Int
+    last_window::Int
+    cause::Symbol
+    declared_at::Dates.DateTime
+    function GapEvent(
+        first_window::Integer,
+        last_window::Integer,
+        cause::Symbol,
+        declared_at::Dates.DateTime,
+    )
+        1 <= first_window <= last_window || throw(
+            ArgumentError(
+                "gap of windows $first_window:$last_window; need 1 <= first <= last.",
+            ),
+        )
+        cause in (:lost, :undelivered, :horizon) || throw(
+            ArgumentError("gap cause $cause; expected :lost, :undelivered, or :horizon."),
+        )
+        return new(Int(first_window), Int(last_window), cause, declared_at)
+    end
+end
+
+"""
+    estimator_gap!(estimator, gap::GapEvent)
+
+Inform a [`Stateful`](@ref) estimator that the windows of `gap` will not
+be seen, before the first window after it; the estimator decides whether
+to reset, bridge, or record the hole. A no-op unless an estimator
+implements it.
+"""
+estimator_gap!(::AbstractWindowEstimator, ::GapEvent) = nothing

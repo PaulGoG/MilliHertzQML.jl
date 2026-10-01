@@ -618,7 +618,12 @@ arrival time `complete_at` of the `completing_batch`, the window's
 `coverage`, the classifier `score`, the `decision`, the inference wall
 time `inference_wall_ms`, and `psd_row`, the last delivered row behind
 the causal PSD estimate ([`TrailingWelch`](@ref)) the window
-was whitened with, 0 when the detector's static PSD was used.
+was whitened with, 0 when the detector's static PSD was used, and
+`release_at`, the arrival time at which the window was scored: its
+`complete_at` for a [`Stateless`](@ref) scorer, and for a
+[`Stateful`](@ref) one the arrival that released it in content order
+([`OrderedCommit`](@ref)). The twelve-argument constructor sets
+`release_at = complete_at`.
 """
 struct WindowRecord
     window::Int
@@ -633,6 +638,111 @@ struct WindowRecord
     decision::Int
     inference_wall_ms::Float64
     psd_row::Int
+    release_at::Dates.DateTime
+end
+
+function WindowRecord(
+    window::Integer,
+    row_start::Integer,
+    row_end::Integer,
+    content_start::Dates.DateTime,
+    content_end::Dates.DateTime,
+    complete_at::Dates.DateTime,
+    completing_batch::AbstractString,
+    coverage::Real,
+    score::Real,
+    decision::Integer,
+    inference_wall_ms::Real,
+    psd_row::Integer,
+)
+    return WindowRecord(
+        window,
+        row_start,
+        row_end,
+        content_start,
+        content_end,
+        complete_at,
+        completing_batch,
+        coverage,
+        score,
+        decision,
+        inference_wall_ms,
+        psd_row,
+        complete_at,
+    )
+end
+
+"""
+    PendingWindow
+
+A window conditioned when it became evaluable and held by an
+[`OrderedCommit`](@ref) until its release: its payload `rows`, the
+conditioned `samples`, `complete_at` and `completing_batch`, its
+`coverage` and `psd_row` (as in [`WindowRecord`](@ref)).
+"""
+struct PendingWindow
+    rows::UnitRange{Int}
+    samples::Vector{Float64}
+    complete_at::Dates.DateTime
+    completing_batch::String
+    coverage::Float64
+    psd_row::Int
+end
+
+"""
+    OrderedCommit(last_window; order_horizon = nothing, late_policy = :skip)
+
+Release of the windows of a replay to a [`Stateful`](@ref) estimator in
+content order. A window is conditioned when it becomes evaluable, exactly
+as for a [`Stateless`](@ref) one, and held ([`PendingWindow`](@ref));
+windows are released by strictly increasing index, each once, and a run
+of windows that can never be scored is declared by one
+[`GapEvent`](@ref) instead, which the estimator receives
+([`estimator_gap!`](@ref)) before the window after it. `last_window` is
+the last window of the record, 0 when its length is unknown.
+
+A window can never be scored when its own rows, or more of its
+conditioning stretch than the coverage bound admits, fell in a lost or
+pruned batch (`:lost`). Without further bound a missing window holds back
+every later one until the end of the record, where the windows still
+missing are declared `:undelivered`. `order_horizon`, a time period,
+bounds that wait: when a later window has been held for longer than it,
+the windows missing before it are declared `:horizon`. A window that
+becomes evaluable after its gap was declared is late: skipped and counted
+(`late_policy = :skip`) or refused (`:error`).
+"""
+mutable struct OrderedCommit
+    next::Int
+    last_window::Int
+    pending::Dict{Int,PendingWindow}
+    gaps::Vector{GapEvent}
+    late::Int
+    now::Dates.DateTime
+    order_horizon::Union{Nothing,Dates.Millisecond}
+    late_policy::Symbol
+    function OrderedCommit(
+        last_window::Integer;
+        order_horizon::Union{Nothing,Dates.Period} = nothing,
+        late_policy::Symbol = :skip,
+    )
+        last_window >= 0 || throw(ArgumentError("last_window must be non-negative."))
+        late_policy in (:skip, :error) ||
+            throw(ArgumentError("late_policy = $late_policy; expected :skip or :error."))
+        horizon = order_horizon === nothing ? nothing : Dates.Millisecond(order_horizon)
+        horizon === nothing ||
+            horizon > Dates.Millisecond(0) ||
+            throw(ArgumentError("order_horizon must be positive."))
+        return new(
+            1,
+            Int(last_window),
+            Dict{Int,PendingWindow}(),
+            GapEvent[],
+            0,
+            Dates.DateTime(0),
+            horizon,
+            late_policy,
+        )
+    end
 end
 
 """
@@ -694,14 +804,18 @@ end
 
 """
     ReplayState(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0,
-                trailing_psd = nothing)
+                trailing_psd = nothing, order_horizon = nothing, late_policy = :skip)
 
 Consumer state of a replay: the batches of the run, the [`Coverage`](@ref)
 of delivered rows, the [`WindowScheduler`](@ref), the delivered payload
-per batch, the scored windows, the number of arrival events consumed, and,
-under `trailing_psd::`[`TrailingWelch`](@ref), the current causal PSD
-estimate with the last delivered row it was made on. Fed one
-event at a time by [`process_event!`](@ref).
+per batch, the scored windows, the number of arrival events consumed,
+under `trailing_psd::`[`TrailingWelch`](@ref) the current causal PSD
+estimate with the last delivered row it was made on, and, when the
+detector's scorer is [`Stateful`](@ref), the [`OrderedCommit`](@ref) that
+releases its windows in content order (`order_horizon`, `late_policy`);
+the scorer is reset ([`reset_estimator!`](@ref)) on construction. Fed one
+event at a time by [`process_event!`](@ref) and closed by
+[`finalize_replay!`](@ref).
 """
 mutable struct ReplayState
     geometry::RunGeometry
@@ -722,12 +836,15 @@ mutable struct ReplayState
     trailing::Union{Nothing,TrailingWelch}
     trailing_psd::Any
     trailing_row::Int
+    commit::Union{Nothing,OrderedCommit}
     function ReplayState(
         run::AbstractTelemetryRun,
         detector::StreamingDetector;
         min_coverage::Real = 1.0,
         tdi_gap_dilation_sec::Real = 0.0,
         trailing_psd::Union{Nothing,TrailingWelch} = nothing,
+        order_horizon::Union{Nothing,Dates.Period} = nothing,
+        late_policy::Symbol = :skip,
     )
         geometry = run_geometry(run)
         isapprox(geometry.sample_rate, detector.sample_rate; rtol = 1e-9) || throw(
@@ -738,6 +855,16 @@ mutable struct ReplayState
         )
         tdi_gap_dilation_sec >= 0 ||
             throw(ArgumentError("tdi_gap_dilation_sec must be non-negative."))
+        W, S = detector.window_size, detector.step_size
+        last_window = geometry.payload_rows >= W ? div(geometry.payload_rows - W, S) + 1 : 0
+        commit =
+            estimator_memory(detector.scorer) isa Stateful ?
+            OrderedCommit(
+                last_window;
+                order_horizon = order_horizon,
+                late_policy = late_policy,
+            ) : nothing
+        commit === nothing || reset_estimator!(detector.scorer)
         return new(
             geometry,
             detector,
@@ -759,6 +886,7 @@ mutable struct ReplayState
             trailing_psd,
             nothing,
             0,
+            commit,
         )
     end
 end
@@ -910,6 +1038,10 @@ function process_event!(
             stretch, offset = delivered_stretch(state, window)
             stretch === nothing && continue
             psd, psd_row = whitening_psd!(state, window)
+            if state.commit !== nothing
+                hold_window!(state, m, window, stretch, offset, psd, psd_row, event, batch)
+                continue
+            end
             t0 = time()
             score = score_window(state.detector, stretch, offset; psd = psd)
             record = WindowRecord(
@@ -941,18 +1073,190 @@ function process_event!(
             deleteat!(state.starts, searchsortedfirst(state.starts, start))
         end
     end
+    state.commit === nothing || release_windows!(state, event.sim_time, scored, on_window)
     return scored
+end
+
+"""
+    hold_window!(state, m, window, stretch, offset, psd, psd_row, event, batch)
+
+Condition the evaluable window `m` of a replay with a [`Stateful`](@ref)
+scorer and hold it for its ordered release; a window whose gap was already
+declared is late ([`OrderedCommit`](@ref)).
+"""
+function hold_window!(
+    state::ReplayState,
+    m::Integer,
+    window::UnitRange{Int},
+    stretch::AbstractVector{<:Real},
+    offset::Integer,
+    psd,
+    psd_row::Integer,
+    event::ArrivalEvent,
+    batch::BatchRecord,
+)
+    commit = state.commit
+    if m < commit.next
+        commit.late_policy === :error && throw(
+            ArgumentError(
+                "window $m became evaluable at $(event.sim_time), after the gap " *
+                "that covers it was declared.",
+            ),
+        )
+        commit.late += 1
+        return nothing
+    end
+    samples = collect(condition_window(state.detector, stretch, offset; psd = psd))
+    commit.pending[m] = PendingWindow(
+        window,
+        samples,
+        event.sim_time,
+        batch.name,
+        covered_fraction(state.coverage, window),
+        psd_row,
+    )
+    return nothing
+end
+
+"""
+    window_lost(state, m) -> Bool
+
+Whether window `m` can never become evaluable: its own rows, or more of
+its conditioning stretch than the scheduler's `min_coverage` admits, lie
+in the permanent holes of lost or pruned batches.
+"""
+function window_lost(state::ReplayState, m::Integer)
+    isempty(state.excluded) && return false
+    window = window_rows(state.scheduler, m)
+    any(hole -> !isempty(intersect(hole, window)), state.excluded) && return true
+    stretch = conditioning_rows(state.scheduler, m)
+    lost = Coverage()
+    for hole in state.excluded
+        part = intersect(hole, stretch)
+        isempty(part) || add!(lost, part)
+    end
+    n_lost = round(Int, covered_fraction(lost, stretch) * length(stretch))
+    return (length(stretch) - n_lost) / length(stretch) < state.scheduler.min_coverage
+end
+
+"""
+    declare_gap!(state, gap::GapEvent)
+
+Record `gap`, pass it to the stateful scorer ([`estimator_gap!`](@ref)),
+and move the release past it.
+"""
+function declare_gap!(state::ReplayState, gap::GapEvent)
+    push!(state.commit.gaps, gap)
+    estimator_gap!(state.detector.scorer, gap)
+    state.commit.next = gap.last_window + 1
+    return nothing
+end
+
+"""
+    release_windows!(state, t, scored, on_window)
+
+Release the held windows of a stateful replay in content order at mission
+time `t`: score every window from the next index on that is held,
+declare a [`GapEvent`](@ref) over every run of windows that can never be
+scored or has outlived the order horizon, and stop at the first window
+that may still arrive ([`OrderedCommit`](@ref)).
+"""
+function release_windows!(state::ReplayState, t::Dates.DateTime, scored, on_window)
+    commit = state.commit
+    commit.now = max(commit.now, t)
+    detector = state.detector
+    while true
+        m = commit.next
+        commit.last_window > 0 && m > commit.last_window && break
+        if haskey(commit.pending, m)
+            held = pop!(commit.pending, m)
+            t0 = time()
+            score = window_score(detector.scorer, held.samples, detector.sample_rate)
+            record = WindowRecord(
+                m,
+                first(held.rows),
+                last(held.rows),
+                row_time(state.geometry, first(held.rows)),
+                row_time(state.geometry, last(held.rows)),
+                held.complete_at,
+                held.completing_batch,
+                held.coverage,
+                score,
+                score >= detector.threshold ? 1 : 0,
+                1000 * (time() - t0),
+                held.psd_row,
+                commit.now,
+            )
+            push!(state.windows, record)
+            push!(scored, record)
+            on_window === nothing || on_window(record)
+            commit.next += 1
+        elseif window_lost(state, m)
+            stop = m
+            while !haskey(commit.pending, stop + 1) &&
+                  (commit.last_window == 0 || stop + 1 <= commit.last_window) &&
+                  window_lost(state, stop + 1)
+                stop += 1
+            end
+            declare_gap!(state, GapEvent(m, stop, :lost, commit.now))
+        elseif commit.order_horizon !== nothing &&
+               !isempty(commit.pending) &&
+               commit.now - minimum(p.complete_at for p in values(commit.pending)) >
+               commit.order_horizon
+            declare_gap!(
+                state,
+                GapEvent(m, minimum(keys(commit.pending)) - 1, :horizon, commit.now),
+            )
+        else
+            break
+        end
+    end
+    return nothing
+end
+
+"""
+    finalize_replay!(state; on_window = nothing)
+
+Close a replay at the end of its arrival feed: for a [`Stateful`](@ref)
+scorer, release every held window in content order and declare the windows
+still missing, up to the last window of the record when its length is
+known, as `:undelivered` gaps. A no-op for a [`Stateless`](@ref) scorer.
+Returns the windows released.
+"""
+function finalize_replay!(state::ReplayState; on_window = nothing)
+    released = WindowRecord[]
+    commit = state.commit
+    commit === nothing && return released
+    while true
+        release_windows!(state, commit.now, released, on_window)
+        m = commit.next
+        commit.last_window > 0 && m > commit.last_window && break
+        if isempty(commit.pending)
+            commit.last_window > 0 && declare_gap!(
+                state,
+                GapEvent(m, commit.last_window, :undelivered, commit.now),
+            )
+            break
+        end
+        declare_gap!(
+            state,
+            GapEvent(m, minimum(keys(commit.pending)) - 1, :undelivered, commit.now),
+        )
+    end
+    return released
 end
 
 """
     windows_table(state) -> DataFrame
 
 The scored windows of a replay as a table, one row per
-[`WindowRecord`](@ref).
+[`WindowRecord`](@ref), in the order they were scored; the column
+`release_at` is added for a [`Stateful`](@ref) scorer, whose windows are
+scored in content order.
 """
 function windows_table(state::ReplayState)
     w = state.windows
-    return DataFrame(
+    table = DataFrame(
         window = [r.window for r in w],
         row_start = [r.row_start for r in w],
         row_end = [r.row_end for r in w],
@@ -966,26 +1270,64 @@ function windows_table(state::ReplayState)
         inference_wall_ms = [r.inference_wall_ms for r in w],
         psd_row = [r.psd_row for r in w],
     )
+    state.commit === nothing || (table.release_at = [r.release_at for r in w])
+    return table
+end
+
+"""
+    gaps_table(state) -> DataFrame
+
+The [`GapEvent`](@ref)s of a stateful replay, one row each:
+`first_window`, `last_window`, `cause`, `declared_at`; empty for a
+[`Stateless`](@ref) scorer.
+"""
+function gaps_table(state::ReplayState)
+    gaps = state.commit === nothing ? GapEvent[] : state.commit.gaps
+    return DataFrame(
+        first_window = [g.first_window for g in gaps],
+        last_window = [g.last_window for g in gaps],
+        cause = [String(g.cause) for g in gaps],
+        declared_at = [g.declared_at for g in gaps],
+    )
 end
 
 """
     replay_run(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0,
-               trailing_psd = nothing, on_window = nothing) -> DataFrame
+               trailing_psd = nothing, order_horizon = nothing, late_policy = :skip,
+               on_window = nothing) -> DataFrame
 
 Replay the arrival feed of `run` in mission-time order through
 [`process_event!`](@ref) and return the [`windows_table`](@ref): one row
 per scored window with `window`, `row_start`, `row_end`, `content_start`,
 `content_end`, `complete_at`, `completing_batch`, `coverage`, `score`,
-`decision`, `inference_wall_ms`, `psd_row`. `trailing_psd`, a
-[`TrailingWelch`](@ref), whitens every window by a causal PSD estimate
-instead of the detector's static PSD.
+`decision`, `inference_wall_ms`, `psd_row` (and `release_at` for a
+[`Stateful`](@ref) scorer, whose windows are released in content order
+under `order_horizon` and `late_policy`; [`OrderedCommit`](@ref)).
+`trailing_psd`, a [`TrailingWelch`](@ref), whitens every window by a
+causal PSD estimate instead of the detector's static PSD. The gaps of a
+stateful replay are read from [`replay_state`](@ref).
 """
-function replay_run(
+function replay_run(run::AbstractTelemetryRun, detector::StreamingDetector; kwargs...)
+    return windows_table(replay_state(run, detector; kwargs...))
+end
+
+"""
+    replay_state(run, detector; min_coverage = 1.0, tdi_gap_dilation_sec = 0.0,
+                 trailing_psd = nothing, order_horizon = nothing, late_policy = :skip,
+                 on_window = nothing) -> ReplayState
+
+The [`ReplayState`](@ref) after the whole arrival feed of `run`, finalised
+([`finalize_replay!`](@ref)): [`windows_table`](@ref) and
+[`gaps_table`](@ref) read from it.
+"""
+function replay_state(
     run::AbstractTelemetryRun,
     detector::StreamingDetector;
     min_coverage::Real = 1.0,
     tdi_gap_dilation_sec::Real = 0.0,
     trailing_psd::Union{Nothing,TrailingWelch} = nothing,
+    order_horizon::Union{Nothing,Dates.Period} = nothing,
+    late_policy::Symbol = :skip,
     on_window = nothing,
 )
     return @timeit TIMER "telemetry replay" begin
@@ -995,23 +1337,29 @@ function replay_run(
             min_coverage = min_coverage,
             tdi_gap_dilation_sec = tdi_gap_dilation_sec,
             trailing_psd = trailing_psd,
+            order_horizon = order_horizon,
+            late_policy = late_policy,
         )
         for event in arrival_events(run)
             process_event!(state, run, event; on_window = on_window)
         end
-        windows_table(state)
+        finalize_replay!(state; on_window = on_window)
+        state
     end
 end
 
 """
     follow_run(run, detector; poll_interval_sec = 1.0, min_coverage = 1.0,
                tdi_gap_dilation_sec = 0.0, trailing_psd = nothing,
+               order_horizon = nothing, late_policy = :skip,
                on_window = nothing, max_wall_sec = Inf) -> DataFrame
 
 Live mode: poll the arrival feed of `run` every `poll_interval_sec`,
 consuming events beyond those already processed, until the run reaches a
 terminal state (`run_state` ≠ `:active`) and the feed is drained, or
 `max_wall_sec` of wall time elapse. The consumer never writes into the run.
+A stateful scorer is served in content order as in [`replay_run`](@ref);
+the replay is finalised ([`finalize_replay!`](@ref)) when the loop ends.
 Returns the [`windows_table`](@ref).
 """
 function follow_run(
@@ -1021,6 +1369,8 @@ function follow_run(
     min_coverage::Real = 1.0,
     tdi_gap_dilation_sec::Real = 0.0,
     trailing_psd::Union{Nothing,TrailingWelch} = nothing,
+    order_horizon::Union{Nothing,Dates.Period} = nothing,
+    late_policy::Symbol = :skip,
     on_window = nothing,
     max_wall_sec::Real = Inf,
 )
@@ -1031,6 +1381,8 @@ function follow_run(
         min_coverage = min_coverage,
         tdi_gap_dilation_sec = tdi_gap_dilation_sec,
         trailing_psd = trailing_psd,
+        order_horizon = order_horizon,
+        late_policy = late_policy,
     )
     start = time()
     while true
@@ -1050,6 +1402,7 @@ function follow_run(
         time() - start > max_wall_sec && break
         sleep(poll_interval_sec)
     end
+    finalize_replay!(state; on_window = on_window)
     return windows_table(state)
 end
 

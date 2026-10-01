@@ -51,6 +51,8 @@ export AbstractWindowEstimator, AbstractWindowScorer, EstimatorMemory, Stateless
 export estimator_memory, window_score, score_label, score_bounds, FeatureMap
 export condition_window, ReplayState, process_event!, windows_table, replay_run
 export follow_run, alert_latency_table, event_merger_times
+export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
+export finalize_replay!, gaps_table, replay_state
 
 include("config.jl")
 include("provenance.jl")

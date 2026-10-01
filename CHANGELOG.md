@@ -13,6 +13,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `score_bounds`, the memory trait `estimator_memory` (`Stateless`,
   `Stateful`), the spectral `FeatureMap` of a conditioned window, and
   `condition_window`. The classifier is one scorer, `VQCScorer`.
+- Stateful estimators in a replay: windows are conditioned when they
+  complete, held, and released in content order (`OrderedCommit`,
+  `PendingWindow`); windows that can never be scored are declared by a
+  `GapEvent` (`:lost`, `:undelivered`, `:horizon`) passed to the estimator
+  (`estimator_gap!`), which is reset at the start of a replay
+  (`reset_estimator!`). `replay_run` and `follow_run` take `order_horizon`
+  and `late_policy`; `replay_state` returns the finalised replay
+  (`finalize_replay!`), `gaps_table` its gaps; a stateful replay records
+  `release_at` beside `complete_at`. A stateless replay is unchanged.
 
 ### Changed
 - The package is built in three layers: `MilliHertzQML.StreamingInference`

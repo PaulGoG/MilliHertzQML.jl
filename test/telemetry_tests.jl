@@ -47,6 +47,28 @@ struct RMSScorer <: AbstractWindowScorer end
 MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) =
     Float32(sqrt(sum(abs2, window) / length(window)))
 
+# A stateful reference estimator: the RMS of each window, with the sequence
+# of scores, gaps and resets it received.
+mutable struct SequenceRMS <: AbstractWindowScorer
+    scores::Vector{Float32}
+    gaps::Vector{GapEvent}
+    resets::Int
+end
+SequenceRMS() = SequenceRMS(Float32[], GapEvent[], 0)
+MilliHertzQML.estimator_memory(::SequenceRMS) = Stateful()
+function MilliHertzQML.window_score(s::SequenceRMS, window::AbstractVector{<:Real}, ::Real)
+    value = Float32(sqrt(sum(abs2, window) / length(window)))
+    push!(s.scores, value)
+    return value
+end
+MilliHertzQML.estimator_gap!(s::SequenceRMS, gap::GapEvent) = (push!(s.gaps, gap); nothing)
+function MilliHertzQML.reset_estimator!(s::SequenceRMS)
+    s.resets += 1
+    empty!(s.scores)
+    empty!(s.gaps)
+    return nothing
+end
+
 @testset "Telemetry coupling (core)" begin
     epoch = Dates.DateTime(2035, 1, 1)
     geometry = RunGeometry(0.2, 50.0, 10, epoch, "1.0.0")
@@ -616,4 +638,143 @@ MilliHertzQML.window_score(::RMSScorer, window::AbstractVector{<:Real}, ::Real) 
         @test all(r -> r == 0 || r > last(hole), trimmed.psd_row[rows_after])
         @test_throws ArgumentError TrailingWelch(3000, 500, 1024; edge_rows = -1)
     end
+end
+
+@testset "Stateful estimators (ordered commit)" begin
+    fs = 0.2
+    epoch = Dates.DateTime(2035, 1, 1)
+    geometry = RunGeometry(fs, 50.0, 10, epoch, "test")
+    n_batches = 80
+    n_windows = div(n_batches * 100 - 1000, 100) + 1
+    payload = synthesize_noise(
+        StableRNG(71),
+        n_batches * 100,
+        fs;
+        f_min = 1e-5,
+        psd = lisa_noise_psd,
+    )
+    # Batch 20 reaches the ground after every other batch. With one window of
+    # context on each side, windows 1–30 wait for it; later windows complete
+    # in time, so a stateless replay scores them first
+    order = vcat(setdiff(1:n_batches, [20]), [20])
+    events = [
+        ArrivalEvent(epoch + Dates.Second(600 * i), "LIVE_batch_$k", :ingested, 0) for
+        (i, k) in enumerate(order)
+    ]
+    run = MemoryTelemetryRun(geometry, payload, events)
+    conditioning = (
+        sample_rate = fs,
+        window_size = 1000,
+        step_size = 100,
+        psd = lisa_noise_psd,
+        context_windows = 1,
+    )
+    stateless = replay_run(run, StreamingDetector(RMSScorer(), 1.0; conditioning...))
+    scorer = SequenceRMS()
+    state = replay_state(run, StreamingDetector(scorer, 1.0; conditioning...))
+    stateful = windows_table(state)
+    @test !issorted(stateless.window) && sort(stateless.window) == 1:n_windows
+    # Released in content order, every window once, conditioned at readiness
+    # exactly as the stateless path, so the scores agree window by window
+    @test stateful.window == 1:n_windows
+    @test stateful.score == stateless.score[sortperm(stateless.window)]
+    @test scorer.scores == stateful.score && scorer.resets == 1 && isempty(scorer.gaps)
+    @test "release_at" in names(stateful) && !("release_at" in names(stateless))
+    @test all(stateful.release_at .>= stateful.complete_at)
+    # Windows 1–30 are released as they complete, with batch 20; every later
+    # window completed earlier and is held behind them until then
+    @test all(stateful.release_at[1:30] .== stateful.complete_at[1:30])
+    @test all(stateful.release_at[31:end] .== last(events).sim_time)
+    @test all(stateful.release_at[31:end] .> stateful.complete_at[31:end])
+    @test maximum(stateful.release_at) == last(events).sim_time
+    @test nrow(gaps_table(state)) == 0 && state.commit.late == 0
+    @test isempty(finalize_replay!(state)) && isempty(
+        finalize_replay!(
+            ReplayState(run, StreamingDetector(RMSScorer(), 1.0; conditioning...)),
+        ),
+    )
+    # The order is kept under a causal PSD estimate as well
+    trailing = TrailingWelch(3000, 500, 1000)
+    @test windows_table(
+        replay_state(
+            run,
+            StreamingDetector(SequenceRMS(), 1.0; conditioning...);
+            trailing_psd = trailing,
+        ),
+    ).score == sort(
+        replay_run(
+            run,
+            StreamingDetector(RMSScorer(), 1.0; conditioning...);
+            trailing_psd = trailing,
+        ),
+        :window,
+    ).score
+
+    # A lost batch: the windows it touches can never be scored, and one gap
+    # declares them before the first window after it
+    lossy = [
+        ArrivalEvent(
+            epoch + Dates.Second(600 * k),
+            "LIVE_batch_$k",
+            k == 30 ? :lost : :ingested,
+            0,
+        ) for k in 1:n_batches
+    ]
+    run_lossy = MemoryTelemetryRun(geometry, payload, lossy; lost = ["LIVE_batch_30"])
+    missing_windows = setdiff(
+        1:n_windows,
+        replay_run(run_lossy, StreamingDetector(RMSScorer(), 1.0; conditioning...)).window,
+    )
+    @test missing_windows == first(missing_windows):last(missing_windows)
+    scorer_lossy = SequenceRMS()
+    state_lossy =
+        replay_state(run_lossy, StreamingDetector(scorer_lossy, 1.0; conditioning...))
+    gaps = gaps_table(state_lossy)
+    @test gaps.cause == ["lost"]
+    @test gaps.first_window == [first(missing_windows)] &&
+          gaps.last_window == [last(missing_windows)]
+    @test windows_table(state_lossy).window == setdiff(1:n_windows, missing_windows)
+    @test scorer_lossy.gaps == [
+        GapEvent(first(missing_windows), last(missing_windows), :lost, gaps.declared_at[1]),
+    ]
+
+    # Order horizon: windows 1–30 wait for batch 20 longer than two hours and
+    # are declared a gap; when it arrives they are late, skipped and counted,
+    # or refused
+    state_horizon = replay_state(
+        run,
+        StreamingDetector(SequenceRMS(), 1.0; conditioning...);
+        order_horizon = Dates.Hour(2),
+    )
+    @test gaps_table(state_horizon).cause == ["horizon"]
+    @test (gaps_table(state_horizon).first_window, gaps_table(state_horizon).last_window) ==
+          ([1], [30])
+    @test windows_table(state_horizon).window == 31:n_windows
+    @test state_horizon.commit.late == 30
+    @test_throws ArgumentError replay_state(
+        run,
+        StreamingDetector(SequenceRMS(), 1.0; conditioning...);
+        order_horizon = Dates.Hour(2),
+        late_policy = :error,
+    )
+
+    # The feed ends before batch 20 and the last batches arrive: the windows
+    # still missing are declared undelivered, and every window index is either
+    # scored or in exactly one gap
+    run_short = MemoryTelemetryRun(geometry, payload, events[1:60])
+    state_short =
+        replay_state(run_short, StreamingDetector(SequenceRMS(), 1.0; conditioning...))
+    gaps_short = gaps_table(state_short)
+    @test all(gaps_short.cause .== "undelivered") &&
+          last(gaps_short.last_window) == n_windows
+    covered = vcat(
+        windows_table(state_short).window,
+        [a:b for (a, b) in zip(gaps_short.first_window, gaps_short.last_window)]...,
+    )
+    @test sort(covered) == 1:n_windows
+
+    @test_throws ArgumentError GapEvent(3, 2, :lost, epoch)
+    @test_throws ArgumentError GapEvent(1, 2, :other, epoch)
+    @test_throws ArgumentError OrderedCommit(10; late_policy = :other)
+    @test_throws ArgumentError OrderedCommit(10; order_horizon = Dates.Hour(0))
 end
