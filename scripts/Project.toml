@@ -8,9 +8,13 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
 CurvatureDistinguishability = {rev = "bf82733675f386698bd5966b65e24e8868e1c0be", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
 DeepSpaceTelemetry = {rev = "7af7e4647ace73e2932397cbba33a299249e2495", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
 MilliHertzQML = {path = ".."}
+
+[compat]
+TupleTools = "=1.6.0"

@@ -111,6 +111,10 @@ the commits of their release tags:
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
 `v2.0.1`, the constellation response of the simulator. Where git rewrites
 GitHub URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true`.
+The same environments pin TupleTools.jl to 1.6.0: on Julia ≥ 1.12 its 1.6.1
+sorts small tuples through `Base.sort`, which allocates, and Yao sorts the
+qubit locations of every gate block, so training takes twice as long; the
+results are identical.
 
 ## Entry points
 

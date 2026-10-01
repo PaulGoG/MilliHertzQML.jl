@@ -68,6 +68,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   The input is hashed on every call, reuse included: about 17 s for the
   3 GB Sangria training product.
 
+- The script, test and benchmark environments pin TupleTools.jl to 1.6.0.
+  Its 1.6.1 sorts small tuples through `Base.sort` on Julia ≥ 1.12, which
+  allocates; Yao sorts the qubit locations of every gate block, so a
+  training step took 2.2 times as long and allocated twice as much (an
+  epoch of the eight-qubit model 4.5 instead of 2.1 minutes on 16 threads).
+  Training results are identical.
+
 ### Fixed
 - A feature sidecar records the parameters of an analytic whitening PSD
   (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`),
