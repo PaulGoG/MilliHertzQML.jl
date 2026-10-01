@@ -1,7 +1,7 @@
 # Sangria benchmark (LDC2a training and blind products): labelling, the
 # two-band whitened configuration, and the telemetry payload export. Keys
 # absent here take the defaults documented in configs/default.toml
-# (src/config.jl); the HDF5 products are passed on the command line. Paths
+# (the settings functions under src/); the HDF5 products are passed on the command line. Paths
 # are resolved relative to the project root.
 
 [paths]

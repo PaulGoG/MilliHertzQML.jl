@@ -99,7 +99,7 @@ export estimator_memory, window_score, score_label, score_bounds, FeatureMap
 export condition_window, VQCScorer
 export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
 export finalize_replay!, gaps_table, replay_state
-export content_digest, parameter_digest, product_table
+export content_digest, parameter_digest, product_table, scored_at
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
 export event_merger_times

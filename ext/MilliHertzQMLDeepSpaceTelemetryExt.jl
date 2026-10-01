@@ -1,5 +1,5 @@
 # ext/MilliHertzQMLDeepSpaceTelemetryExt.jl — adapter of a DeepSpaceTelemetry
-# run directory to the consumer interface of src/telemetry.jl, through the
+# run directory to the consumer interface of src/StreamingInference/telemetry.jl, through the
 # producer's own API (configuration snapshot, batch metadata, segment
 # loader), so that a change of the run-directory contract surfaces as a
 # version bump or an API error rather than as silent format drift. The

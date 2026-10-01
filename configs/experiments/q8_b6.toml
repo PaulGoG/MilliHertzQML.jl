@@ -1,6 +1,6 @@
 # Sangria experiment `q8_b6`, the selected configuration: preprocessing,
 # training, inference, and the telemetry replay of its model. Keys absent
-# here take the defaults documented in configs/default.toml (src/config.jl);
+# here take the defaults documented in configs/default.toml (the settings functions under src/);
 # the HDF5 products are passed on the command line. Paths are resolved
 # relative to the project root.
 

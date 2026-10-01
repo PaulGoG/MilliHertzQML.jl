@@ -790,7 +790,7 @@ function figure_telemetry_alerts(
     scores = Float64.(windows.score)
     latency_h = [
         Dates.value(a - c) / 3.6e6 for
-        (a, c) in zip(windows.complete_at, windows.content_end)
+        (a, c) in zip(scored_at(windows), windows.content_end)
     ]
     # Windows complete out of order: draw them in content-time order
     order = sortperm(t_days)
@@ -1186,7 +1186,8 @@ function animate_mission_replay(
     days = [days_since(epoch, t) for t in windows.content_end]
     perm = sortperm(days)
     content_day = days[perm]
-    arrival_day = [days_since(epoch, windows.complete_at[i]) for i in perm]
+    scored = scored_at(windows)
+    arrival_day = [days_since(epoch, scored[i]) for i in perm]
     latency_h = 24 .* (arrival_day .- content_day)
     coverage = Float64.(windows.coverage[perm])
     score = Float64.(windows.score[perm])

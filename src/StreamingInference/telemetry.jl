@@ -678,7 +678,10 @@ end
 A window conditioned when it became evaluable and held by an
 [`OrderedCommit`](@ref) until its release: its payload `rows`, the
 conditioned `samples`, `complete_at` and `completing_batch`, its
-`coverage` and `psd_row` (as in [`WindowRecord`](@ref)).
+`coverage` and `psd_row` (as in [`WindowRecord`](@ref)), and the wall
+time of its conditioning `conditioning_ms`, added to the scoring time at
+release so that `inference_wall_ms` means the same as for a stateless
+scorer.
 """
 struct PendingWindow
     rows::UnitRange{Int}
@@ -687,6 +690,7 @@ struct PendingWindow
     completing_batch::String
     coverage::Float64
     psd_row::Int
+    conditioning_ms::Float64
 end
 
 """
@@ -855,28 +859,31 @@ mutable struct ReplayState
         )
         tdi_gap_dilation_sec >= 0 ||
             throw(ArgumentError("tdi_gap_dilation_sec must be non-negative."))
+        scheduler = WindowScheduler(
+            detector.window_size,
+            detector.step_size;
+            min_coverage = min_coverage,
+            context_rows = detector.context_windows * detector.window_size,
+            payload_rows = max(0, geometry.payload_rows),
+        )
         W, S = detector.window_size, detector.step_size
         last_window = geometry.payload_rows >= W ? div(geometry.payload_rows - W, S) + 1 : 0
-        commit =
-            estimator_memory(detector.scorer) isa Stateful ?
-            OrderedCommit(
-                last_window;
-                order_horizon = order_horizon,
-                late_policy = late_policy,
-            ) : nothing
-        commit === nothing || reset_estimator!(detector.scorer)
+        # Validated for every scorer, so that a misspelt option is refused
+        # rather than ignored when the scorer turns out to be stateless; the
+        # scorer is reset only once every argument has been accepted
+        commit = OrderedCommit(
+            last_window;
+            order_horizon = order_horizon,
+            late_policy = late_policy,
+        )
+        stateful = estimator_memory(detector.scorer) isa Stateful
+        stateful && reset_estimator!(detector.scorer)
         return new(
             geometry,
             detector,
             Dict(b.name => b for b in list_batches(run)),
             Coverage(),
-            WindowScheduler(
-                detector.window_size,
-                detector.step_size;
-                min_coverage = min_coverage,
-                context_rows = detector.context_windows * detector.window_size,
-                payload_rows = max(0, geometry.payload_rows),
-            ),
+            scheduler,
             Dict{Int,Vector{Float32}}(),
             Int[],
             WindowRecord[],
@@ -886,7 +893,7 @@ mutable struct ReplayState
             trailing_psd,
             nothing,
             0,
-            commit,
+            stateful ? commit : nothing,
         )
     end
 end
@@ -1004,11 +1011,15 @@ end
     process_event!(state, run, event; on_window = nothing) -> Vector{WindowRecord}
 
 Consume one arrival event: an `ingested` batch is read, added to the
-coverage, and every window that thereby becomes evaluable is scored at the
-event's mission time; a `lost` or `pruned` batch is removed from the
-coverage with the configured erosion on each side. Other events are
-ignored. Returns the windows scored by this event; `on_window(record)` is
-called for each.
+coverage, and every window that thereby becomes evaluable is conditioned;
+a `lost` or `pruned` batch is removed from the coverage with the
+configured erosion on each side. Other events are ignored. A
+[`Stateless`](@ref) scorer scores the evaluable windows at the event's
+mission time; for a [`Stateful`](@ref) one they are held and the event
+releases, in content order, every held window that no earlier window still
+waits for ([`OrderedCommit`](@ref)), which may include windows completed by
+earlier events. Returns the windows scored by this event; `on_window(record)`
+is called for each.
 """
 function process_event!(
     state::ReplayState,
@@ -1018,7 +1029,11 @@ function process_event!(
 )
     state.consumed += 1
     scored = WindowRecord[]
-    haskey(state.batches, event.batch) || return scored
+    if !haskey(state.batches, event.batch)
+        state.commit === nothing ||
+            release_windows!(state, event.sim_time, scored, on_window)
+        return scored
+    end
     batch = state.batches[event.batch]
     if event.event == :ingested
         start = first(batch.rows)
@@ -1106,6 +1121,7 @@ function hold_window!(
         commit.late += 1
         return nothing
     end
+    t0 = time()
     samples = collect(condition_window(state.detector, stretch, offset; psd = psd))
     commit.pending[m] = PendingWindow(
         window,
@@ -1114,6 +1130,7 @@ function hold_window!(
         batch.name,
         covered_fraction(state.coverage, window),
         psd_row,
+        1000 * (time() - t0),
     )
     return nothing
 end
@@ -1153,6 +1170,32 @@ function declare_gap!(state::ReplayState, gap::GapEvent)
 end
 
 """
+    declare_gaps!(state, first_window, last_window, cause)
+
+Declare the windows `first_window:last_window` as gaps: runs of windows
+that can never be scored ([`window_lost`](@ref)) with cause `:lost`, the
+others with `cause`.
+"""
+function declare_gaps!(
+    state::ReplayState,
+    first_window::Integer,
+    last_window::Integer,
+    cause::Symbol,
+)
+    m = first_window
+    while m <= last_window
+        lost = window_lost(state, m)
+        stop = m
+        while stop < last_window && window_lost(state, stop + 1) == lost
+            stop += 1
+        end
+        declare_gap!(state, GapEvent(m, stop, lost ? :lost : cause, state.commit.now))
+        m = stop + 1
+    end
+    return nothing
+end
+
+"""
     release_windows!(state, t, scored, on_window)
 
 Release the held windows of a stateful replay in content order at mission
@@ -1183,7 +1226,7 @@ function release_windows!(state::ReplayState, t::Dates.DateTime, scored, on_wind
                 held.coverage,
                 score,
                 score >= detector.threshold ? 1 : 0,
-                1000 * (time() - t0),
+                held.conditioning_ms + 1000 * (time() - t0),
                 held.psd_row,
                 commit.now,
             )
@@ -1203,10 +1246,7 @@ function release_windows!(state::ReplayState, t::Dates.DateTime, scored, on_wind
                !isempty(commit.pending) &&
                commit.now - minimum(p.complete_at for p in values(commit.pending)) >
                commit.order_horizon
-            declare_gap!(
-                state,
-                GapEvent(m, minimum(keys(commit.pending)) - 1, :horizon, commit.now),
-            )
+            declare_gaps!(state, m, minimum(keys(commit.pending)) - 1, :horizon)
         else
             break
         end
@@ -1232,16 +1272,11 @@ function finalize_replay!(state::ReplayState; on_window = nothing)
         m = commit.next
         commit.last_window > 0 && m > commit.last_window && break
         if isempty(commit.pending)
-            commit.last_window > 0 && declare_gap!(
-                state,
-                GapEvent(m, commit.last_window, :undelivered, commit.now),
-            )
+            commit.last_window > 0 &&
+                declare_gaps!(state, m, commit.last_window, :undelivered)
             break
         end
-        declare_gap!(
-            state,
-            GapEvent(m, minimum(keys(commit.pending)) - 1, :undelivered, commit.now),
-        )
+        declare_gaps!(state, m, minimum(keys(commit.pending)) - 1, :undelivered)
     end
     return released
 end
@@ -1273,6 +1308,16 @@ function windows_table(state::ReplayState)
     state.commit === nothing || (table.release_at = [r.release_at for r in w])
     return table
 end
+
+"""
+    scored_at(windows) -> Vector{DateTime}
+
+The arrival time at which every window of a replay table was scored: its
+`release_at` when the table has one (a [`Stateful`](@ref) scorer, whose
+windows wait for their predecessors), its `complete_at` otherwise.
+"""
+scored_at(windows::DataFrame) =
+    "release_at" in DataFrames.names(windows) ? windows.release_at : windows.complete_at
 
 """
     gaps_table(state) -> DataFrame
@@ -1447,8 +1492,9 @@ preceding the signal as early detections. A table with spans but without
 An alert is a run of `persistence` consecutive alarmed windows —
 consecutive in window index, whatever order they reached the ground — at
 least one of which overlaps the span. It is raised by the arrival that
-completes the run: `t_alarm` is the latest `complete_at` of its windows
-and `alarm_window` the window of that arrival. With `persistence = 1`
+completes the run: `t_alarm` is the latest time at which one of its
+windows was scored ([`scored_at`](@ref): `complete_at`, or `release_at`
+for a stateful scorer) and `alarm_window` the window of that arrival. With `persistence = 1`
 every alarmed window is an alert on its own. `latency_data_h = t_alarm −
 t_merger` (negative when the alert precedes the merger),
 `latency_total_h = latency_data_h + processing_latency_hours`, the
@@ -1495,6 +1541,7 @@ function alert_latency_table(
     end
     # Alarmed windows in window order, cut into maximal runs of consecutive
     # indices; `runs` holds position ranges into `alarmed`.
+    scored = scored_at(windows)
     alarmed = nrow(windows) == 0 ? Int[] : findall(==(1), windows.decision)
     alarmed = alarmed[sortperm(Int.(windows.window[alarmed]))]
     runs = alarm_runs(Int.(windows.window[alarmed]))
@@ -1530,7 +1577,7 @@ function alert_latency_table(
                 any(in(hits), sub) || continue
                 # The arrival completing the run; among windows completed by
                 # the same arrival, the latest in mission time
-                ts = [windows.complete_at[alarmed[j]] for j in sub]
+                ts = [scored[alarmed[j]] for j in sub]
                 t = maximum(ts)
                 k = sub[findlast(==(t), ts)]
                 if best_t === nothing || t < best_t

@@ -4,7 +4,7 @@
 # orbital Doppler phase and the finite-arm transfer roll-off, applied to the
 # waveforms this package generates. Only the response comes from that package; the
 # inspiral–merger–ringdown amplitude and phase stay in src/waveforms.jl and
-# the channel noise follows the sensitivity model of src/simulation.jl.
+# the channel noise follows the sensitivity model of src/MilliHertzBase/noise.jl.
 module MilliHertzQMLCurvatureDistinguishabilityExt
 
 using CurvatureDistinguishability: waveform_params

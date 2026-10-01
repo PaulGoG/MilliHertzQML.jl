@@ -2,7 +2,7 @@
 # Welch whitening estimate smoothed in log-frequency by 0.01 dex, for the
 # training and blind features and for the trailing estimate of the replay.
 # Keys absent here take the defaults documented in configs/default.toml
-# (src/config.jl); the HDF5 products are passed on the command line. Paths
+# (the settings functions under src/); the HDF5 products are passed on the command line. Paths
 # are resolved relative to the project root.
 
 [paths]

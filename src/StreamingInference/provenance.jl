@@ -215,8 +215,9 @@ content_digest(path::AbstractString) = bytes2hex(open(sha256, path))
 
 SHA-256 (hexadecimal) of the key-sorted TOML rendering of a parameter
 dictionary: the identity of the parameters of a product, the same in
-every process, on every machine and under every Julia version (unlike
-`Base.hash`).
+every process and on every machine (unlike `Base.hash`, which also differs
+between Julia versions). It is as stable as the TOML rendering: a change
+of the TOML printer would change it.
 """
 function parameter_digest(parameters::AbstractDict)
     io = IOBuffer()

@@ -21,7 +21,8 @@ versioning follows [Semantic Versioning](https://semver.org/).
   (`reset_estimator!`). `replay_run` and `follow_run` take `order_horizon`
   and `late_policy`; `replay_state` returns the finalised replay
   (`finalize_replay!`), `gaps_table` its gaps; a stateful replay records
-  `release_at` beside `complete_at`. A stateless replay is unchanged.
+  `release_at` beside `complete_at`, and its alerts are timed by it
+  (`scored_at`). A stateless replay is unchanged.
 
 ### Changed
 - The package is built in three layers: `MilliHertzQML.StreamingInference`
@@ -42,6 +43,19 @@ versioning follows [Semantic Versioning](https://semver.org/).
   and `scale_to_snr` require the `psd` keyword; they no longer default to
   the LISA noise model (`psd = lisa_noise_psd` restores the former call).
 
+- **Breaking:** `whitening_psd_from_sidecar`, and with it
+  `detector_from_run` and `scripts/infer_telemetry.jl`, refuses a feature
+  sidecar that lacks the PSD kind or the parameters of an analytic kind
+  instead of substituting defaults. Sidecars written by 2.x for
+  `psd = "model"`, `"channel"` or `"ldc"` lack them: regenerate the
+  features, or add the keys the configuration of the product used.
+  Products whitened by `"welch"` or `"none"` are unaffected.
+- `WindowRecord` has a thirteenth field, `release_at`; the twelve-argument
+  constructor remains. For a stateful scorer `process_event!` returns the
+  windows its event released, which may have completed earlier.
+- The identifier of a standalone inference run (`evaluate_classifier`
+  without a run identifier) is derived from the SHA-256 of the absolute
+  model path, so its output directory name differs from 2.x.
 - Product identity: the parameter digest of a pre-processed product is the
   SHA-256 of the key-sorted TOML rendering of its parameters
   (`parameter_digest`, formerly `Base.hash`, which differs between Julia
@@ -51,14 +65,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   sidecars carry a `[product]` table (`product_table`: kind, channels,
   schema, parents). Products made by 2.x have other digests and are
   recomputed on their next run (the previous files are kept as `_#k`).
+  The input is hashed on every call, reuse included: about 17 s for the
+  3 GB Sangria training product.
 
 ### Fixed
 - A feature sidecar records the parameters of an analytic whitening PSD
   (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`),
-  and `whitening_psd_from_sidecar` refuses a sidecar that lacks the PSD
-  kind or its parameters instead of substituting defaults; it also rebuilds
-  the `"channel"` kind, which it did not know. The parameter digest of the
-  products is unchanged.
+  which 2.x read back with defaults whatever the product had been made
+  with; `whitening_psd_from_sidecar` also rebuilds the `"channel"` kind,
+  which it did not know.
 - `rootrelative` took a sibling directory whose name extends the root's
   (`/ws/MilliHertzQMLx` against `/ws/MilliHertzQML`) for a path inside the
   root.

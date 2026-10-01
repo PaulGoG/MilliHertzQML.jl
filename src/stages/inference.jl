@@ -180,7 +180,7 @@ function evaluate_classifier(
         model_dir = dirname(model_path)
         output_id =
             isempty(run_id) ?
-            "standalone_" * parameter_digest(Dict("model" => String(model_path)))[1:6] :
+            "standalone_" * parameter_digest(Dict("model" => abspath(model_path)))[1:6] :
             String(run_id)
         geometry = inference_geometry(features_path, config)
 

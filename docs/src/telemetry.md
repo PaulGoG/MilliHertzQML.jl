@@ -123,8 +123,15 @@ holds back every later one; at the end of the feed the missing windows are
 declared `:undelivered`, and an `order_horizon` bounds the wait during a
 replay (`:horizon`), after which a window that completes is late and is
 skipped and counted, or refused (`late_policy`). Every scored row then
-records `release_at` beside `complete_at`; `replay_state` returns the
-finalised replay, from which `windows_table` and `gaps_table` are read.
+records `release_at` beside `complete_at`, and alerts are timed by it
+(`scored_at`); `replay_state` returns the finalised replay, from which
+`windows_table` and `gaps_table` are read. Rows the producer never
+generated (a scheduled generation gap, an emitter restart) reach the
+consumer only as a jump in the content epoch, not as a lost batch, so the
+windows around them are not known to be lost: they hold back the later
+windows until the order horizon or the end of the feed, and are declared
+`:horizon` or `:undelivered`. Reading the producer's declared gaps is
+future work.
 
 ### Whitening PSD
 

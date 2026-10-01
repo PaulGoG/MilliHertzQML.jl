@@ -1,5 +1,5 @@
 # Sangria experiment `q6_b4_noweight`; keys as in configs/sangria.toml. Keys absent
-# here take the defaults documented in configs/default.toml (src/config.jl);
+# here take the defaults documented in configs/default.toml (the settings functions under src/);
 # the replay settings of the selected model are in configs/experiments/q8_b6.toml;
 # the HDF5 products are passed on the command line. Paths are resolved
 # relative to the project root.

@@ -86,10 +86,7 @@ function preprocessing_parameters(
     merge!(parameters, Dict(analytic_psd_parameters(settings)))
     if settings.psd == "welch"
         parameters["welch_segment_length"] = settings.welch_segment_length
-        # Recorded only when set, so that products made before the key
-        # existed keep their identity
-        settings.psd_smoothing_dex > 0 &&
-            (parameters["psd_smoothing_dex"] = settings.psd_smoothing_dex)
+        parameters["psd_smoothing_dex"] = settings.psd_smoothing_dex
     end
     isempty(label_path) || (parameters["label_file_sha256"] = content_digest(label_path))
     return parameters

@@ -54,6 +54,7 @@ export follow_run, alert_latency_table, event_merger_times
 export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
 export finalize_replay!, gaps_table, replay_state
 export content_digest, parameter_digest, product_table
+export scored_at
 
 include("config.jl")
 include("provenance.jl")

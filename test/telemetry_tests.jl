@@ -1,4 +1,4 @@
-# Unit tests of the consumer side of the telemetry coupling (src/telemetry.jl)
+# Unit tests of the consumer side of the telemetry coupling (src/StreamingInference/telemetry.jl)
 # on an in-memory run; included by runtests.jl.
 
 # An in-memory run whose producer discarded production: after `gap_after`
@@ -772,6 +772,73 @@ end
         [a:b for (a, b) in zip(gaps_short.first_window, gaps_short.last_window)]...,
     )
     @test sort(covered) == 1:n_windows
+
+    # Alerts of a stateful scorer are timed when its windows are scored: here
+    # every window waits for batch 20, the last arrival
+    events_table = DataFrame(
+        event = [1],
+        merger_time_s = [5000 / fs],
+        label_start_index = [3001],
+        label_end_index = [5500],
+        signal_start_index = [3001],
+    )
+    alert_stateful = alert_latency_table(
+        windows_table(
+            replay_state(run, StreamingDetector(SequenceRMS(), 0.5; conditioning...)),
+        ),
+        events_table,
+        geometry;
+        persistence = 1,
+    )
+    alert_stateless = alert_latency_table(
+        replay_run(run, StreamingDetector(RMSScorer(), 0.5; conditioning...)),
+        events_table,
+        geometry;
+        persistence = 1,
+    )
+    @test alert_stateful.t_alarm == [last(events).sim_time]
+    @test alert_stateless.t_alarm[1] < last(events).sim_time
+    @test scored_at(stateful) == stateful.release_at &&
+          scored_at(stateless) == stateless.complete_at
+
+    # Options are validated for every scorer, and a scorer is reset only once
+    # every argument has been accepted
+    @test_throws ArgumentError replay_run(
+        run,
+        StreamingDetector(RMSScorer(), 1.0; conditioning...);
+        late_policy = :bogus,
+    )
+    kept = SequenceRMS()
+    push!(kept.scores, 1.0f0)
+    @test_throws ArgumentError ReplayState(
+        run,
+        StreamingDetector(kept, 1.0; conditioning...);
+        min_coverage = 2.0,
+    )
+    @test kept.resets == 0 && kept.scores == [1.0f0]
+
+    # A horizon gap that contains windows which can never be scored is split
+    # by cause: batch 25 is lost, windows 6–35 touch it; windows 1–5 only
+    # wait for batch 20
+    events_mixed = [
+        ArrivalEvent(
+            epoch + Dates.Second(600 * i),
+            "LIVE_batch_$k",
+            k == 25 ? :lost : :ingested,
+            0,
+        ) for (i, k) in enumerate(order)
+    ]
+    run_mixed =
+        MemoryTelemetryRun(geometry, payload, events_mixed; lost = ["LIVE_batch_25"])
+    state_mixed = replay_state(
+        run_mixed,
+        StreamingDetector(SequenceRMS(), 1.0; conditioning...);
+        order_horizon = Dates.Hour(2),
+    )
+    gaps_mixed = gaps_table(state_mixed)
+    @test gaps_mixed.cause == ["horizon", "lost"]
+    @test gaps_mixed.first_window == [1, 6] && gaps_mixed.last_window == [5, 35]
+    @test windows_table(state_mixed).window == 36:n_windows && state_mixed.commit.late == 5
 
     @test_throws ArgumentError GapEvent(3, 2, :lost, epoch)
     @test_throws ArgumentError GapEvent(1, 2, :other, epoch)
