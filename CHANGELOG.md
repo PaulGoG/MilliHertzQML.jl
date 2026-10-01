@@ -39,21 +39,28 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `test/`, `docs/` and `bench/` environments resolve to the repository).
   Outside all three it throws instead of resolving against a package
   directory. Relative paths and provenance follow it.
-- The package is built in three layers: `MilliHertzQML.StreamingInference`
+- **Breaking:** the package is built on two packages of its own:
+  [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl)
   (domain-general: configuration, provenance, signal processing, features,
-  evaluation, the estimator interface, the streamed replay),
-  `MilliHertzQML.MilliHertzBase` (gravitational waves: noise model,
-  response, waveforms, LDC products, whitening PSDs, the generation,
-  pre-processing, labelling and payload-export stages), and the classifier.
-  `using MilliHertzQML` exports every public name as before; internal names
-  are reached through their layer (for example
-  `MilliHertzQML.MilliHertzBase.L_ARM`).
-  Each layer has its own CairoMakie extension
-  (`StreamingInferenceCairoMakieExt`, `MilliHertzBaseCairoMakieExt`,
-  `MilliHertzQMLCairoMakieExt`); the legend style, the tick labelling of
-  logarithmic axes, `decimation`, the frame checks of the animations,
-  `top_legend!` and `label_bands!` are public names of the domain-general
-  layer (not exported).
+  evaluation, the estimator interface, the streamed replay) and
+  [MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl)
+  (gravitational waves: noise model, response, waveforms, LDC products,
+  whitening PSDs, the generation, pre-processing, labelling and
+  payload-export stages, the DeepSpaceTelemetry and CurvatureDistinguishability
+  extensions), both pinned by URL and commit; MilliHertzQML is the
+  classifier. `using MilliHertzQML` exports every public name as before;
+  internal names are reached through their package, also as
+  `MilliHertzQML.StreamingInference` and `MilliHertzQML.MilliHertzBase`
+  (for example `MilliHertzQML.MilliHertzBase.L_ARM`). The extensions of
+  the producers moved with the gravitational-wave layer
+  (`MilliHertzBaseDeepSpaceTelemetryExt`,
+  `MilliHertzBaseCurvatureDistinguishabilityExt`); each package has its
+  own CairoMakie extension. Julia 1.13 is the floor (it collects the
+  `[sources]` of packages added by URL). The scripts pass the classifier's
+  score label, legend name and unit score range to the figures of the two
+  packages, whose defaults are a generic score on the range of the data, so
+  the figures are unchanged; the alert figure of a replay without an event
+  table no longer carries an empty "Merger" entry.
 - **Breaking:** `StreamingDetector` is generic over its scorer and holds
   the conditioning only (sampling rate, window geometry, whitening PSD,
   high-pass, context); the feature set and bands moved to the scorer's

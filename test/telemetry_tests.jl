@@ -1,4 +1,4 @@
-# Unit tests of the consumer side of the telemetry coupling (src/StreamingInference/telemetry.jl)
+# Unit tests of the consumer side of the telemetry coupling (StreamingInference.jl, src/telemetry.jl)
 # on an in-memory run; included by runtests.jl.
 
 # An in-memory run whose producer discarded production: after `gap_after`

@@ -2,9 +2,16 @@ include(joinpath(@__DIR__, "activate.jl"))
 
 using Documenter
 using DocumenterCitations
+using DocumenterInterLinks
 using MilliHertzQML
 
 bibliography = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style = :numeric)
+# References to the two layers resolve against their manuals.
+links = InterLinks(
+    "StreamingInference" => "https://PaulGoG.github.io/StreamingInference.jl/dev/",
+    "MilliHertzBase" => "https://PaulGoG.github.io/MilliHertzBase.jl/dev/",
+)
+fallbacks = ExternalFallbacks(; automatic = true)
 
 makedocs(
     sitename = "MilliHertzQML",
@@ -14,12 +21,8 @@ makedocs(
         canonical = "https://PaulGoG.github.io/MilliHertzQML.jl",
         size_threshold_ignore = ["api.md"],
     ),
-    modules = [
-        MilliHertzQML,
-        MilliHertzQML.StreamingInference,
-        MilliHertzQML.MilliHertzBase,
-    ],
-    plugins = [bibliography],
+    modules = [MilliHertzQML],
+    plugins = [bibliography, links, fallbacks],
     pages = [
         "Home" => "index.md",
         "Results" => "results.md",

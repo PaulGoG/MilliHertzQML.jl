@@ -26,7 +26,7 @@ jobs:
           - version: "1"
             os: ubuntu-latest
             coverage: true
-          - version: "1.12"
+          - version: "1.13"
             os: ubuntu-latest
             coverage: false
     steps:

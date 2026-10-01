@@ -160,6 +160,7 @@ function replay_animation(
             epoch = geometry.epoch,
             label_spans = spans,
             span_label = MilliHertzQML.StreamingInference.credited_span_label(crediting),
+            CLASSIFIER_SCORE_AXIS...,
         )
     end
 end

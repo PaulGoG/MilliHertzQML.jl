@@ -37,16 +37,9 @@ end
 end
 
 @testset "Static QA (JET)" begin
-    # Reports are restricted to this package and its two layers; dependencies
-    # are analysed but not reported against.
-    JET.test_package(
-        MilliHertzQML;
-        target_modules = (
-            MilliHertzQML,
-            MilliHertzQML.StreamingInference,
-            MilliHertzQML.MilliHertzBase,
-        ),
-    )
+    # Reports are restricted to this package; its dependencies, the two
+    # layers included, are analysed but not reported against.
+    JET.test_package(MilliHertzQML; target_modules = (MilliHertzQML,))
 end
 
 @testset "MilliHertzQML Tests (Multi-Qubit VQC)" begin
@@ -1410,16 +1403,14 @@ end
 @testset "Figures (CairoMakie extension)" begin
     # Plain-decimal labels of a sparse logarithmic axis: below unity the
     # mantissa follows the leading zeros (0.2, not "2.1").
-    ext = Base.get_extension(MilliHertzQML, :StreamingInferenceCairoMakieExt)
-    SI = MilliHertzQML.StreamingInference
-    @test all(
-        m -> Base.get_extension(MilliHertzQML, m) !== nothing,
-        (
-            :StreamingInferenceCairoMakieExt,
-            :MilliHertzBaseCairoMakieExt,
-            :MilliHertzQMLCairoMakieExt,
-        ),
+    ext = Base.get_extension(
+        MilliHertzQML.StreamingInference,
+        :StreamingInferenceCairoMakieExt,
     )
+    SI = MilliHertzQML.StreamingInference
+    @test Base.get_extension(MilliHertzQML, :MilliHertzQMLCairoMakieExt) !== nothing &&
+          Base.get_extension(MilliHertzQML.MilliHertzBase, :MilliHertzBaseCairoMakieExt) !==
+          nothing
     @test SI.decade_label.([-2, -1, 0, 1, 2]) == ["0.01", "0.1", "1", "10", "100"]
     @test SI.decade_label(-1, 2) == "0.2"
     @test SI.decade_label(-2, 5) == "0.05"

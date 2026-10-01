@@ -54,6 +54,7 @@ function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
             result.probabilities,
             result.threshold;
             labels = result.labels,
+            CLASSIFIER_SCORE_AXIS...,
         ),
         joinpath(plot_dir, "mission_trace");
         run_id = run_id,
@@ -63,13 +64,15 @@ function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
             result.probabilities,
             result.threshold;
             labels = result.labels,
+            score_label = "Classifier score",
+            score_range = (0.0, 1.0),
         ),
         joinpath(plot_dir, "probability_distribution");
         run_id = run_id,
     )
     if result.labels !== nothing
         save_figure(
-            figure_roc(result.roc.fpr, result.roc.tpr, result.auc),
+            figure_roc(result.roc.fpr, result.roc.tpr, result.auc; label = "VQC"),
             joinpath(plot_dir, "roc_curve");
             run_id = run_id,
         )

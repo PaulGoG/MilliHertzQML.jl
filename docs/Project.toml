@@ -1,11 +1,17 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
+DocumenterInterLinks = "d12716ef-a0f6-4df4-a9f1-a5a34e75c656"
+MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
+StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 
 [sources]
+MilliHertzBase = {rev = "3bfa6126bc50edc7d8f4457874991b175bbb34d0", url = "https://github.com/PaulGoG/MilliHertzBase.jl.git"}
 MilliHertzQML = {path = ".."}
+StreamingInference = {rev = "9516d311c218fec5bfbfa2928d0ec4fc72bb453b", url = "https://github.com/PaulGoG/StreamingInference.jl.git"}
 
 [compat]
 Documenter = "1"
 DocumenterCitations = "1.5"
+DocumenterInterLinks = "1"

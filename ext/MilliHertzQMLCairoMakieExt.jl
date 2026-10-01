@@ -10,11 +10,11 @@ using CairoMakie.Makie: lines!, hlines!, vlines!, scatterlines!, text!, scatter!
 using CairoMakie.Makie: linkxaxes!, hidexdecorations!, rowgap!, xlims!, ylims!
 using CairoMakie.Makie: linkyaxes!, hideydecorations!, colgap!, Observable, @lift, record
 using Statistics: median
-using MilliHertzQML.StreamingInference: FIGURE_STROKES, figure_size, FIGURE_COLORS
-using MilliHertzQML.StreamingInference: ANNOTATION_FONTSIZE, LEGEND_STYLE
-using MilliHertzQML.StreamingInference: ANIMATION_PX_PER_UNIT, dense_log_ticks
-using MilliHertzQML.StreamingInference: check_frame_scale, check_gif_path, frame_schedule
-using MilliHertzQML.StreamingInference: figure_theme, animation_theme, top_legend!
+using StreamingInference: FIGURE_STROKES, figure_size, FIGURE_COLORS
+using StreamingInference: ANNOTATION_FONTSIZE, LEGEND_STYLE
+using StreamingInference: ANIMATION_PX_PER_UNIT, dense_log_ticks
+using StreamingInference: check_frame_scale, check_gif_path, frame_schedule
+using StreamingInference: figure_theme, animation_theme, top_legend!
 import MilliHertzQML:
     figure_training_history,
     animate_training_history,

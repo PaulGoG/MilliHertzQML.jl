@@ -227,6 +227,8 @@ function main()
                 span_label = MilliHertzQML.StreamingInference.credited_span_label(
                     Symbol(settings.alert_crediting),
                 ),
+                event_label = "Merger",
+                CLASSIFIER_SCORE_AXIS...,
             ),
             joinpath(plot_dir, "telemetry_alerts");
             run_id = run_id,

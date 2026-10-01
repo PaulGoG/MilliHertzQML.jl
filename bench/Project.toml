@@ -1,15 +1,19 @@
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 Yao = "5872b779-8223-5990-8dd0-5abbb0748c8c"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "3bfa6126bc50edc7d8f4457874991b175bbb34d0"}
 MilliHertzQML = {path = ".."}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "9516d311c218fec5bfbfa2928d0ec4fc72bb453b"}
 
 [compat]
 TupleTools = "=1.6.0"

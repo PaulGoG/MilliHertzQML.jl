@@ -3,7 +3,10 @@
 # antenna patterns taken from that package, the polarisation and inclination
 # conventions of the projection, and an end-to-end two-channel record.
 @testset "Constellation response (CurvatureDistinguishability extension)" begin
-    ext = Base.get_extension(MilliHertzQML, :MilliHertzQMLCurvatureDistinguishabilityExt)
+    ext = Base.get_extension(
+        MilliHertzQML.MilliHertzBase,
+        :MilliHertzBaseCurvatureDistinguishabilityExt,
+    )
     @test ext !== nothing
     response = lisa_response()
     @test channel_count(response) == 2

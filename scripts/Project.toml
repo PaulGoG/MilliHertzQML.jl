@@ -6,15 +6,19 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 TupleTools = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
 CurvatureDistinguishability = {rev = "bf82733675f386698bd5966b65e24e8868e1c0be", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
 DeepSpaceTelemetry = {rev = "7af7e4647ace73e2932397cbba33a299249e2495", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "3bfa6126bc50edc7d8f4457874991b175bbb34d0"}
 MilliHertzQML = {path = ".."}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "9516d311c218fec5bfbfa2928d0ec4fc72bb453b"}
 
 [compat]
 TupleTools = "=1.6.0"
