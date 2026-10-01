@@ -179,7 +179,9 @@ function evaluate_classifier(
         isfile(model_path) || throw(ArgumentError("model artifact not found: $model_path"))
         model_dir = dirname(model_path)
         output_id =
-            isempty(run_id) ? "standalone_" * string(hash(model_path))[1:6] : String(run_id)
+            isempty(run_id) ?
+            "standalone_" * parameter_digest(Dict("model" => String(model_path)))[1:6] :
+            String(run_id)
         geometry = inference_geometry(features_path, config)
 
         plot_dir = joinpath(paths.plots, "run_$output_id")

@@ -287,6 +287,11 @@ function label_truth_stream(
         write_toml(
             snapshot_path,
             Dict{String,Any}(
+                "product" => product_table(
+                    "labels";
+                    channels = "A",
+                    parents = Dict{String,Any}("source" => content_digest(source)),
+                ),
                 "labels" => Dict{String,Any}(
                     "source" => provenance_path(source),
                     "truth_group" => settings.truth_group,

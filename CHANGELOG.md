@@ -42,6 +42,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
   and `scale_to_snr` require the `psd` keyword; they no longer default to
   the LISA noise model (`psd = lisa_noise_psd` restores the former call).
 
+- Product identity: the parameter digest of a pre-processed product is the
+  SHA-256 of the key-sorted TOML rendering of its parameters
+  (`parameter_digest`, formerly `Base.hash`, which differs between Julia
+  versions), and its inputs enter it by the SHA-256 of their content
+  (`content_digest`) instead of path, size and modification time, so a
+  touched or moved but identical input keeps the product. Feature and label
+  sidecars carry a `[product]` table (`product_table`: kind, channels,
+  schema, parents). Products made by 2.x have other digests and are
+  recomputed on their next run (the previous files are kept as `_#k`).
+
 ### Fixed
 - A feature sidecar records the parameters of an analytic whitening PSD
   (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`),

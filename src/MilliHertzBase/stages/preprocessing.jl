@@ -54,13 +54,14 @@ end
 """
     preprocessing_parameters(settings, h5_path, tdi_group, label_path) -> Dict{String, Any}
 
-Every parameter that determines the pre-processed product: the source
-file (root-relative path, size, modification time) and TDI group, the
+Every parameter that determines the pre-processed product: the content
+digest of the source file ([`content_digest`](@ref)) and its TDI group, the
 window geometry, the whitening mode with the parameters of that mode, the
 analysis bands, the record high-pass, the feature set, and — when
-`label_path` is non-empty — the label file (path, size, modification
-time). Its digest ([`parameter_digest`](@ref)) keys the reuse of an
-existing product.
+`label_path` is non-empty — the content digest of the label file. Inputs
+are identified by content, not by path or modification time, so a moved or
+rewritten but identical input keeps the product's identity. Its digest
+([`parameter_digest`](@ref)) keys the reuse of an existing product.
 """
 function preprocessing_parameters(
     settings::NamedTuple,
@@ -69,9 +70,7 @@ function preprocessing_parameters(
     label_path::AbstractString,
 )
     parameters = Dict{String,Any}(
-        "source" => provenance_path(h5_path),
-        "source_size" => filesize(h5_path),
-        "source_mtime" => mtime(h5_path),
+        "source_sha256" => content_digest(h5_path),
         "tdi_group" => String(tdi_group),
         "window_size" => settings.window_size,
         "step_size" => settings.step_size,
@@ -92,25 +91,8 @@ function preprocessing_parameters(
         settings.psd_smoothing_dex > 0 &&
             (parameters["psd_smoothing_dex"] = settings.psd_smoothing_dex)
     end
-    if !isempty(label_path)
-        parameters["label_file"] = provenance_path(label_path)
-        parameters["label_file_size"] = filesize(label_path)
-        parameters["label_file_mtime"] = mtime(label_path)
-    end
+    isempty(label_path) || (parameters["label_file_sha256"] = content_digest(label_path))
     return parameters
-end
-
-"""
-    parameter_digest(parameters) -> String
-
-Sixteen-digit hexadecimal digest of a parameter dictionary: the hash of
-its key-sorted TOML rendering, so that the digest depends on the values
-only and is reproducible across processes.
-"""
-function parameter_digest(parameters::AbstractDict)
-    io = IOBuffer()
-    TOML.print(io, parameters; sorted = true)
-    return string(hash(String(take!(io))); base = 16, pad = 16)
 end
 
 """
@@ -322,6 +304,17 @@ function preprocess_record(
             write_toml(
                 sidecar_path,
                 Dict{String,Any}(
+                    "product" => product_table(
+                        "features";
+                        channels = "A",
+                        parents = Dict{String,Any}(
+                            "source" => parameters["source_sha256"],
+                            (
+                                has_labels ?
+                                ("labels" => parameters["label_file_sha256"],) : ()
+                            )...,
+                        ),
+                    ),
                     "features" => Dict{String,Any}(
                         "source" => provenance_path(h5_path),
                         "tdi_group" => group,

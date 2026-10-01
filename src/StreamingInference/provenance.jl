@@ -203,6 +203,52 @@ function provenance()
 end
 
 """
+    content_digest(path) -> String
+
+SHA-256 (hexadecimal) of the content of the file at `path`: the identity
+of an input product whatever its location or modification time.
+"""
+content_digest(path::AbstractString) = bytes2hex(open(sha256, path))
+
+"""
+    parameter_digest(parameters) -> String
+
+SHA-256 (hexadecimal) of the key-sorted TOML rendering of a parameter
+dictionary: the identity of the parameters of a product, the same in
+every process, on every machine and under every Julia version (unlike
+`Base.hash`).
+"""
+function parameter_digest(parameters::AbstractDict)
+    io = IOBuffer()
+    TOML.print(io, parameters; sorted = true)
+    return bytes2hex(sha256(take!(io)))
+end
+
+"""
+    product_table(kind; channels, parents = Dict{String,Any}(), schema = 1) -> Dict{String,Any}
+
+The `[product]` table of a sidecar: the `kind` of product (`"features"`,
+`"labels"`, …), the `channels` it was made from (a channel-set token such
+as `"A"`), the `schema` version of its tables, and the content digests
+([`content_digest`](@ref)) of its `parents`, so that a product can be
+traced to its inputs and refused when they do not match.
+"""
+function product_table(
+    kind::AbstractString;
+    channels::AbstractString,
+    parents::AbstractDict = Dict{String,Any}(),
+    schema::Integer = 1,
+)
+    schema >= 1 || throw(ArgumentError("schema must be at least 1."))
+    return Dict{String,Any}(
+        "kind" => String(kind),
+        "channels" => String(channels),
+        "schema" => Int(schema),
+        "parents" => Dict{String,Any}(String(k) => v for (k, v) in parents),
+    )
+end
+
+"""
     backup_existing!(path) -> Union{Nothing, String}
 
 Move an existing file at `path` to `<stem>_#k<ext>` with the first free

@@ -1326,6 +1326,62 @@ end
     end
 end
 
+@testset "Product identity" begin
+    p = Dict{String,Any}("b" => 2, "a" => [1.0, 2.0])
+    q = Dict{String,Any}("a" => [1.0, 2.0], "b" => 2)
+    @test parameter_digest(p) == parameter_digest(q)
+    @test length(parameter_digest(p)) == 64 &&
+          all(in("0123456789abcdef"), parameter_digest(p))
+    @test parameter_digest(merge(p, Dict{String,Any}("b" => 3))) != parameter_digest(p)
+    table = product_table("features"; channels = "A", parents = Dict("source" => "x"))
+    @test table["kind"] == "features" && table["channels"] == "A" && table["schema"] == 1
+    @test table["parents"] == Dict{String,Any}("source" => "x")
+    @test_throws ArgumentError product_table("features"; channels = "A", schema = 0)
+    mktempdir() do dir
+        fs = 0.2
+        n = 12_000
+        h5 = joinpath(dir, "record.h5")
+        HDF5 = MilliHertzQML.MilliHertzBase.HDF5
+        function write_record(seed)
+            noise =
+                synthesize_noise(StableRNG(seed), n, fs; f_min = 1e-5, psd = lisa_noise_psd)
+            HDF5.h5open(h5, "w") do file
+                tdi = HDF5.create_group(HDF5.create_group(file, "obs"), "tdi")
+                tdi["t"] = collect((0:(n-1)) ./ fs)
+                tdi["X"] = zeros(n)
+                tdi["Y"] = zeros(n)
+                tdi["Z"] = sqrt(2.0) .* noise
+            end
+        end
+        write_record(1)
+        digest = content_digest(h5)
+        @test length(digest) == 64 && content_digest(h5) == digest
+        config = Dict{String,Any}(
+            "paths" => Dict{String,Any}("inputs" => joinpath(dir, "inputs")),
+            "preprocessing" => Dict{String,Any}(
+                "h5_file" => h5,
+                "tdi_group" => "obs/tdi",
+                "psd" => "none",
+                "output_prefix" => "identity",
+                "edge_margin" => 1.0,
+            ),
+        )
+        product = preprocess_record(config)
+        @test !product.skipped
+        sidecar = TOML.parsefile(product.sidecar_path)
+        @test sidecar["product"]["kind"] == "features" &&
+              sidecar["product"]["channels"] == "A"
+        @test sidecar["product"]["parents"] == Dict{String,Any}("source" => digest)
+        # An input touched but unchanged keeps the identity of the product;
+        # an input with other content makes a new one
+        touch(h5)
+        @test preprocess_record(config).skipped
+        write_record(2)
+        @test content_digest(h5) != digest
+        @test !preprocess_record(config).skipped
+    end
+end
+
 @testset "Figures (CairoMakie extension)" begin
     # Plain-decimal labels of a sparse logarithmic axis: below unity the
     # mantissa follows the leading zeros (0.2, not "2.1").
