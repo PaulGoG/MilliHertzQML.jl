@@ -48,6 +48,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `using MilliHertzQML` exports every public name as before; internal names
   are reached through their layer (for example
   `MilliHertzQML.MilliHertzBase.L_ARM`).
+  Each layer has its own CairoMakie extension
+  (`StreamingInferenceCairoMakieExt`, `MilliHertzBaseCairoMakieExt`,
+  `MilliHertzQMLCairoMakieExt`); the legend style, the tick labelling of
+  logarithmic axes, `decimation`, the frame checks of the animations,
+  `top_legend!` and `label_bands!` are public names of the domain-general
+  layer (not exported).
 - **Breaking:** `StreamingDetector` is generic over its scorer and holds
   the conditioning only (sampling rate, window geometry, whitening PSD,
   high-pass, context); the feature set and bands moved to the scorer's

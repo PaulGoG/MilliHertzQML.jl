@@ -1410,28 +1410,37 @@ end
 @testset "Figures (CairoMakie extension)" begin
     # Plain-decimal labels of a sparse logarithmic axis: below unity the
     # mantissa follows the leading zeros (0.2, not "2.1").
-    ext = Base.get_extension(MilliHertzQML, :MilliHertzQMLCairoMakieExt)
-    @test ext.decade_label.([-2, -1, 0, 1, 2]) == ["0.01", "0.1", "1", "10", "100"]
-    @test ext.decade_label(-1, 2) == "0.2"
-    @test ext.decade_label(-2, 5) == "0.05"
-    @test ext.decade_label(1, 2) == "20"
+    ext = Base.get_extension(MilliHertzQML, :StreamingInferenceCairoMakieExt)
+    SI = MilliHertzQML.StreamingInference
+    @test all(
+        m -> Base.get_extension(MilliHertzQML, m) !== nothing,
+        (
+            :StreamingInferenceCairoMakieExt,
+            :MilliHertzBaseCairoMakieExt,
+            :MilliHertzQMLCairoMakieExt,
+        ),
+    )
+    @test SI.decade_label.([-2, -1, 0, 1, 2]) == ["0.01", "0.1", "1", "10", "100"]
+    @test SI.decade_label(-1, 2) == "0.2"
+    @test SI.decade_label(-2, 5) == "0.05"
+    @test SI.decade_label(1, 2) == "20"
     @test ext.count_ticks(134) == [0, 50, 100] && ext.count_ticks(23) == [0, 5, 10, 15, 20]
     @test ext.count_ticks(1) == [0, 1] && ext.count_ticks(0) == [0]
     @test_throws ArgumentError ext.count_ticks(-1)
-    @test ext.dense_log_ticks(0.35, 37.0) ==
+    @test SI.dense_log_ticks(0.35, 37.0) ==
           ([0.5, 1.0, 2.0, 5.0, 10.0, 20.0], ["0.5", "1", "2", "5", "10", "20"])
-    @test ext.dense_log_ticks(1e-3, 1e3) == ext.log_ticks(1e-3, 1e3)
+    @test SI.dense_log_ticks(1e-3, 1e3) == SI.log_ticks(1e-3, 1e3)
     # Alert labels: a right-hand label that would cover the next marker moves
     # to the left, and so does one that would leave the axis
     @test ext.alert_label_placement([0.5, 0.56], [0.5, 0.52], ["−27.8 h", "−21.1 h"]) ==
           [:above_left, :above_right]
     @test ext.alert_label_placement([0.95], [0.5], ["15.1 h"]) == [:above_left]
     @test_throws DimensionMismatch ext.alert_label_placement([0.1], [0.1, 0.2], ["a"])
-    @test_throws ArgumentError ext.decade_label(0, 10)
-    values, ticklabels = ext.log_ticks(0.15, 3.0)
+    @test_throws ArgumentError SI.decade_label(0, 10)
+    values, ticklabels = SI.log_ticks(0.15, 3.0)
     @test values == [0.2, 0.5, 1.0, 2.0]
     @test ticklabels == ["0.2", "0.5", "1", "2"]
-    values, ticklabels = ext.log_ticks(0.01, 100.0)
+    values, ticklabels = SI.log_ticks(0.01, 100.0)
     @test ticklabels == ["0.01", "0.1", "1", "10", "100"]
 
     rng = StableRNG(21)

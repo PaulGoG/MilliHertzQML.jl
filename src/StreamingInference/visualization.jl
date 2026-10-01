@@ -247,3 +247,157 @@ ground-availability latency of every window (`complete_at − content_end`
 table of `alert_latency_table`) annotated. Requires CairoMakie.
 """
 function figure_telemetry_alerts end
+
+# Figure toolkit shared by the figures of every layer: legend style, tick
+# labelling of logarithmic axes, decimation of long traces, and the frame
+# checks of the animations. Public, not exported; `top_legend!` and
+# `label_bands!` are implemented by the CairoMakie extension.
+
+"""
+    LEGEND_STYLE
+
+Keyword arguments of the horizontal legend placed above the axes.
+"""
+const LEGEND_STYLE = (
+    orientation = :horizontal,
+    tellheight = true,
+    tellwidth = false,
+    framevisible = false,
+    padding = (0, 0, 0, 0),
+    rowgap = 4,
+    colgap = 16,
+    patchsize = (40, 14),
+    merge = true,
+    titlefont = :bold,
+)
+
+"""
+    decimation(n, max_points) -> StepRange
+
+Index range keeping about `max_points` of `n` samples.
+"""
+decimation(n::Integer, max_points::Integer) = 1:max(1, cld(n, max_points)):n
+
+"""
+    decade_label(k, m = 1) -> String
+
+Plain-decimal tick label of ``m \\times 10^k`` for a single-digit mantissa
+`m`: `1`, `10`, `100`, `0.1`, `0.01`; `20`, `0.2`, `0.05`.
+"""
+function decade_label(k::Integer, m::Integer = 1)
+    1 <= m <= 9 || throw(ArgumentError("m = $m; the mantissa must be a single digit."))
+    return k >= 0 ? string(m * 10^k) : "0." * repeat("0", -k - 1) * string(m)
+end
+
+"""
+    log_ticks(lo, hi) -> (values, labels)
+
+Tick values of a logarithmic axis spanning `[lo, hi]`: the decades inside
+the range, with the 2× and 5× intermediates added when fewer than two
+decades fall inside, labelled as plain decimals.
+"""
+function log_ticks(lo::Real, hi::Real)
+    0 < lo <= hi || throw(ArgumentError("a logarithmic range needs 0 < lo <= hi."))
+    k_lo = floor(Int, log10(lo))
+    k_hi = ceil(Int, log10(hi))
+    decades = [k for k in k_lo:k_hi if lo <= 10.0^k <= hi]
+    if length(decades) >= 2
+        return 10.0 .^ decades, decade_label.(decades)
+    end
+    values = Float64[]
+    labels = String[]
+    for k in k_lo:k_hi, m in (1, 2, 5)
+        v = m * 10.0^k
+        lo <= v <= hi || continue
+        push!(values, v)
+        push!(labels, decade_label(k, m))
+    end
+    return values, labels
+end
+
+"""
+    dense_log_ticks(lo, hi) -> (values, labels)
+
+Ticks of a logarithmic axis spanning `[lo, hi]` at the 1×, 2× and 5×
+multiples of every decade, for axes that span two or three decades; above
+nine such ticks it falls back to [`log_ticks`](@ref).
+"""
+function dense_log_ticks(lo::Real, hi::Real)
+    0 < lo <= hi || throw(ArgumentError("a logarithmic range needs 0 < lo <= hi."))
+    values = Float64[]
+    labels = String[]
+    for k in floor(Int, log10(lo)):ceil(Int, log10(hi)), m in (1, 2, 5)
+        v = m * 10.0^k
+        lo <= v <= hi || continue
+        push!(values, v)
+        push!(labels, decade_label(k, m))
+    end
+    return length(values) <= 9 ? (values, labels) : log_ticks(lo, hi)
+end
+
+"""
+    ANIMATION_PX_PER_UNIT
+
+Raster scale of an animation in pixels per typographic point. A GIF is read
+on screen, so two pixels per point on the 900 pt canvas (1800 px wide) is
+its resolution, against four for the printed figures. Whole numbers only,
+see [`check_frame_scale`](@ref).
+"""
+const ANIMATION_PX_PER_UNIT = 2
+
+"""
+    check_frame_scale(px_per_unit)
+
+Throw unless `px_per_unit` is a whole number at least one. A fractional
+raster scale renders frames that do not match the size declared to the
+video encoder, which appears as a band of noise along their top edge.
+"""
+function check_frame_scale(px_per_unit::Real)
+    isinteger(px_per_unit) && px_per_unit >= 1 || throw(
+        ArgumentError("px_per_unit = $px_per_unit; expected a whole number of at least 1."),
+    )
+    return nothing
+end
+
+"""
+    check_gif_path(path)
+
+Throw unless `path` names a GIF; the animations of the project are written
+as GIF.
+"""
+function check_gif_path(path::AbstractString)
+    endswith(lowercase(path), ".gif") ||
+        throw(ArgumentError("path = $(repr(path)); an animation is written as .gif."))
+    return nothing
+end
+
+"""
+    frame_schedule(n, n_frames, hold_frames) -> Vector{Int}
+
+Sweep of about `n_frames` states out of `n`, always ending on `n`, followed
+by `hold_frames` repetitions of the last state. The sweep starts at two
+states, since a single one draws no line segment.
+"""
+function frame_schedule(n::Integer, n_frames::Integer, hold_frames::Integer)
+    n >= 2 || throw(ArgumentError("n must be at least 2."))
+    n_frames >= 2 || throw(ArgumentError("n_frames must be at least 2."))
+    hold_frames >= 0 || throw(ArgumentError("hold_frames must not be negative."))
+    sweep = unique(round.(Int, range(2, n; length = min(n_frames, n - 1))))
+    return vcat(sweep, fill(n, hold_frames))
+end
+
+"""
+    top_legend!(figure, axis; nbanks = 1)
+
+Horizontal legend of the labelled series of `axis` above the axes, in the
+first row of the figure layout, in `nbanks` rows. Requires CairoMakie.
+"""
+function top_legend! end
+
+"""
+    label_bands!(axis, x, labels)
+
+Shaded band over every contiguous run of positive `labels` along `x`; the
+first band carries the legend entry. Requires CairoMakie.
+"""
+function label_bands! end

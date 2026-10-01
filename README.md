@@ -246,7 +246,9 @@ MilliHertzQML.jl/
 │   ├── vqc_scorer.jl       # The classifier as a window scorer; the detector of a training run
 │   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier
 ├── ext/
-│   ├── MilliHertzQMLCairoMakieExt.jl        # CairoMakie implementation of the figures and animations
+│   ├── StreamingInferenceCairoMakieExt.jl   # Theme, exports, evaluation, score and replay figures
+│   ├── MilliHertzBaseCairoMakieExt.jl       # Mission and strain traces
+│   ├── MilliHertzQMLCairoMakieExt.jl        # Training history and the classifier studies
 │   ├── MilliHertzQMLCurvatureDistinguishabilityExt.jl # Constellation response of the simulator
 │   └── MilliHertzQMLDeepSpaceTelemetryExt.jl # Run-directory adapter over the DeepSpaceTelemetry API
 ├── scripts/

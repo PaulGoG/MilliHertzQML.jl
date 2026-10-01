@@ -58,6 +58,10 @@ export content_digest, parameter_digest, product_table
 export scored_at
 export with_pipeline_root, config_root
 
+public LEGEND_STYLE, decimation, decade_label, log_ticks, dense_log_ticks
+public ANIMATION_PX_PER_UNIT, check_frame_scale, check_gif_path, frame_schedule
+public top_legend!, label_bands!, FIGURE_FONTSIZE, TICK_FONTSIZE, ANNOTATION_FONTSIZE
+
 include("config.jl")
 include("provenance.jl")
 include("dsp.jl")
