@@ -33,6 +33,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   revisions under `layers` (`layer_provenance` of StreamingInference.jl):
   the two layers at their pinned commits and this package with the git
   state of its tree.
+- Channel modes: `[tdi] channels = "A" | "AE"` (MilliHertzBase.jl). A
+  model can be trained on the features of the A and E network, which are
+  as many as those of A, so the circuit is unchanged
+  (`configs/experiments/q8_b6_ae.toml`). The run snapshot records the mode;
+  training refuses a configuration whose mode differs from that of its
+  feature table, and inference refuses features of another mode than the
+  model was trained on. The streamed replay reads the A channel only.
 - The circuit evaluated in place and an adjoint gradient. A
   `CircuitWorkspace` holds the circuit of a model built once, with its
   registers; `predict_probability!` scores a sample on it, bit for bit as

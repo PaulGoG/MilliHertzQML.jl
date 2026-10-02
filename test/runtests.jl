@@ -535,6 +535,90 @@ end
     end
 end
 
+@testset "Channel modes (classifier)" begin
+    # A feature table of the A and E network, trained on and scored only
+    # under a configuration and a model of the same mode
+    @test MilliHertzQML.recorded_channels(joinpath(tempdir(), "absent_features.csv")) == "A"
+    @test MilliHertzQML.run_channels(joinpath(tempdir(), "absent_run")) == "A"
+    mktempdir() do dir
+        rng = StableRNG(17)
+        n = 600
+        labels = zeros(Int, n)
+        labels[250:300] .= 1
+        table = DataFrame(rand(rng, Float32, n, 4), feature_names(:whitened))
+        table.p_low .+= 3.0f0 .* labels
+        function product(stem, channels)
+            path = joinpath(dir, stem * "_features.csv")
+            CSV.write(path, table)
+            CSV.write(joinpath(dir, stem * "_labels.csv"), DataFrame(Label = labels))
+            sidecar = Dict{String,Any}(
+                "features" => Dict{String,Any}(
+                    "window_size" => 1000,
+                    "step_size" => 100,
+                    "sample_rate" => 0.2,
+                ),
+            )
+            channels === nothing ||
+                (sidecar["product"] = Dict{String,Any}("channels" => channels))
+            open(io -> TOML.print(io, sidecar), joinpath(dir, stem * "_features.toml"), "w")
+            return path
+        end
+        pair = product("pair", "AE")
+        single = product("single", "A")
+        legacy = product("legacy", nothing)
+        @test MilliHertzQML.recorded_channels(pair) == "AE"
+        @test MilliHertzQML.recorded_channels(legacy) == "A"
+        config(features, mode) = Dict{String,Any}(
+            "paths" => Dict{String,Any}(
+                "inputs" => dir,
+                "models" => joinpath(dir, "models"),
+                "plots" => joinpath(dir, "plots"),
+                "results" => joinpath(dir, "results"),
+            ),
+            "tdi" => Dict{String,Any}("channels" => mode),
+            "model" => Dict{String,Any}("n_qubits" => 4, "n_layers" => 1),
+            "training" => Dict{String,Any}(
+                "train_features" => features,
+                "train_labels" => replace(features, "_features" => "_labels"),
+                "epochs" => 1,
+                "batch_size" => 32,
+                "threshold_criterion" => "youden",
+            ),
+        )
+        # The product decides: a configuration of another mode is refused
+        @test_throws ArgumentError train_classifier(config(pair, "A"); run_id = "refused")
+        @test_throws ArgumentError train_classifier(
+            config(single, "AE");
+            run_id = "refused",
+        )
+        run = train_classifier(config(pair, "AE"); run_id = "pair")
+        @test MilliHertzQML.run_channels(run.run_dir) == "AE"
+        @test TOML.parsefile(joinpath(run.run_dir, "config.toml"))["features"]["channels"] ==
+              "AE"
+        # Scoring: features of the mode the model was trained on, or none
+        scored = evaluate_classifier(
+            config(pair, "AE");
+            run_id = "pair",
+            features = pair,
+            labels = replace(pair, "_features" => "_labels"),
+        )
+        @test length(scored.probabilities) == n
+        @test_throws ArgumentError evaluate_classifier(
+            config(pair, "AE");
+            run_id = "pair",
+            features = single,
+        )
+        @test_throws ArgumentError evaluate_classifier(
+            config(pair, "AE");
+            run_id = "pair",
+            features = legacy,
+        )
+    end
+    # The replay of a detector reads the A channel only
+    @test tdi_settings(Dict{String,Any}()).channels == "A"
+    @test channel_suffix("AE") == "_ae"
+end
+
 include("telemetry_tests.jl")
 include("telemetry_integration_tests.jl")
 

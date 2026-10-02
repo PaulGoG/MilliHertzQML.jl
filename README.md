@@ -270,7 +270,7 @@ MilliHertzQML.jl/
 │   ├── default.toml        # Pipeline defaults (simulator)
 │   ├── sangria.toml        # Sangria four-qubit baseline: Welch-whitened two-band features, truth-stream labels
 │   ├── sangria_paper.toml  # Sangria parity run with the raw-window features of Isfan et al. (2025)
-│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, and whitening variant
+│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, whitening variant, and channel mode
 ├── data/
 │   ├── inputs/             # Telemetry records, feature and label CSVs (not tracked)
 │   └── outputs/            # Per-run figures and results (not tracked)

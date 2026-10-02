@@ -40,6 +40,9 @@ label_channel = "A"         # channel of the label span and the catalogue SNR un
 orbit_phase = 0.0           # orbital phase of the constellation at the record start [rad]; "lisa" response only
 constellation_phase = 0.0   # cartwheel phase of the constellation at the record start [rad]; "lisa" response only
 
+[tdi]
+channels = "A"   # TDI channel mode of every product; one of: "A" | "AE" (features of the A and E network, stems ending in _ae) | "AET" (labelling only)
+
 [preprocessing]
 tdi_group = "obs/tdi"   # HDF5 group or compound dataset holding t, X, Y, Z
 h5_file = "data/inputs/simulated_telemetry_complex.h5"   # HDF5 record; overridden by --h5-file

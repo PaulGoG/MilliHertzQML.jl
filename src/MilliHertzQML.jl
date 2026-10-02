@@ -65,6 +65,7 @@ using StreamingInference:
     load_features,
     manifest_sha256,
     matched_filter_snr,
+    network_periodogram,
     MemoryTelemetryRun,
     new_run_id,
     newly_evaluable!,
@@ -134,10 +135,13 @@ using StreamingInference:
 using MilliHertzBase:
     MilliHertzBase,
     AbstractDetectorResponse,
+    CHANNEL_MODES,
     catalog_events,
     channel_catalog,
     channel_count,
+    channel_names,
     channel_noise_psd,
+    channel_suffix,
     confusion_psd,
     detectable_span,
     detectable_spans,
@@ -180,6 +184,7 @@ using MilliHertzBase:
     SkyAveragedResponse,
     snr_peaks,
     source_frame,
+    tdi_settings,
     tdi_to_aet,
     telemetry_settings,
     whitening_psd,
@@ -254,6 +259,7 @@ export cfgget, override, section
 export analysis_band, pipeline_paths, feature_geometry
 export generation_settings, preprocessing_settings, model_settings, training_settings
 export inference_settings, ldc_settings, resource_settings, telemetry_settings
+export tdi_settings, channel_names, channel_suffix, CHANNEL_MODES, network_periodogram
 export TIMER,
     report_timing,
     new_run_id,

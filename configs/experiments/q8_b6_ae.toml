@@ -1,0 +1,86 @@
+# Sangria experiment `q8_b6_ae`: the selected configuration `q8_b6` on the
+# A and E channels. Preprocessing, labelling, training and inference; the
+# telemetry replay reads the A channel only. Keys absent
+# here take the defaults documented in configs/default.toml (the settings functions under src/);
+# the HDF5 products are passed on the command line. Paths are resolved
+# relative to the project root.
+
+[paths]
+inputs = "data/inputs"              # telemetry records, feature, label and PSD CSVs
+models = "models"                   # per-run model checkpoints, logs, thresholds
+plots = "data/outputs/plots"        # per-run figures
+results = "data/outputs/results"    # per-run inference tables and snapshots
+
+[tdi]
+channels = "AE"   # TDI channel mode of every product; one of: "A" | "AE" (features of the A and E network, stems ending in _ae) | "AET" (labelling only)
+
+[preprocessing]
+tdi_group = "obs/tdi"   # HDF5 group or compound dataset holding t, X, Y, Z
+window_size = 1000      # sliding-window length [samples]; >= 2
+step_size = 100         # sliding-window step [samples]; in [1, window_size]
+sample_rate = 0.2       # expected sampling frequency [Hz]; must agree with the file; > 0
+psd = "welch"           # whitening PSD; one of: "model" (RCL19 sensitivity) | "channel" (RCL19 Michelson-channel PSD, for "lisa" response products) | "ldc" (analytic TDI PSD) | "welch" (estimated) | "none"
+welch_segment_length = 65536   # segment of the "welch" estimate [samples]; >= 2
+psd_smoothing_dex = 0.0         # log-frequency smoothing of the "welch" estimate and of the replay's "trailing" estimate [dex]; >= 0, 0 disables
+feature_set = "bands"       # per-window features; one of: "whitened" | "paper" | "bands"
+low_band_hz = [0.001, 0.005]   # low analysis band [Hz]; ascending, > 0
+high_band_hz = [0.005, 0.1]    # high analysis band [Hz]; ascending, > 0
+band_edges_hz = [0.0003, 0.0006, 0.001, 0.002, 0.004, 0.01, 0.04]  # band edges of the "bands" feature set [Hz]; ascending, > 0, at least 2 (features: bands + 2)
+highpass_cutoff_hz = 0.0005    # zero-phase record high-pass cutoff [Hz]; >= 0, 0 disables
+highpass_order = 8             # Butterworth order of the record high-pass; >= 1
+edge_margin = 10.0              # windows dropped at each record end, in window lengths; >= 0
+output_prefix = "sangria_b6_train"   # prefix of the output feature/label CSVs
+
+[model]
+n_qubits = 8    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_layers = 4    # data re-uploading layers; >= 1
+
+[training]
+train_features = "data/inputs/sangria_b6_train_ae_features.csv"   # training feature CSV
+train_labels = "data/inputs/sangria_b6_train_ae_labels.csv"       # training label CSV
+epochs = 50                # maximum training epochs; >= 1
+batch_size = 64            # mini-batch size; >= 1
+learning_rate = 0.01       # initial Adam learning rate; > 0
+lr_decay = 0.95            # multiplicative learning-rate decay per epoch; in (0, 1]
+patience = 12              # early-stopping patience [epochs]; >= 1
+train_fraction = 0.7       # chronological training block; in (0, 1)
+validation_fraction = 0.15 # chronological validation block (early stopping, threshold); in (0, 1); the rest is the test block
+class_weight = "balanced"  # positive-class loss weight; one of: "balanced" (negative/positive count ratio) | "none"
+threshold_criterion = "far"  # criterion fitting the threshold on the calibration block; one of: "far" | "fpr" | "youden"
+threshold_block = "held_out"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
+target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
+target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
+scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
+phase_span = 1.0           # phase-encoding interval [0, phase_span π] of the feature scaler; in (0, 2]
+min_fit_episodes = 5       # false-alarm episodes on the calibration block below which the training stage warns; >= 0
+test_mode_samples = 5000   # sample cap under --test-mode; >= 1
+test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
+threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
+gradient_method = "adjoint"  # gradient of the training loss; one of: "adjoint" (reverse pass uncomputing the circuit in place) | "zygote" (Zygote tape over the non-mutating circuit, the reference)
+seed = 9999                # RNG seed for the data split and initialisation; non-negative integer
+
+[inference]
+features = "data/inputs/sangria_b6_blind_ae_features.csv"   # inference feature CSV
+labels = "data/inputs/sangria_b6_blind_ae_labels.csv"       # inference label CSV; "" for blind mode
+block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
+
+[ldc]
+truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
+catalog_group = "sky/mbhb/cat"  # compound dataset of the source catalogue
+psd_model = "sangria"           # analytic TDI PSD of the labelling SNR; one of: "Proposal" | "SciRDv1" | "MRDv1" | "MRD_MFR" | "sangria" | "spritz"
+tdi2 = false                    # second-generation TDI factor of the labelling PSD; one of: true | false
+observation_years = 0.0         # confusion term of the labelling PSD [yr]; 0 disables, else in [0.25, 10]
+label_span = "fixed"            # positive span per merger; one of: "fixed" | "detectable"
+label_before_sec = 345600.0     # fixed span before the merger [s]; >= 0
+label_after_sec = 1620.0        # fixed span after the merger [s]; >= 0
+label_snr_threshold = 5.0       # per-window SNR defining "detectable" and locating mergers without a catalogue; > 0
+label_window_size = 1000        # window of the labelling SNR scan [samples]; >= 2
+label_step = 10                 # stride of the labelling SNR scan [samples]; >= 1
+peak_min_separation_sec = 86400.0   # minimum separation of SNR peaks taken as distinct mergers [s]; >= 0
+merger_snr_threshold = 8.0      # per-window SNR a peak must reach to count as a merger without a catalogue; > 0
+precursor_ratio = 0.1           # amplitude ratio below which an earlier SNR peak is merged into the later one; in [0, 1]
+output_prefix = "sangria_ae"    # prefix of the label, event, and span CSVs
+
+[resources]
+max_memory_gib = 16.0    # a stage whose pre-flight memory estimate exceeds this refuses to start [GiB]; > 0
+warn_memory_gib = 8.0    # a stage whose estimate exceeds this warns [GiB]; <= max_memory_gib

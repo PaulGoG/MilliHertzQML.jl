@@ -260,6 +260,15 @@ function train_classifier(
         run_dir = joinpath(paths.models, "run_$run_id")
         mkpath(run_dir)
         geometry = feature_geometry(trn.train_features, config)
+        # The product is authoritative: a configuration naming another
+        # channel mode than its feature table records is refused
+        channels = recorded_channels(trn.train_features)
+        channels == tdi_settings(config).channels || throw(
+            ArgumentError(
+                "[tdi] channels = \"$(tdi_settings(config).channels)\", but the feature " *
+                "table $(trn.train_features) holds the channels $channels.",
+            ),
+        )
         snapshot = Dict{String,Any}(
             "model" => Dict{String,Any}(
                 "n_qubits" => mdl.n_qubits,
@@ -290,6 +299,7 @@ function train_classifier(
                 "seed" => trn.seed,
             ),
             "features" => Dict{String,Any}(
+                "channels" => channels,
                 "window_size" => geometry.window_size,
                 "step_size" => geometry.step_size,
                 "sample_rate" => geometry.sample_rate,

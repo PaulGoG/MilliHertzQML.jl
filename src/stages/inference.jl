@@ -28,6 +28,37 @@ function inference_geometry(features_path::AbstractString, config::AbstractDict)
 end
 
 """
+    recorded_channels(features_path) -> String
+
+Channel mode of a feature table, as its sidecar records it (`channels` of
+the `[product]` table, else of `[features]`); `"A"` for a table without a
+sidecar or made before the modes existed.
+"""
+function recorded_channels(features_path::AbstractString)
+    sidecar = replace(features_path, r"\.csv$" => ".toml")
+    isfile(sidecar) || return "A"
+    tables = TOML.parsefile(sidecar)
+    for name in ("product", "features")
+        channels = get(get(tables, name, Dict{String,Any}()), "channels", nothing)
+        channels isa AbstractString && return String(channels)
+    end
+    return "A"
+end
+
+"""
+    run_channels(model_dir) -> String
+
+Channel mode of the features a run was trained on, from its `config.toml`
+snapshot; `"A"` for a run trained before the modes existed.
+"""
+function run_channels(model_dir::AbstractString)
+    path = joinpath(model_dir, "config.toml")
+    isfile(path) || return "A"
+    features = get(TOML.parsefile(path), "features", Dict{String,Any}())
+    return String(get(features, "channels", "A"))
+end
+
+"""
     THRESHOLD_FIT_KEYS
 
 Rates of the fitting block recorded in `threshold.toml` under `fit_<key>`;
@@ -198,6 +229,14 @@ function evaluate_classifier(
             ),
         )
         threshold, threshold_info = load_threshold(model_dir)
+        trained_on = run_channels(model_dir)
+        scored_on = recorded_channels(features_path)
+        trained_on == scored_on || throw(
+            ArgumentError(
+                "the model of $model_dir was trained on features of the channels " *
+                "$trained_on; the table $features_path holds those of $scored_on.",
+            ),
+        )
         @info "model loaded" model_path = model_path threshold = threshold criterion =
             get(threshold_info, "criterion", "unknown") fitted_at =
             get(threshold_info, "fitted_at", "unknown")
