@@ -33,6 +33,16 @@ end
 @testset "Static QA (ExplicitImports)" begin
     @test ExplicitImports.check_no_stale_explicit_imports(MilliHertzQML) === nothing
     @test ExplicitImports.check_no_implicit_imports(MilliHertzQML) === nothing
+    @test ExplicitImports.check_all_explicit_imports_via_owners(MilliHertzQML) === nothing
+    @test ExplicitImports.check_all_explicit_imports_are_public(MilliHertzQML) === nothing
+    @test ExplicitImports.check_all_qualified_accesses_via_owners(MilliHertzQML) === nothing
+    # `Optimisers.adjust!` is documented by Optimisers.jl, which declares no
+    # public names beyond its exports
+    @test ExplicitImports.check_all_qualified_accesses_are_public(
+        MilliHertzQML;
+        ignore = (:adjust!,),
+    ) === nothing
+    @test ExplicitImports.check_no_self_qualified_accesses(MilliHertzQML) === nothing
 end
 
 @testset "Static QA (JET)" begin
