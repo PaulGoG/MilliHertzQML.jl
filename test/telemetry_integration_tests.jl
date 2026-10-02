@@ -1,7 +1,7 @@
-# Integration test of the telemetry coupling through the producer: a minimal
+# Integration test of the classifier on a producer run: a minimal
 # DeepSpaceTelemetry mission ingests an exported payload at 0.2 Hz into a
-# temporary run root, and the consumer replays the run directory through
-# the package extension. Included by runtests.jl.
+# temporary run root, and the detector of a classifier replays the run
+# directory through MilliHertzBase's extension. Included by runtests.jl.
 
 @testset "Telemetry coupling (DeepSpaceTelemetry run)" begin
     TelemetryCore = DeepSpaceTelemetry.TelemetryCore
@@ -164,102 +164,5 @@
             )-1)
         @test all(b -> isempty(intersect(b.rows, gap_rows)), gap_delivered)
         @test any(b -> first(b.rows) > last(gap_rows), gap_delivered)
-    end
-end
-
-@testset "Payload alignment of producer runs" begin
-    fs = 0.2
-    epoch = Dates.DateTime(2035, 1, 1)
-    function fake_run(
-        dir;
-        version = "2.0.1",
-        source = "external",
-        downtime = 0.0,
-        origin = nothing,
-        tx = String[],
-        components = String[],
-    )
-        mkpath(dir)
-        touch(joinpath(dir, "RUN_COMPLETE"))
-        provenance =
-            Dict{String,Any}("platform" => Dict{String,Any}("package_version" => version))
-        origin === nothing || (provenance["payload_origin"] = origin)
-        open(joinpath(dir, "config_snapshot.toml"), "w") do io
-            TOML.print(
-                io,
-                Dict{String,Any}(
-                    "physics" => Dict{String,Any}(
-                        "sample_rate" => fs,
-                        "segment_duration_sec" => 50.0,
-                        "batch_size" => 10,
-                        "data_source" => source,
-                    ),
-                    "simulation" => Dict{String,Any}(
-                        "start_sim_time" => string(epoch),
-                        "initial_downtime_days" => downtime,
-                    ),
-                    "provenance" => provenance,
-                ),
-            )
-        end
-        isempty(tx) || write(
-            joinpath(dir, "events_tx.csv"),
-            join(["SimTime,Batch,Event"; tx], "\n") * "\n",
-        )
-        isempty(components) || write(
-            joinpath(dir, "component_events.csv"),
-            join(["SimTime,Component,Event"; components], "\n") * "\n",
-        )
-        return dir
-    end
-    gap = [
-        "2035-01-01T02:00:00.0,SCHEDULED,gap_start",
-        "2035-01-01T03:00:00.0,SCHEDULED,gap_end",
-    ]
-    restart = ["2035-01-01T04:00:00.0,emitter,restart"]
-    mktempdir() do dir
-        # Producers up to 2.0.1 misplace an external payload after a scheduled
-        # gap or a restart; such runs are refused, others open.
-        @test_throws ArgumentError open_telemetry_run(
-            fake_run(joinpath(dir, "a"); tx = gap),
-        )
-        @test_throws ArgumentError open_telemetry_run(
-            fake_run(joinpath(dir, "b"); components = restart),
-        )
-        @test_throws ArgumentError open_telemetry_run(
-            fake_run(joinpath(dir, "c"); version = "unknown", tx = gap),
-        )
-        @test open_telemetry_run(
-            fake_run(joinpath(dir, "d"); version = "2.1.1", tx = gap),
-        ) isa AbstractTelemetryRun
-        @test open_telemetry_run(
-            fake_run(joinpath(dir, "e"); source = "synthetic", tx = gap),
-        ) isa AbstractTelemetryRun
-        @test open_telemetry_run(
-            fake_run(joinpath(dir, "f"); tx = ["2035-01-01T02:00:00.0,RECORDER,gap_start"]),
-        ) isa AbstractTelemetryRun
-        # Payload row 1 must lie at the mission epoch.
-        @test_throws ArgumentError open_telemetry_run(
-            fake_run(joinpath(dir, "g"); downtime = 0.5),
-        )
-        @test_throws ArgumentError open_telemetry_run(
-            fake_run(joinpath(dir, "h"); version = "2.1.1", origin = "2034-12-31T12:00:00"),
-        )
-        # A stamped payload row sets the rows of a batch and must agree with
-        # its content epoch.
-        run_dir = fake_run(joinpath(dir, "i"); version = "2.1.1", origin = string(epoch))
-        batch = joinpath(run_dir, "ground", "LIVE_batch_7")
-        mkpath(batch)
-        write(
-            joinpath(batch, "metadata.json"),
-            """{"segment_count":10,"content_epoch":"2035-01-01T00:50:00","payload_row":601,"batch_id":7}""",
-        )
-        run = open_telemetry_run(run_dir)
-        @test only(list_batches(run)).rows == 601:700
-        write(
-            joinpath(batch, "metadata.json"),
-            """{"segment_count":10,"content_epoch":"2035-01-01T00:50:00","payload_row":501,"batch_id":7}""",
-        )
-        @test_throws ArgumentError list_batches(run)
     end
 end

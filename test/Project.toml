@@ -2,12 +2,10 @@
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-CurvatureDistinguishability = "023135ff-521e-423d-a4c9-75a9bc432dee"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
-FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
@@ -25,7 +23,6 @@ Yao = "5872b779-8223-5990-8dd0-5abbb0748c8c"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
-CurvatureDistinguishability = {rev = "bf82733675f386698bd5966b65e24e8868e1c0be", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
 DeepSpaceTelemetry = {rev = "7af7e4647ace73e2932397cbba33a299249e2495", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
 MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "3bfa6126bc50edc7d8f4457874991b175bbb34d0"}
 MilliHertzQML = {path = ".."}

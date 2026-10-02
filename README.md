@@ -243,14 +243,12 @@ MilliHertzQML.jl/
 │   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert table, figure
 │   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
 ├── test/
-│   ├── Project.toml        # Test environment (package by path, the two producers by git)
+│   ├── Project.toml        # Test environment (package by path, the layers and the producer by git)
 │   ├── activate.jl         # Activates and instantiates this environment
 │   ├── runtests.jl         # Static QA (Aqua, JET, ExplicitImports), unit tests, figures, pipeline smoke test
-│   ├── labeling_tests.jl   # Labelling stage on a synthetic truth stream
-│   ├── telemetry_tests.jl  # Coupling core on an in-memory run
-│   ├── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed through the extension
-│   ├── response_tests.jl   # Constellation response extension: patterns, channel PSD, catalogue, A/E record
-│   └── export_payload_tests.jl         # Payload export stage
+│   ├── circuit_tests.jl    # In-place circuit and adjoint gradient against the tape and finite differences
+│   ├── telemetry_tests.jl  # Classifier as window scorer on an in-memory run, detector of a training run
+│   └── telemetry_integration_tests.jl  # A DeepSpaceTelemetry mission replayed with the detector of a classifier
 ├── bench/
 │   ├── Project.toml        # Benchmark environment (package by path)
 │   ├── activate.jl         # Activates and instantiates this environment
