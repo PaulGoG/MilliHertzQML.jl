@@ -29,6 +29,10 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `[paths] root`, else the nearest directory above it holding a
   `Project.toml`), and every script runs its stage inside the root of its
   configuration.
+- Provenance snapshots list the packages of the pipeline with their
+  revisions under `layers` (`layer_provenance` of StreamingInference.jl):
+  the two layers at their pinned commits and this package with the git
+  state of its tree.
 - The circuit evaluated in place and an adjoint gradient. A
   `CircuitWorkspace` holds the circuit of a model built once, with its
   registers; `predict_probability!` scores a sample on it, bit for bit as
