@@ -34,9 +34,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
   the two layers at their pinned commits and this package with the git
   state of its tree.
 - Channel modes: `[tdi] channels = "A" | "AE"` (MilliHertzBase.jl). A
-  model can be trained on the features of the A and E network, which are
-  as many as those of A, so the circuit is unchanged
-  (`configs/experiments/q8_b6_ae.toml`). The run snapshot records the mode;
+  model can be trained on the combined features of A and E, which are as
+  many as those of A, so the circuit is unchanged
+  (`configs/experiments/q8_b6_ae.toml`; `[preprocessing]
+  channel_combination`, by default the value of every feature farthest
+  towards a signal among the channels). The run snapshot records the mode;
   training refuses a configuration whose mode differs from that of its
   feature table, and inference refuses features of another mode than the
   model was trained on. The streamed replay reads the A channel only.
