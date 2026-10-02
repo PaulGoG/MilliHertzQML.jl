@@ -3,7 +3,8 @@
 MilliHertzQML is a Julia pipeline for the detection of massive black hole
 binary (MBHB) coalescences in LISA telemetry by a variational quantum
 classifier (VQC) with data re-uploading. The circuits are simulated with
-`Yao.jl`; training uses `Zygote.jl` gradients and `Flux.jl` optimisers.
+`Yao.jl` and differentiated by its reversible (adjoint) mode; the
+optimiser comes from `Optimisers.jl`.
 The classification approach follows Isfan et al. [IsfanEtAl2025](@cite).
 
 On the LISA Data Challenge 2a "Sangria" blind year, with decision

@@ -29,8 +29,41 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `[paths] root`, else the nearest directory above it holding a
   `Project.toml`), and every script runs its stage inside the root of its
   configuration.
+- The circuit evaluated in place and an adjoint gradient. A
+  `CircuitWorkspace` holds the circuit of a model built once, with its
+  registers; `predict_probability!` scores a sample on it, bit for bit as
+  `predict_probability` does, and `accumulate_gradient!` differentiates
+  the sample loss by Yao's reversible mode: the circuit is undone gate by
+  gate on the state and on an adjoint register, three passes and two
+  registers whatever the number of parameters. `batch_gradient` and
+  `train_step!` take `method` (`:adjoint`, the default, or `:zygote`) and
+  `workspaces`; `[training] gradient_method` selects it for a run, and
+  `gradient_tasks` gives the number of workspaces a batch needs. For the
+  eight-qubit circuit the gradient costs 0.15 ms per sample on one thread
+  against 8 ms under the Zygote tape, and an epoch of the Sangria training
+  block about three seconds on 16 threads against two to four minutes.
+  The two gradients agree to single-precision rounding; retrained with the
+  adjoint gradient, `q8_b6` and `q8_b6_s001` reproduce their reference
+  runs at all four seeds (same selected epoch, thresholds within 1.2e-7,
+  the same counts on the blind year).
 
 ### Changed
+- The batch gradient defaults to the adjoint method. Its chunk sums are
+  taken by tasks that draw chunks from a shared counter, and serial and
+  threaded evaluation give the same bits; the Zygote tape over the
+  non-mutating forward pass remains as the reference
+  (`gradient_method = "zygote"`), unchanged. `predict_all` scores on one
+  workspace per task. `training_memory_estimate_gib` takes
+  `gradient_method` and counts two statevectors per task for the adjoint
+  method.
+- The optimiser comes from Optimisers.jl and the mini-batches from one
+  random permutation of the training rows per epoch; Flux.jl is no longer
+  a dependency. The permutations and the Adam updates are those of 2.x,
+  and a run under the Zygote reference reproduces its 2.x history bit for
+  bit. `train_step!` takes the state of `Optimisers.setup`.
+- The suite of this package tests the classifier and its coupling to the
+  layers; the tests of the layers run in StreamingInference.jl and
+  MilliHertzBase.jl.
 - **Breaking:** `project_root()` is the pipeline root, no longer the
   directory of the installed package: the root of the current
   `with_pipeline_root` scope, else the environment variable
@@ -94,13 +127,6 @@ versioning follows [Semantic Versioning](https://semver.org/).
   recomputed on their next run (the previous files are kept as `_#k`).
   The input is hashed on every call, reuse included: about 17 s for the
   3 GB Sangria training product.
-
-- The script, test and benchmark environments pin TupleTools.jl to 1.6.0.
-  Its 1.6.1 sorts small tuples through `Base.sort` on Julia ≥ 1.12, which
-  allocates; Yao sorts the qubit locations of every gate block, so a
-  training step took 2.2 times as long and allocated twice as much (an
-  epoch of the eight-qubit model 4.5 instead of 2.1 minutes on 16 threads).
-  Training results are identical.
 
 ### Fixed
 - A feature sidecar records the parameters of an analytic whitening PSD

@@ -12,11 +12,21 @@ A variational quantum classifier with data re-uploading that detects
 massive black hole binary (MBHB) coalescences in LISA-like milliHertz
 telemetry, both in a completed record and streamed through a simulated
 telemetry mission as the data reaches the ground. The circuits are
-simulated with `Yao.jl`; training uses `Zygote.jl` gradients and `Flux.jl`
-optimisers. The classification approach follows Isfan et al., *Class.
+simulated with `Yao.jl` and differentiated by its reversible (adjoint)
+mode; the optimiser comes from `Optimisers.jl`. The classification approach follows Isfan et al., *Class.
 Quantum Grav.* **42** 225001 (2025), DOI
 [10.1088/1361-6382/ae1787](https://doi.org/10.1088/1361-6382/ae1787),
 reimplemented in Julia in place of the original Python and Qiskit code.
+
+The package is the classifier of a set of three.
+[StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl)
+holds what depends neither on the physical domain nor on the method:
+conditioning of a streamed record, the estimator interface, the replay,
+evaluation, configuration and provenance.
+[MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl) holds the
+gravitational-wave layer: LISA noise, waveforms, LDC products, labelling,
+and the coupling to a telemetry producer. `using MilliHertzQML` gives the
+interface of all three.
 
 ## At a glance
 
@@ -108,17 +118,14 @@ Every environment (the root, `scripts/`, `test/`, `bench/`, `docs/`)
 carries an `activate.jl` that activates and instantiates it; the auxiliary
 environments consume the package by path and activate themselves, so the
 entry points below run as written. `Manifest.toml` files are not tracked.
-The script and test environments pin two unregistered packages of mine at
-the commits of their release tags:
+Every environment pins the two layers at a commit. The script environment
+also pins two unregistered packages of mine at the commits of their
+release tags:
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.1.1`, the telemetry producer, and
+`v2.1.1`, the telemetry producer (in the test environment too), and
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
 `v2.0.1`, the constellation response of the simulator. Where git rewrites
 GitHub URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true`.
-The same environments pin TupleTools.jl to 1.6.0: on Julia ≥ 1.12 its 1.6.1
-sorts small tuples through `Base.sort`, which allocates, and Yao sorts the
-qubit locations of every gate block, so training takes twice as long; the
-results are identical.
 
 ## Entry points
 
@@ -149,7 +156,7 @@ from the latest release and at
 |---|---|
 | Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
-| Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, threaded gradients, threshold fitted by a false-alarm criterion |
+| Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
 | LDC products | Native reader, analytic TDI noise PSD, truth-stream labels; validated on Sangria |
 | Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
 | Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
@@ -222,7 +229,8 @@ MilliHertzQML.jl/
 │   ├── MilliHertzQML.jl    # Module: the classifier; re-exports StreamingInference.jl and MilliHertzBase.jl
 │   ├── settings.jl         # Settings of the circuit and its training; training memory estimate
 │   ├── model.jl            # VQC struct, ansatz and feature-map construction
-│   ├── training.jl         # Forward pass, class-weighted BCE loss, threaded batch gradient
+│   ├── circuit.jl          # Circuit built once per task: in-place forward pass, adjoint gradient
+│   ├── training.jl         # Non-mutating forward pass, class-weighted BCE loss, batch gradient (adjoint, or the Zygote reference)
 │   ├── scaler.jl           # Train-fitted feature scaler onto the phase-encoding interval
 │   ├── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
 │   ├── visualization.jl    # Figure interface of the classifier and its studies
@@ -252,7 +260,7 @@ MilliHertzQML.jl/
 ├── bench/
 │   ├── Project.toml        # Benchmark environment (package by path)
 │   ├── activate.jl         # Activates and instantiates this environment
-│   └── benchmarks.jl       # BenchmarkTools performance measurements
+│   └── benchmarks.jl       # Forward pass, batch gradient by both methods, training step, scoring, register size
 ├── docs/
 │   ├── Project.toml        # Documentation environment (package by path)
 │   ├── activate.jl         # Activates and instantiates this environment

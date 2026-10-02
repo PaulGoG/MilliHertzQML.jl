@@ -1028,10 +1028,11 @@ julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001.toml --run-dir <
 ```
 
 Training runs to early stopping in 16 to 50 epochs; an epoch of the
-eight-qubit model takes about two minutes on 16 threads (four to five
-under TupleTools.jl 1.6.1, which the script environment no longer
-resolves), and
-inference over the blind year about a minute. The other configurations are in `configs/experiments/` and
+eight-qubit model takes about three seconds on 16 threads, and inference
+over the blind year about a minute. The runs of this page were trained
+under the Zygote tape, at two to four minutes per epoch; retrained with
+the adjoint gradient, which is now the default, the two configurations
+reproduce them at every seed (see [Training](architecture.md#Training)). The other configurations are in `configs/experiments/` and
 `configs/sangria.toml`; every run on this page was trained with the
 committed `phase_span = 1.0`. The batch gradient is chunked at a fixed
 size and reduced in chunk order, so the thread count does not enter the
