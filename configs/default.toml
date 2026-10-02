@@ -87,6 +87,7 @@ min_fit_episodes = 5       # false-alarm episodes on the calibration block below
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 20      # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
+gradient_method = "adjoint"  # gradient of the training loss; one of: "adjoint" (reverse pass uncomputing the circuit in place) | "zygote" (Zygote tape over the non-mutating circuit, the reference)
 seed = 9999                # RNG seed for the data split and initialisation; non-negative integer
 
 [inference]

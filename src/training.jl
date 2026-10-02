@@ -1,6 +1,6 @@
-# src/training.jl — forward pass of the data re-uploading circuit, the
-# class-weighted binary cross-entropy, and the batch gradient, serial or
-# over the Julia threads.
+# src/training.jl — the non-mutating forward pass of the data re-uploading
+# circuit (the reference of src/circuit.jl), the class-weighted binary
+# cross-entropy, and the batch gradient, serial or over the Julia threads.
 
 """
     dispatch_params!(model::VariationalQuantumClassifier)
@@ -157,18 +157,29 @@ end
 
 """
     batch_gradient(model, X_batch, y_batch; positive_weight = 1,
-                   threaded = Threads.nthreads() > 1, chunk_size = 4)
+                   threaded = Threads.nthreads() > 1, chunk_size = GRADIENT_CHUNK,
+                   method = :adjoint, workspaces = nothing)
         -> (loss, gradient)
 
 Mean weighted binary cross-entropy of the batch and its gradient with
-respect to `model.params`. Serial (`threaded = false`, or a batch that
-fits one chunk): one Zygote tape over [`loss_function`](@ref). Threaded:
-the batch is cut into consecutive chunks of `chunk_size` samples, one
-tape per chunk on the Julia threads (`Threads.@threads`); the chunk
-gradients are stored by chunk index and summed in that order, so the
-result depends on `chunk_size` but neither on the thread count nor on
-the scheduling, and differs from the serial gradient only by the
-rounding of the accumulation order.
+respect to `model.params`. The batch is cut into consecutive chunks of
+`chunk_size` samples; the chunk sums are stored by chunk index and added
+in that order, so the result depends on `chunk_size` but neither on the
+thread count nor on the scheduling.
+
+`method = :adjoint` (default): every chunk runs the circuit in place on its
+own [`CircuitWorkspace`](@ref) and differentiates by uncomputing it
+([`accumulate_gradient!`](@ref)); serial and threaded evaluation give the
+same bits. `workspaces`, when given, supplies at least one workspace per
+chunk (their parameters are reloaded from `model` on entry); otherwise
+they are allocated on the call.
+
+`method = :zygote`: the reference, a Zygote tape over the non-mutating
+[`loss_function`](@ref) — one tape over the whole batch when serial
+(`threaded = false`, or a batch that fits one chunk), one per chunk on the
+Julia threads otherwise, the two differing by the rounding of the
+accumulation order. The adjoint gradient agrees with it to single-precision
+rounding at a small fraction of the cost.
 """
 function batch_gradient(
     model::VariationalQuantumClassifier,
@@ -176,12 +187,25 @@ function batch_gradient(
     y_batch;
     positive_weight::Real = 1,
     threaded::Bool = Threads.nthreads() > 1,
-    chunk_size::Integer = 4,
+    chunk_size::Integer = GRADIENT_CHUNK,
+    method::Symbol = :adjoint,
+    workspaces::Union{Nothing,AbstractVector{<:CircuitWorkspace}} = nothing,
 )
     check_batch(model, X_batch, y_batch)
     chunk_size >= 1 || throw(ArgumentError("chunk_size = $chunk_size; at least 1."))
+    method in (:adjoint, :zygote) ||
+        throw(ArgumentError("method = :$method; expected :adjoint or :zygote."))
     n = size(X_batch, 1)
     n >= 1 || throw(ArgumentError("the batch is empty."))
+    method == :adjoint && return adjoint_batch_gradient(
+        model,
+        X_batch,
+        y_batch,
+        positive_weight,
+        threaded,
+        Int(chunk_size),
+        workspaces,
+    )
     if !threaded || n <= chunk_size
         loss_serial, grads_serial = Zygote.withgradient(model) do m
             loss_function(m, X_batch, y_batch; positive_weight = positive_weight)
@@ -209,13 +233,57 @@ function batch_gradient(
     return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
 end
 
+# Chunk sums of the loss and of the adjoint gradient, one workspace per chunk
+function adjoint_batch_gradient(
+    model,
+    X_batch,
+    y_batch,
+    positive_weight,
+    threaded,
+    chunk_size,
+    workspaces,
+)
+    n = size(X_batch, 1)
+    n_chunks = cld(n, chunk_size)
+    pool =
+        workspaces === nothing ? [CircuitWorkspace(model) for _ in 1:n_chunks] : workspaces
+    length(pool) >= n_chunks || throw(
+        ArgumentError("$(length(pool)) workspaces for $n_chunks chunks of the batch."),
+    )
+    losses = zeros(Float32, n_chunks)
+    gradients = zeros(Float32, length(model.params), n_chunks)
+    chunk_sum!(c) = begin
+        workspace = load_parameters!(pool[c], model.params)
+        gradient = @view(gradients[:, c])
+        for k in ((c-1)*chunk_size+1):min(n, c*chunk_size)
+            losses[c] += accumulate_gradient!(
+                gradient,
+                workspace,
+                @view(X_batch[k, :]),
+                y_batch[k];
+                positive_weight = positive_weight,
+            )
+        end
+    end
+    if threaded && n_chunks > 1
+        Threads.@threads for c in 1:n_chunks
+            chunk_sum!(c)
+        end
+    else
+        foreach(chunk_sum!, 1:n_chunks)
+    end
+    return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
+end
+
 """
     train_step!(model, opt_state, X_batch, y_batch; positive_weight = 1,
-                threaded = Threads.nthreads() > 1) -> loss
+                threaded = Threads.nthreads() > 1, method = :adjoint,
+                workspaces = nothing) -> loss
 
-One optimisation step: the batch gradient ([`batch_gradient`](@ref))
-applied to `model.params` in place through the Flux optimiser state
-`opt_state`. Returns the batch loss before the update.
+One optimisation step: the batch gradient ([`batch_gradient`](@ref), with
+its `method` and `workspaces`) applied to `model.params` in place through
+the Flux optimiser state `opt_state`. Returns the batch loss before the
+update.
 """
 function train_step!(
     model::VariationalQuantumClassifier,
@@ -224,6 +292,8 @@ function train_step!(
     y_batch;
     positive_weight::Real = 1,
     threaded::Bool = Threads.nthreads() > 1,
+    method::Symbol = :adjoint,
+    workspaces::Union{Nothing,AbstractVector{<:CircuitWorkspace}} = nothing,
 )
     val, gradient = batch_gradient(
         model,
@@ -231,6 +301,8 @@ function train_step!(
         y_batch;
         positive_weight = positive_weight,
         threaded = threaded,
+        method = method,
+        workspaces = workspaces,
     )
     Flux.update!(opt_state, model.params, gradient)
     return val

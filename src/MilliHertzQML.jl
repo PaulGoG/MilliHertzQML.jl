@@ -201,13 +201,16 @@ using TOML: TOML
 using TimerOutputs: @timeit
 using Yao:
     Yao,
+    AbstractArrayReg,
     AbstractBlock,
+    ChainBlock,
     H,
     Ry,
     Rz,
     X,
     Z,
     apply,
+    apply!,
     chain,
     control,
     dispatch,
@@ -215,12 +218,16 @@ using Yao:
     expect,
     nparameters,
     put,
+    state,
+    subblocks,
     zero_state
+using Yao.AD: apply_back!
 using Zygote: Zygote
 
 export VariationalQuantumClassifier
 export train_step!, predict_probability, predict, loss_function, accuracy
 export weighted_bce, sample_loss, batch_gradient
+export CircuitWorkspace, load_parameters!, predict_probability!, accumulate_gradient!
 export load_data, load_features, extract_features, feature_names
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model
@@ -287,6 +294,7 @@ export export_telemetry_payload, samples_per_batch, catalog_events
 
 include("settings.jl")
 include("model.jl")
+include("circuit.jl")
 include("training.jl")
 include("scaler.jl")
 include("persistence.jl")
@@ -295,12 +303,14 @@ include("vqc_scorer.jl")
 include("stages/training.jl")
 include("stages/inference.jl")
 
-# Precompilation of the inference path — circuit construction, feature
-# scaling, and the forward pass — which every script and every inference run
-# enters first. The gradient path is left out: its Zygote tape dominates the
-# precompilation time and is compiled once per training run in any case. The
-# feature matrix is a literal, so the workload touches neither the filesystem
-# nor a random stream beyond the seeded parameter initialisation.
+# Precompilation of the paths every script enters: circuit construction,
+# feature scaling, the forward pass (non-mutating and in place) and the
+# adjoint batch gradient. The adjoint kernel is called directly, because
+# `batch_gradient` also holds the Zygote reference path, and a Zygote
+# pullback generated while precompiling fails at run time (a BoundsError in
+# its gradient accumulation); the tape is compiled where it is used. The
+# feature matrix is a literal, so the workload touches neither the
+# filesystem nor a random stream beyond the seeded parameter initialisation.
 @setup_workload begin
     features = Float32[
         0.10 0.90
@@ -312,6 +322,7 @@ include("stages/inference.jl")
         0.75 0.95
         0.40 0.05
     ]
+    labels = [0, 1, 0, 1, 0, 0, 1, 0]
     @compile_workload begin
         model = VariationalQuantumClassifier(2, 1; rng = Xoshiro(0))
         scaler = fit_scaler(features)
@@ -319,6 +330,7 @@ include("stages/inference.jl")
         predict_probability(model, @view(encoded[1, :]))
         predict(model, @view(encoded[1, :]))
         predict_all(model, encoded; threaded = false)
+        adjoint_batch_gradient(model, encoded, labels, 1.5, false, GRADIENT_CHUNK, nothing)
     end
 end
 

@@ -19,7 +19,7 @@ end
 
 Validated `[training]` parameters: inputs, optimiser, chronological blocks,
 class weighting, threshold criterion and fitting block, scaler quantiles and
-phase-encoding span, test-mode caps, threading.
+phase-encoding span, test-mode caps, threading, gradient method.
 """
 function training_settings(config::AbstractDict)
     t = section(config, "training")
@@ -93,28 +93,48 @@ function training_settings(config::AbstractDict)
         test_mode_samples = cfgget(t, "test_mode_samples", 5000; type = Int, min = 1),
         test_mode_epochs = cfgget(t, "test_mode_epochs", 20; type = Int, min = 1),
         threaded = cfgget(t, "threaded", true; type = Bool),
+        gradient_method = cfgget(
+            t,
+            "gradient_method",
+            "adjoint";
+            type = String,
+            choices = ("adjoint", "zygote"),
+        ),
         seed = cfgget(t, "seed", 42; type = Int),
     )
 end
 
 """
-    training_memory_estimate_gib(n_qubits, n_layers, batch_size) -> Float64
+    training_memory_estimate_gib(n_qubits, n_layers, batch_size;
+                                 gradient_method = "adjoint") -> Float64
 
-Pre-flight estimate of the memory of one training step: the statevector of
-``2^{n}`` complex single-precision amplitudes is copied at every gate
-application under the automatic-differentiation tape, ``n_\\mathrm{qubits}
-(2 + 2) + n_\\mathrm{qubits}`` gates per layer (feature map, rotations,
-CNOT ring), for every sample of the batch, plus the same again for the
-adjoint pass.
+Pre-flight estimate of the memory of one training step. A statevector
+holds ``2^{n}`` complex single-precision amplitudes.
+
+- `"adjoint"`: every chunk of [`GRADIENT_CHUNK`](@ref) samples owns a
+  workspace of two registers and copies the state once at a time for the
+  expectation values, three statevectors in all, whatever the depth.
+- `"zygote"`: the statevector is copied at every gate application under
+  the tape, ``n_\\mathrm{qubits} (2 + 2) + n_\\mathrm{qubits}`` gates per
+  layer (feature map, rotations, CNOT ring), for every sample of the batch,
+  plus the same again for the reverse pass.
 """
 function training_memory_estimate_gib(
     n_qubits::Integer,
     n_layers::Integer,
-    batch_size::Integer,
+    batch_size::Integer;
+    gradient_method::AbstractString = "adjoint",
 )
     (n_qubits >= 1 && n_layers >= 1 && batch_size >= 1) ||
         throw(ArgumentError("n_qubits, n_layers, and batch_size must be positive."))
+    gradient_method in ("adjoint", "zygote") || throw(
+        ArgumentError(
+            "gradient_method = \"$gradient_method\"; expected \"adjoint\" or \"zygote\".",
+        ),
+    )
     statevector_bytes = 2.0^n_qubits * 8
+    gradient_method == "adjoint" &&
+        return 3 * cld(batch_size, GRADIENT_CHUNK) * statevector_bytes / 2^30
     gates_per_layer = 5 * n_qubits
     return 2 * batch_size * n_layers * gates_per_layer * statevector_bytes / 2^30
 end

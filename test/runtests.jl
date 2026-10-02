@@ -12,6 +12,7 @@ using StableRNGs
 using Aqua, JET, ExplicitImports
 using MilliHertzQML
 using Yao, Flux, Zygote
+using FiniteDiff: FiniteDiff
 using CairoMakie: CairoMakie
 using DeepSpaceTelemetry: DeepSpaceTelemetry
 using CurvatureDistinguishability: CurvatureDistinguishability
@@ -93,20 +94,25 @@ end
         @test sum(sample_loss(model, X_batch[k, :], y_batch[k]) for k in 1:4) / 4 ≈
               loss_function(model, X_batch, y_batch)
 
-        # Threaded batch gradient: same loss, the gradient of the serial tape
-        # up to accumulation rounding, deterministic across calls
+        # The Zygote reference, threaded: same loss, the gradient of the
+        # serial tape up to accumulation rounding, deterministic across calls
         X_big = rand(rng, Float32, 24, 4)
         y_big = rand(rng, 0:1, 24)
-        l_serial, g_serial =
-            batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = false)
-        l_threads, g_threads =
-            batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = true)
+        tape(m, threaded) = batch_gradient(
+            m,
+            X_big,
+            y_big;
+            positive_weight = 2.0,
+            threaded = threaded,
+            method = :zygote,
+        )
+        l_serial, g_serial = tape(model, false)
+        l_threads, g_threads = tape(model, true)
         @test l_serial ≈ loss_function(model, X_big, y_big; positive_weight = 2.0)
         @test l_threads ≈ l_serial rtol = 1e-5
         @test length(g_threads) == length(model.params)
         @test isapprox(g_threads, g_serial; rtol = 1e-4, atol = 1e-6)
-        @test g_threads ==
-              batch_gradient(model, X_big, y_big; positive_weight = 2.0, threaded = true)[2]
+        @test g_threads == tape(model, true)[2]
         @test g_serial == Zygote.gradient(
             m -> loss_function(m, X_big, y_big; positive_weight = 2.0),
             model,
@@ -121,7 +127,8 @@ end
         # excluded from the comparison.
         m_serial = VariationalQuantumClassifier(4, 2; rng = StableRNG(5))
         m_threads = VariationalQuantumClassifier(4, 2; rng = StableRNG(5))
-        g_ref = batch_gradient(m_serial, X_big, y_big; threaded = false)[2]
+        g_ref =
+            batch_gradient(m_serial, X_big, y_big; threaded = false, method = :zygote)[2]
         @test all(abs.(g_ref[(end-3):end]) .< 1e-6)
         @test count(abs.(g_ref) .> 1e-5) >= 8
         live = abs.(g_ref) .> 1e-5
@@ -131,6 +138,7 @@ end
             X_big,
             y_big;
             threaded = false,
+            method = :zygote,
         )
         train_step!(
             m_threads,
@@ -138,6 +146,7 @@ end
             X_big,
             y_big;
             threaded = true,
+            method = :zygote,
         )
         @test isapprox(
             m_serial.params[live],
@@ -284,6 +293,8 @@ end
         end
     end
 end
+
+include("circuit_tests.jl")
 
 @testset "Noise model (Robson, Cornish & Liu 2019)" begin
     # Structural properties of the sensitivity curve
@@ -1282,11 +1293,6 @@ end
                 Dict{String,Any}("max_memory_gib" => 1.0, "warn_memory_gib" => 2.0),
         ),
     )
-    # One more qubit doubles the statevector and adds a fifth of the gates
-    @test training_memory_estimate_gib(5, 4, 64) ==
-          2.5 * training_memory_estimate_gib(4, 4, 64)
-    @test training_memory_estimate_gib(4, 4, 128) ==
-          2 * training_memory_estimate_gib(4, 4, 64)
     @test record_memory_estimate_gib(2^30 ÷ 8) == 6.0
     @test check_memory(0.1, r16; stage = "test") == 0.1
     @test_logs (:warn, r"warning threshold") match_mode = :any check_memory(

@@ -9,9 +9,11 @@
         -> Vector{Float32}
 
 Classifier probability of every row of the encoded feature matrix `X`
-(samples × features), over the Julia threads when `threaded` (the rows
-are independent, so the result is the same either way); with `progress`,
-a line is printed after every tenth of the rows.
+(samples × features), evaluated in place on one [`CircuitWorkspace`](@ref)
+per task and over the Julia threads when `threaded` (the rows are
+independent, so the result is the same either way, and equal to
+[`predict_probability`](@ref) row by row); with `progress`, a line is
+printed after every tenth of the rows.
 """
 function predict_all(
     model::VariationalQuantumClassifier,
@@ -21,16 +23,21 @@ function predict_all(
 )
     n = size(X, 1)
     probabilities = Vector{Float32}(undef, n)
+    n_tasks = threaded ? clamp(n, 1, Threads.nthreads()) : 1
+    workspaces = [CircuitWorkspace(model) for _ in 1:n_tasks]
     chunk = max(1, cld(n, 10))
     for lo in 1:chunk:n
         hi = min(n, lo + chunk - 1)
-        if threaded
-            Threads.@threads for i in lo:hi
-                probabilities[i] = predict_probability(model, @view(X[i, :]))
+        if n_tasks > 1
+            # Task t scores every n_tasks-th row of the block on its own workspace
+            Threads.@threads for t in 1:n_tasks
+                for i in (lo+t-1):n_tasks:hi
+                    probabilities[i] = predict_probability!(workspaces[t], @view(X[i, :]))
+                end
             end
         else
             for i in lo:hi
-                probabilities[i] = predict_probability(model, @view(X[i, :]))
+                probabilities[i] = predict_probability!(workspaces[1], @view(X[i, :]))
             end
         end
         progress && println("  Progress: $(round(Int, hi / n * 100)) %")
@@ -182,8 +189,9 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    `split.toml`; feature scaler fitted on the training block only;
 5. Adam with exponential learning-rate decay, the positive class weighted
    by the negative-to-positive count ratio under
-   `class_weight = "balanced"`, batch gradients and forward passes over
-   the Julia threads when `threaded` ([`batch_gradient`](@ref)), early
+   `class_weight = "balanced"`, batch gradients by `gradient_method`
+   ([`batch_gradient`](@ref)) and forward passes over the Julia threads
+   when `threaded`, early
    stopping on the validation loss with the `patience` of the
    configuration; the best epoch is kept in
    `gw_model_best.jld2` and copied to `gw_model.jld2`;
@@ -224,7 +232,12 @@ function train_classifier(
         resources = resource_settings(config)
         max_epochs = test_mode ? trn.test_mode_epochs : trn.epochs
         check_memory(
-            training_memory_estimate_gib(mdl.n_qubits, mdl.n_layers, trn.batch_size),
+            training_memory_estimate_gib(
+                mdl.n_qubits,
+                mdl.n_layers,
+                trn.batch_size;
+                gradient_method = trn.gradient_method,
+            ),
             resources;
             stage = "training",
         )
@@ -258,6 +271,7 @@ function train_classifier(
                 "train_labels" => rootrelative(trn.train_labels),
                 "test_mode" => test_mode,
                 "threaded" => trn.threaded,
+                "gradient_method" => trn.gradient_method,
                 "run_id" => run_id,
                 "seed" => trn.seed,
             ),
@@ -357,9 +371,14 @@ function train_classifier(
         epochs_no_improve = 0
         loop_start = time()
         threaded = trn.threaded && Threads.nthreads() > 1
+        method = Symbol(trn.gradient_method)
+        workspaces =
+            method == :adjoint ?
+            [CircuitWorkspace(model) for _ in 1:cld(trn.batch_size, GRADIENT_CHUNK)] :
+            nothing
         @info "training started" batch_size = trn.batch_size max_epochs = max_epochs n_qubits =
-            mdl.n_qubits n_layers = mdl.n_layers threaded = threaded threads =
-            Threads.nthreads()
+            mdl.n_qubits n_layers = mdl.n_layers gradient_method = trn.gradient_method threaded =
+            threaded threads = Threads.nthreads()
 
         for epoch in 1:max_epochs
             current_lr = trn.learning_rate * trn.lr_decay^(epoch - 1)
@@ -374,6 +393,8 @@ function train_classifier(
                     y;
                     positive_weight = positive_weight,
                     threaded = threaded,
+                    method = method,
+                    workspaces = workspaces,
                 )
             end
             avg_train_loss = epoch_train_loss / length(train_loader)
