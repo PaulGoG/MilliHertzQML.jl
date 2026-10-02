@@ -111,9 +111,9 @@ end
 Pre-flight estimate of the memory of one training step. A statevector
 holds ``2^{n}`` complex single-precision amplitudes.
 
-- `"adjoint"`: every chunk of [`GRADIENT_CHUNK`](@ref) samples owns a
-  workspace of two registers and copies the state once at a time for the
-  expectation values, three statevectors in all, whatever the depth.
+- `"adjoint"`: every task owns a workspace of two registers, whatever the
+  depth, and there is at most one task per chunk of
+  [`GRADIENT_CHUNK`](@ref) samples.
 - `"zygote"`: the statevector is copied at every gate application under
   the tape, ``n_\\mathrm{qubits} (2 + 2) + n_\\mathrm{qubits}`` gates per
   layer (feature map, rotations, CNOT ring), for every sample of the batch,
@@ -134,7 +134,7 @@ function training_memory_estimate_gib(
     )
     statevector_bytes = 2.0^n_qubits * 8
     gradient_method == "adjoint" &&
-        return 3 * cld(batch_size, GRADIENT_CHUNK) * statevector_bytes / 2^30
+        return 2 * cld(batch_size, GRADIENT_CHUNK) * statevector_bytes / 2^30
     gates_per_layer = 5 * n_qubits
     return 2 * batch_size * n_layers * gates_per_layer * statevector_bytes / 2^30
 end

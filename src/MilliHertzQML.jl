@@ -190,12 +190,12 @@ using DataFrames: DataFrames, DataFrame
 using Dates: Dates
 using Distributed: Distributed
 using DrWatson: DrWatson
-using Flux: Flux
 using Functors: Functors
 using JLD2: JLD2, jldsave
 using LinearAlgebra: LinearAlgebra
+using Optimisers: Optimisers
 using PrecompileTools: @compile_workload, @setup_workload
-using Random: Random, AbstractRNG, Xoshiro
+using Random: Random, AbstractRNG, Xoshiro, randperm
 using Statistics: quantile
 using TOML: TOML
 using TimerOutputs: @timeit
@@ -218,6 +218,7 @@ using Yao:
     expect,
     nparameters,
     put,
+    setiparams!,
     state,
     subblocks,
     zero_state
@@ -228,6 +229,7 @@ export VariationalQuantumClassifier
 export train_step!, predict_probability, predict, loss_function, accuracy
 export weighted_bce, sample_loss, batch_gradient
 export CircuitWorkspace, load_parameters!, predict_probability!, accumulate_gradient!
+export gradient_tasks
 export load_data, load_features, extract_features, feature_names
 export FeatureScaler, fit_scaler, encode_features
 export save_model, load_model

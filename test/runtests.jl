@@ -10,7 +10,7 @@ using CSV, DataFrames
 using StableRNGs
 using Aqua, JET, ExplicitImports
 using MilliHertzQML
-using Yao, Flux, Zygote
+using Yao, Optimisers, Zygote
 using FiniteDiff: FiniteDiff
 using CairoMakie: CairoMakie
 using DeepSpaceTelemetry: DeepSpaceTelemetry
@@ -68,7 +68,7 @@ end
         X_batch = rand(rng, Float32, 4, 4)
         y_batch = [0, 1, 0, 1]
 
-        opt_state = Flux.setup(Adam(0.1), model.params)
+        opt_state = Optimisers.setup(Optimisers.Adam(0.1), model.params)
         l_init = loss_function(model, X_batch, y_batch)
 
         grads = Zygote.gradient(model) do m
@@ -132,7 +132,7 @@ end
         live = abs.(g_ref) .> 1e-5
         train_step!(
             m_serial,
-            Flux.setup(Adam(0.1), m_serial.params),
+            Optimisers.setup(Optimisers.Adam(0.1), m_serial.params),
             X_big,
             y_big;
             threaded = false,
@@ -140,7 +140,7 @@ end
         )
         train_step!(
             m_threads,
-            Flux.setup(Adam(0.1), m_threads.params),
+            Optimisers.setup(Optimisers.Adam(0.1), m_threads.params),
             X_big,
             y_big;
             threaded = true,
@@ -375,7 +375,7 @@ end
     yw = [1, 0, 1, 0, 0, 0]
     @test loss_function(model, Xw, yw; positive_weight = 1) == loss_function(model, Xw, yw)
     @test loss_function(model, Xw, yw; positive_weight = 3) > loss_function(model, Xw, yw)
-    opt_state = Flux.setup(Adam(0.01), model.params)
+    opt_state = Optimisers.setup(Optimisers.Adam(0.01), model.params)
     @test isfinite(train_step!(model, opt_state, Xw, yw; positive_weight = 2.0))
 end
 

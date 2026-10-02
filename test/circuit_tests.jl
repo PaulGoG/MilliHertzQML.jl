@@ -116,10 +116,13 @@ end
             @test isapprox(g_adjoint, g_differences; rtol = 5e-5)
             # Threads and a caller's workspaces change no bit
             @test gradient(; threaded = true) == (loss_adjoint, g_adjoint)
-            pool = [CircuitWorkspace(model) for _ in 1:6]
+            tasks = gradient_tasks(22; threaded = true)
+            @test tasks == min(Threads.nthreads(), 6)
+            @test gradient_tasks(22; threaded = false) == 1
+            pool = [CircuitWorkspace(model) for _ in 1:tasks]
             @test gradient(; workspaces = pool, threaded = true) ==
                   (loss_adjoint, g_adjoint)
-            @test_throws ArgumentError gradient(; workspaces = pool[1:5])
+            @test_throws ArgumentError gradient(; workspaces = CircuitWorkspace[])
             # The chunk size changes the accumulation order only
             @test isapprox(gradient(; chunk_size = 1)[2], g_adjoint; rtol = 1e-5)
             @test isapprox(gradient(; chunk_size = 22)[2], g_adjoint; rtol = 1e-5)
@@ -142,10 +145,15 @@ end
             batch_gradient(m_tape, features, labels; method = :zygote, threaded = false)[2]
         live = abs.(g_ref) .> 1e-5
         @test count(live) >= 8
-        train_step!(m_adjoint, Flux.setup(Adam(0.1), m_adjoint.params), features, labels)
+        train_step!(
+            m_adjoint,
+            Optimisers.setup(Optimisers.Adam(0.1), m_adjoint.params),
+            features,
+            labels,
+        )
         train_step!(
             m_tape,
-            Flux.setup(Adam(0.1), m_tape.params),
+            Optimisers.setup(Optimisers.Adam(0.1), m_tape.params),
             features,
             labels;
             method = :zygote,
@@ -159,7 +167,7 @@ end
         )
 
         pool = [CircuitWorkspace(m_adjoint) for _ in 1:6]
-        opt_state = Flux.setup(Adam(0.1), m_adjoint.params)
+        opt_state = Optimisers.setup(Optimisers.Adam(0.1), m_adjoint.params)
         loss_initial = loss_function(m_adjoint, features, labels)
         for _ in 1:20
             train_step!(m_adjoint, opt_state, features, labels; workspaces = pool)
@@ -175,8 +183,8 @@ end
         @test_throws ArgumentError training(
             Dict{String,Any}("gradient_method" => "forward"),
         )
-        # Adjoint: three statevectors per chunk of four samples, whatever the depth
-        @test training_memory_estimate_gib(4, 4, 64) == 3 * 16 * 2^4 * 8 / 2^30
+        # Adjoint: two statevectors per chunk of four samples, whatever the depth
+        @test training_memory_estimate_gib(4, 4, 64) == 2 * 16 * 2^4 * 8 / 2^30
         @test training_memory_estimate_gib(5, 9, 64) ==
               2 * training_memory_estimate_gib(4, 4, 64)
         # Tape: one more qubit doubles the statevector and adds a fifth of the gates

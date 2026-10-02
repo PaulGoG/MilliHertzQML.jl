@@ -10,10 +10,11 @@
 
 Classifier probability of every row of the encoded feature matrix `X`
 (samples × features), evaluated in place on one [`CircuitWorkspace`](@ref)
-per task and over the Julia threads when `threaded` (the rows are
-independent, so the result is the same either way, and equal to
-[`predict_probability`](@ref) row by row); with `progress`, a line is
-printed after every tenth of the rows.
+per task and over the Julia threads when `threaded`, the tasks drawing
+blocks of rows from a shared counter (the rows are independent, so the
+result is the same either way, and equal to [`predict_probability`](@ref)
+row by row); with `progress`, a line is printed after every tenth of the
+rows.
 """
 function predict_all(
     model::VariationalQuantumClassifier,
@@ -23,26 +24,39 @@ function predict_all(
 )
     n = size(X, 1)
     probabilities = Vector{Float32}(undef, n)
-    n_tasks = threaded ? clamp(n, 1, Threads.nthreads()) : 1
+    n_tasks = threaded ? clamp(cld(n, SCORING_BLOCK), 1, Threads.nthreads()) : 1
     workspaces = [CircuitWorkspace(model) for _ in 1:n_tasks]
-    chunk = max(1, cld(n, 10))
-    for lo in 1:chunk:n
-        hi = min(n, lo + chunk - 1)
-        if n_tasks > 1
-            # Task t scores every n_tasks-th row of the block on its own workspace
-            Threads.@threads for t in 1:n_tasks
-                for i in (lo+t-1):n_tasks:hi
-                    probabilities[i] = predict_probability!(workspaces[t], @view(X[i, :]))
-                end
-            end
+    tenth = max(1, cld(n, 10))
+    for lo in 1:tenth:n
+        hi = min(n, lo + tenth - 1)
+        next_row = Threads.Atomic{Int}(lo)
+        if n_tasks == 1
+            score_rows!(probabilities, workspaces[1], X, next_row, hi)
         else
-            for i in lo:hi
-                probabilities[i] = predict_probability!(workspaces[1], @view(X[i, :]))
+            @sync for t in 1:n_tasks
+                Threads.@spawn score_rows!(probabilities, workspaces[t], X, next_row, hi)
             end
         end
         progress && println("  Progress: $(round(Int, hi / n * 100)) %")
     end
     return probabilities
+end
+
+"""
+Rows a task of [`predict_all`](@ref) draws at a time from the shared counter.
+"""
+const SCORING_BLOCK = 16
+
+# Scores blocks of rows drawn from the shared counter until row `hi` is passed
+function score_rows!(probabilities, workspace, X, next_row, hi)
+    while true
+        first_row = Threads.atomic_add!(next_row, SCORING_BLOCK)
+        first_row > hi && break
+        for i in first_row:min(hi, first_row+SCORING_BLOCK-1)
+            probabilities[i] = predict_probability!(workspace, @view(X[i, :]))
+        end
+    end
+    return nothing
 end
 
 """
@@ -348,15 +362,11 @@ function train_classifier(
         @info "training block" windows = length(y_train) positive = n_pos positive_weight =
             positive_weight
 
-        # The loader batches along the last dimension (features × samples).
-        train_loader = Flux.DataLoader(
-            (permutedims(X_train), y_train);
-            batchsize = trn.batch_size,
-            shuffle = true,
-        )
+        n_train = length(y_train)
+        n_batches = cld(n_train, trn.batch_size)
 
         model = VariationalQuantumClassifier(mdl.n_qubits, mdl.n_layers)
-        opt_state = Flux.setup(Flux.Adam(trn.learning_rate), model.params)
+        opt_state = Optimisers.setup(Optimisers.Adam(trn.learning_rate), model.params)
         history = (
             epochs = Int[],
             train_loss = Float32[],
@@ -374,30 +384,36 @@ function train_classifier(
         method = Symbol(trn.gradient_method)
         workspaces =
             method == :adjoint ?
-            [CircuitWorkspace(model) for _ in 1:cld(trn.batch_size, GRADIENT_CHUNK)] :
-            nothing
+            [
+                CircuitWorkspace(model) for
+                _ in 1:gradient_tasks(trn.batch_size; threaded = threaded)
+            ] : nothing
         @info "training started" batch_size = trn.batch_size max_epochs = max_epochs n_qubits =
             mdl.n_qubits n_layers = mdl.n_layers gradient_method = trn.gradient_method threaded =
             threaded threads = Threads.nthreads()
 
         for epoch in 1:max_epochs
             current_lr = trn.learning_rate * trn.lr_decay^(epoch - 1)
-            Flux.adjust!(opt_state, current_lr)
+            Optimisers.adjust!(opt_state, current_lr)
 
+            # One random permutation of the training rows per epoch, cut into
+            # consecutive mini-batches; the last one may be short
+            order = randperm(n_train)
             epoch_train_loss = 0.0f0
-            for (Xt, y) in train_loader
+            for b in 1:n_batches
+                rows = @view(order[((b-1)*trn.batch_size+1):min(n_train, b*trn.batch_size)])
                 epoch_train_loss += train_step!(
                     model,
                     opt_state,
-                    Xt',
-                    y;
+                    X_train[rows, :],
+                    y_train[rows];
                     positive_weight = positive_weight,
                     threaded = threaded,
                     method = method,
                     workspaces = workspaces,
                 )
             end
-            avg_train_loss = epoch_train_loss / length(train_loader)
+            avg_train_loss = epoch_train_loss / n_batches
             avg_val_loss, avg_val_acc = epoch_validation(
                 model,
                 X_val,

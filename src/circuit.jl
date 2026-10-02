@@ -10,34 +10,37 @@ the adjoint method, owns one [`CircuitWorkspace`](@ref).
 const GRADIENT_CHUNK = 4
 
 """
-    encoding_block(n_qubits) -> ChainBlock
+    encoding_blocks(n_qubits) -> (encoding, inverse, gates, inverse_gates)
 
-Feature map of one re-uploading layer: ``H`` followed by ``R_z(x_i)`` on
-every qubit ``i``, the angles held in double precision as in
-[`predict_probability`](@ref).
+Feature map of one re-uploading layer and its inverse. `encoding` applies
+``H`` followed by ``R_z(x_i)`` on every qubit ``i``, the angles held in
+double precision as in [`predict_probability`](@ref); `inverse` applies
+``R_z(-x_i)`` followed by ``H``, the qubits in descending order. `gates`
+and `inverse_gates` are the rotation gates of the two blocks in qubit
+order, through which the angles of a sample are set.
 """
-encoding_block(n_qubits::Integer) = chain(
-    n_qubits,
-    reduce(
-        vcat,
-        [[put(n_qubits, i => H), put(n_qubits, i => Rz(0.0))] for i in 1:n_qubits],
-    ),
-)
-
-"""
-    encoding_inverse_block(n_qubits) -> ChainBlock
-
-Inverse of [`encoding_block`](@ref): ``R_z(-x_i)`` followed by ``H``, the
-qubits in descending order, so that its parameters are the negated angles
-in reverse.
-"""
-encoding_inverse_block(n_qubits::Integer) = chain(
-    n_qubits,
-    reduce(
-        vcat,
-        [[put(n_qubits, i => Rz(0.0)), put(n_qubits, i => H)] for i in n_qubits:-1:1],
-    ),
-)
+function encoding_blocks(n_qubits::Integer)
+    gates = [Rz(0.0) for _ in 1:n_qubits]
+    inverse_gates = [Rz(0.0) for _ in 1:n_qubits]
+    encoding = chain(
+        n_qubits,
+        reduce(
+            vcat,
+            [[put(n_qubits, i => H), put(n_qubits, i => gates[i])] for i in 1:n_qubits],
+        ),
+    )
+    inverse = chain(
+        n_qubits,
+        reduce(
+            vcat,
+            [
+                [put(n_qubits, i => inverse_gates[i]), put(n_qubits, i => H)] for
+                i in n_qubits:-1:1
+            ],
+        ),
+    )
+    return encoding, inverse, gates, inverse_gates
+end
 
 """
     CircuitWorkspace(model)
@@ -45,8 +48,9 @@ encoding_inverse_block(n_qubits::Integer) = chain(
 The circuit of `model` built once, with the registers it is evaluated on:
 the encoding block and its inverse, one ansatz block per layer carrying the
 parameters of `model` ([`load_parameters!`](@ref) after they change), the
-state register ``|\\psi\\rangle`` and the adjoint register
-``|\\lambda\\rangle`` of the reverse pass.
+inverses of the parameter-free gates of the ansatz, the state register
+``|\\psi\\rangle`` and the adjoint register ``|\\lambda\\rangle`` of the
+reverse pass.
 
 [`predict_probability!`](@ref) and [`accumulate_gradient!`](@ref) mutate
 the workspace, so every task needs its own; [`predict_all`](@ref) and
@@ -54,32 +58,45 @@ the workspace, so every task needs its own; [`predict_all`](@ref) and
 are those of [`predict_probability`](@ref), whose scores the workspace
 reproduces bit for bit.
 """
-struct CircuitWorkspace{R<:AbstractArrayReg,C<:ChainBlock,O<:AbstractBlock}
+struct CircuitWorkspace{R<:AbstractArrayReg,C<:ChainBlock,G<:AbstractBlock,O<:AbstractBlock}
     n_qubits::Int
     ψ::R
     λ::R
     encoding::C
     encoding_inverse::C
+    encoding_gates::Vector{G}
+    inverse_gates::Vector{G}
     layers::Vector{C}
+    inverses::Vector{Vector{Union{Nothing,AbstractBlock{2}}}}
     observables::Vector{O}
     mean_z::Vector{Float32}
-    angles::Vector{Float64}
     derivatives::Vector{Float32}
 end
 
 function CircuitWorkspace(model::VariationalQuantumClassifier)
     n = model.n_qubits
     ψ = zero_state(ComplexF32, n)
+    encoding, encoding_inverse, gates, inverse_gates = encoding_blocks(n)
+    layers = [build_layer(n) for _ in 1:model.n_layers]
+    # The inverse of every parameter-free gate; the rotations are undone by
+    # the reverse pass itself
+    inverses = [
+        Union{Nothing,AbstractBlock{2}}[
+            nparameters(block) == 0 ? block' : nothing for block in subblocks(layer)
+        ] for layer in layers
+    ]
     workspace = CircuitWorkspace(
         n,
         ψ,
         copy(ψ),
-        encoding_block(n),
-        encoding_inverse_block(n),
-        [build_layer(n) for _ in 1:model.n_layers],
+        encoding,
+        encoding_inverse,
+        gates,
+        inverse_gates,
+        layers,
+        inverses,
         [put(n, i => Z) for i in 1:n],
         mean_z_diagonal(n),
-        zeros(Float64, n),
         sizehint!(Float32[], length(model.params)),
     )
     return load_parameters!(workspace, model.params)
@@ -128,9 +145,8 @@ function prepare_state!(workspace::CircuitWorkspace, x)
         ),
     )
     for i in 1:n
-        workspace.angles[i] = Float64(x[i])
+        setiparams!(workspace.encoding_gates[i], Float64(x[i]))
     end
-    dispatch!(workspace.encoding, workspace.angles)
     amplitudes = state(workspace.ψ)
     fill!(amplitudes, 0)
     amplitudes[1] = 1
@@ -145,12 +161,16 @@ end
     measured_probability(workspace) -> Float32
 
 ``(1 - \\langle \\bar Z \\rangle)/2`` of the state register, accumulated
-qubit by qubit as in [`predict_probability`](@ref).
+qubit by qubit as in [`predict_probability`](@ref). Every
+``\\langle Z_i \\rangle = \\langle \\psi | Z_i \\psi \\rangle`` is formed as
+Yao's `expect` forms it, with the adjoint register in place of a copy of
+the state; the adjoint register is overwritten.
 """
 function measured_probability(workspace::CircuitWorkspace)
     total_z = 0.0f0
     for observable in workspace.observables
-        total_z += real(expect(observable, workspace.ψ))
+        copyto!(workspace.λ, workspace.ψ)
+        total_z += real(workspace.ψ' * apply!(workspace.λ, observable))
     end
     return (1.0f0 - total_z / Float32(workspace.n_qubits)) / 2.0f0
 end
@@ -215,20 +235,21 @@ function accumulate_gradient!(
     dloss_dp = weighted_bce_derivative(p, y; positive_weight = positive_weight)
     state(workspace.λ) .= workspace.mean_z .* state(workspace.ψ)
     for i in 1:n
-        workspace.angles[i] = -Float64(x[n+1-i])
+        setiparams!(workspace.inverse_gates[i], -Float64(x[i]))
     end
-    dispatch!(workspace.encoding_inverse, workspace.angles)
     empty!(workspace.derivatives)
     registers = (workspace.ψ, workspace.λ)
-    for layer in Iterators.reverse(workspace.layers)
-        for block in Iterators.reverse(subblocks(layer))
-            if nparameters(block) == 0
-                inverse = block'
+    for layer_idx in length(workspace.layers):-1:1
+        blocks = subblocks(workspace.layers[layer_idx])
+        inverses = workspace.inverses[layer_idx]
+        for j in length(blocks):-1:1
+            inverse = inverses[j]
+            if inverse === nothing
+                # prepends -Im⟨Gψ|λ⟩/2 of the rotation, then undoes it
+                apply_back!(registers, blocks[j], workspace.derivatives)
+            else
                 apply!(workspace.ψ, inverse)
                 apply!(workspace.λ, inverse)
-            else
-                # prepends -Im⟨Gψ|λ⟩/2 of the rotation, then undoes it
-                apply_back!(registers, block, workspace.derivatives)
             end
         end
         apply!(workspace.ψ, workspace.encoding_inverse)

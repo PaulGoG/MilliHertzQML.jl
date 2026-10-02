@@ -167,12 +167,12 @@ respect to `model.params`. The batch is cut into consecutive chunks of
 in that order, so the result depends on `chunk_size` but neither on the
 thread count nor on the scheduling.
 
-`method = :adjoint` (default): every chunk runs the circuit in place on its
+`method = :adjoint` (default): every task runs the circuit in place on its
 own [`CircuitWorkspace`](@ref) and differentiates by uncomputing it
 ([`accumulate_gradient!`](@ref)); serial and threaded evaluation give the
 same bits. `workspaces`, when given, supplies at least one workspace per
-chunk (their parameters are reloaded from `model` on entry); otherwise
-they are allocated on the call.
+task ([`gradient_tasks`](@ref); their parameters are reloaded from `model`
+on entry); otherwise they are allocated on the call.
 
 `method = :zygote`: the reference, a Zygote tape over the non-mutating
 [`loss_function`](@ref) — one tape over the whole batch when serial
@@ -233,7 +233,23 @@ function batch_gradient(
     return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
 end
 
-# Chunk sums of the loss and of the adjoint gradient, one workspace per chunk
+"""
+    gradient_tasks(n_samples; threaded = Threads.nthreads() > 1,
+                   chunk_size = GRADIENT_CHUNK) -> Int
+
+Tasks of an adjoint batch gradient over `n_samples` samples, each of which
+needs a [`CircuitWorkspace`](@ref): one per Julia thread, at most one per
+chunk, and one when not `threaded`.
+"""
+gradient_tasks(
+    n_samples::Integer;
+    threaded::Bool = Threads.nthreads() > 1,
+    chunk_size::Integer = GRADIENT_CHUNK,
+) = threaded ? min(Threads.nthreads(), cld(n_samples, chunk_size)) : 1
+
+# Chunk sums of the loss and of the adjoint gradient. The tasks draw chunks
+# from a shared counter, so a slower core takes fewer of them; the sums are
+# stored by chunk index, whichever task computes them.
 function adjoint_batch_gradient(
     model,
     X_batch,
@@ -245,15 +261,63 @@ function adjoint_batch_gradient(
 )
     n = size(X_batch, 1)
     n_chunks = cld(n, chunk_size)
+    n_tasks = gradient_tasks(n; threaded = threaded, chunk_size = chunk_size)
     pool =
-        workspaces === nothing ? [CircuitWorkspace(model) for _ in 1:n_chunks] : workspaces
-    length(pool) >= n_chunks || throw(
-        ArgumentError("$(length(pool)) workspaces for $n_chunks chunks of the batch."),
+        workspaces === nothing ? [CircuitWorkspace(model) for _ in 1:n_tasks] : workspaces
+    length(pool) >= n_tasks || throw(
+        ArgumentError(
+            "$(length(pool)) workspaces for $n_tasks tasks of the batch gradient.",
+        ),
     )
     losses = zeros(Float32, n_chunks)
     gradients = zeros(Float32, length(model.params), n_chunks)
-    chunk_sum!(c) = begin
-        workspace = load_parameters!(pool[c], model.params)
+    next_chunk = Threads.Atomic{Int}(1)
+    if n_tasks == 1
+        chunk_sums!(
+            losses,
+            gradients,
+            pool[1],
+            next_chunk,
+            model.params,
+            X_batch,
+            y_batch,
+            positive_weight,
+            chunk_size,
+        )
+    else
+        @sync for t in 1:n_tasks
+            Threads.@spawn chunk_sums!(
+                losses,
+                gradients,
+                pool[t],
+                next_chunk,
+                model.params,
+                X_batch,
+                y_batch,
+                positive_weight,
+                chunk_size,
+            )
+        end
+    end
+    return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
+end
+
+function chunk_sums!(
+    losses,
+    gradients,
+    workspace,
+    next_chunk,
+    params,
+    X_batch,
+    y_batch,
+    positive_weight,
+    chunk_size,
+)
+    n = size(X_batch, 1)
+    load_parameters!(workspace, params)
+    while true
+        c = Threads.atomic_add!(next_chunk, 1)
+        c > length(losses) && break
         gradient = @view(gradients[:, c])
         for k in ((c-1)*chunk_size+1):min(n, c*chunk_size)
             losses[c] += accumulate_gradient!(
@@ -265,14 +329,7 @@ function adjoint_batch_gradient(
             )
         end
     end
-    if threaded && n_chunks > 1
-        Threads.@threads for c in 1:n_chunks
-            chunk_sum!(c)
-        end
-    else
-        foreach(chunk_sum!, 1:n_chunks)
-    end
-    return sum(losses) / Float32(n), vec(sum(gradients; dims = 2)) ./ Float32(n)
+    return nothing
 end
 
 """
@@ -282,7 +339,7 @@ end
 
 One optimisation step: the batch gradient ([`batch_gradient`](@ref), with
 its `method` and `workspaces`) applied to `model.params` in place through
-the Flux optimiser state `opt_state`. Returns the batch loss before the
+the Optimisers.jl state `opt_state`. Returns the batch loss before the
 update.
 """
 function train_step!(
@@ -304,6 +361,6 @@ function train_step!(
         method = method,
         workspaces = workspaces,
     )
-    Flux.update!(opt_state, model.params, gradient)
+    Optimisers.update!(opt_state, model.params, gradient)
     return val
 end
