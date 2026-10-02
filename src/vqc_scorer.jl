@@ -10,7 +10,10 @@ The [`StreamingDetector`](@ref) of a training run: model and scaler from
 the artifact, the fitted threshold from `threshold.toml`, and the
 conditioning — window geometry, whitening PSD, analysis bands, record
 high-pass, feature set — from the sidecar of the feature table the run was
-trained on (recorded in its `config.toml` snapshot).
+trained on (recorded in its `config.toml` snapshot). For a model trained
+on several channels the detector carries one whitening PSD per channel and
+the combination of their features, and scores the runs that deliver those
+channels ([`ScheduledRecordRun`](@ref)).
 
 `psd_sidecar`, when given, supplies the whitening PSD from a different
 feature sidecar while everything else still comes from the training one.
@@ -65,6 +68,14 @@ function detector_from_run(
     if !isempty(psd_sidecar)
         isfile(psd_sidecar) ||
             throw(ArgumentError("whitening sidecar not found: $psd_sidecar"))
+        trained = recorded_channels(features_path)
+        supplied = recorded_channels(replace(psd_sidecar, r"\.toml$" => ".csv"))
+        trained == supplied || throw(
+            ArgumentError(
+                "the whitening sidecar $psd_sidecar describes the channels $supplied; " *
+                "the model was trained on $trained.",
+            ),
+        )
         @info "whitening with a sidecar other than the training run's" psd_sidecar =
             psd_sidecar training_sidecar = sidecar_path
     end
@@ -82,6 +93,9 @@ function detector_from_run(
         high_band = (Float64(high[1]), Float64(high[2])),
         band_edges = Float64.(edges),
         feature_set = Symbol(cfgget(features, "feature_set", "whitened"; type = String)),
+        combination = Symbol(
+            cfgget(features, "channel_combination", "mean"; type = String),
+        ),
         context_windows = context_windows,
     )
 end
@@ -90,7 +104,8 @@ end
     VQCScorer(model, scaler, features)
 
 The classifier as an [`AbstractWindowScorer`](@ref): the features of a
-conditioned window under the [`FeatureMap`](@ref) `features`, encoded with
+conditioned window — a vector, or a matrix of several channels — under the
+[`FeatureMap`](@ref) `features`, encoded with
 the train-fitted `scaler` ([`encode_features`](@ref)) and scored as the
 probability of the MBHB class ([`predict_probability`](@ref)).
 """
@@ -100,7 +115,12 @@ struct VQCScorer <: AbstractWindowScorer
     features::FeatureMap
 end
 
-function window_score(scorer::VQCScorer, window::AbstractVector{<:Real}, sample_rate::Real)
+window_score(scorer::VQCScorer, window::AbstractVector{<:Real}, sample_rate::Real) =
+    classifier_score(scorer, window, sample_rate)
+window_score(scorer::VQCScorer, window::AbstractMatrix{<:Real}, sample_rate::Real) =
+    classifier_score(scorer, window, sample_rate)
+
+function classifier_score(scorer::VQCScorer, window, sample_rate)
     features = extract_features(scorer.features, window, sample_rate)
     encoded = encode_features(scorer.scaler, reshape(collect(Float32.(features)), 1, :))
     return predict_probability(scorer.model, vec(encoded))
@@ -113,11 +133,13 @@ score_label(::VQCScorer) = "MBHB probability"
                       psd = nothing, highpass_cutoff_hz = 5e-4, highpass_order = 8,
                       low_band = (1e-3, 5e-3), high_band = (5e-3, 1e-1),
                       band_edges = [1e-3, 5e-3, 1e-1], feature_set = :whitened,
-                      context_windows = 4)
+                      combination = :mean, context_windows = 4)
 
 The detector of a trained classifier: a [`VQCScorer`](@ref) of `model`,
 `scaler` and the feature map of the band keywords, under the conditioning
-keywords of the generic constructor.
+keywords of the generic constructor. For a model trained on several
+channels `psd` holds one whitening PSD per channel and `combination` says
+how their features are combined.
 """
 function StreamingDetector(
     model::VariationalQuantumClassifier,
@@ -127,6 +149,7 @@ function StreamingDetector(
     high_band::Tuple{Real,Real} = (5e-3, 1e-1),
     band_edges::AbstractVector{<:Real} = [1e-3, 5e-3, 1e-1],
     feature_set::Symbol = :whitened,
+    combination::Symbol = :mean,
     conditioning...,
 )
     features = FeatureMap(;
@@ -134,6 +157,7 @@ function StreamingDetector(
         low_band = low_band,
         high_band = high_band,
         band_edges = band_edges,
+        combination = combination,
     )
     return StreamingDetector(VQCScorer(model, scaler, features), threshold; conditioning...)
 end

@@ -556,10 +556,15 @@ end
                     "window_size" => 1000,
                     "step_size" => 100,
                     "sample_rate" => 0.2,
+                    "psd" => "none",
+                    "feature_set" => "whitened",
                 ),
             )
-            channels === nothing ||
-                (sidecar["product"] = Dict{String,Any}("channels" => channels))
+            if channels !== nothing
+                sidecar["product"] = Dict{String,Any}("channels" => channels)
+                sidecar["features"]["channels"] = channels
+                channels == "A" || (sidecar["features"]["channel_combination"] = "max")
+            end
             open(io -> TOML.print(io, sidecar), joinpath(dir, stem * "_features.toml"), "w")
             return path
         end
@@ -613,10 +618,52 @@ end
             run_id = "pair",
             features = legacy,
         )
+
+        # The detector of the run: the combination of its features, no
+        # whitening for this product, and a replay of two delivered channels
+        detector = detector_from_run(run.model_path; context_windows = 2)
+        @test detector.scorer.features.combination == :max
+        @test detector.psd === nothing
+        @test_throws ArgumentError detector_from_run(
+            run.model_path;
+            psd_sidecar = replace(single, r"\.csv$" => ".toml"),
+        )
+        fs = 0.2
+        geometry = RunGeometry(fs, 50.0, 10, Dates.DateTime(2035, 1, 1))
+        payload = randn(rng, Float32, 3000, 2)
+        arrivals = [
+            ArrivalEvent(
+                geometry.start_sim_time + Dates.Minute(10 * k),
+                "LIVE_batch_$k",
+                :ingested,
+                1,
+            ) for k in 1:30
+        ]
+        windows = replay_run(MemoryTelemetryRun(geometry, payload, arrivals), detector)
+        @test nrow(windows) == 21 && all(0 .<= windows.score .<= 1)
+        # A window against a direct evaluation on its conditioning stretch
+        w = windows[11, :]
+        lo, hi = max(1, w.row_start - 2000), min(3000, w.row_end + 2000)
+        stretch = payload[lo:hi, :]
+        offset = w.row_start - lo + 1
+        @test w.score == score_window(detector, stretch, offset)
+        conditioned = condition_window(detector, stretch, offset)
+        @test size(conditioned) == (1000, 2)
+        features = extract_features(conditioned, fs; combination = :max)
+        model, _, scaler = load_model(run.model_path)
+        @test w.score == predict_probability(
+            model,
+            vec(encode_features(scaler, reshape(collect(Float32.(features)), 1, :))),
+        )
+        # The delivery of a single-channel run applied to the two-channel record
+        mission = MemoryTelemetryRun(geometry, payload[:, 1], arrivals)
+        @test replay_run(ScheduledRecordRun(mission, payload), detector).score ==
+              windows.score
     end
-    # The replay of a detector reads the A channel only
     @test tdi_settings(Dict{String,Any}()).channels == "A"
     @test channel_suffix("AE") == "_ae"
+    events = DataFrame(signal_start_index = [5], signal_start_index_ae = [3])
+    @test mode_events(events, "AE").signal_start_index == [3]
 end
 
 include("telemetry_tests.jl")

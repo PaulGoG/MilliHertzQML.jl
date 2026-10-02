@@ -7,9 +7,9 @@ MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 
 [sources]
-MilliHertzBase = {rev = "833e2ef98eeeaabcf69fcbde409d78005f25a4e2", url = "https://github.com/PaulGoG/MilliHertzBase.jl.git"}
+MilliHertzBase = {rev = "670c3156a4b96a5c7992216efe6d3f84b3307a24", url = "https://github.com/PaulGoG/MilliHertzBase.jl.git"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {rev = "053ba2d19615149bba013acfd86276c41bbaf481", url = "https://github.com/PaulGoG/StreamingInference.jl.git"}
+StreamingInference = {rev = "793a07c0c79d5a9397b504db54370ef17eab5b89", url = "https://github.com/PaulGoG/StreamingInference.jl.git"}
 
 [compat]
 Documenter = "1"

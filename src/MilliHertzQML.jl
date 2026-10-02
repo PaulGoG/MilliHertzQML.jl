@@ -102,6 +102,7 @@ using StreamingInference:
     save_animation,
     save_figure,
     scale_to_snr,
+    ScheduledRecordRun,
     score_bounds,
     score_window,
     scored_at,
@@ -141,6 +142,7 @@ using MilliHertzBase:
     channel_count,
     channel_names,
     channel_noise_psd,
+    channel_record,
     channel_suffix,
     confusion_psd,
     detectable_span,
@@ -161,6 +163,7 @@ using MilliHertzBase:
     ldc_tdi_psd,
     lisa_noise_psd,
     lisa_response,
+    mode_events,
     open_telemetry_run,
     phenoma_amplitude,
     phenoma_arrival_delay,
@@ -260,6 +263,7 @@ export analysis_band, pipeline_paths, feature_geometry
 export generation_settings, preprocessing_settings, model_settings, training_settings
 export inference_settings, ldc_settings, resource_settings, telemetry_settings
 export tdi_settings, channel_names, channel_suffix, CHANNEL_MODES, network_periodogram
+export ScheduledRecordRun, channel_record, mode_events
 export TIMER,
     report_timing,
     new_run_id,

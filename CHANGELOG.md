@@ -38,10 +38,17 @@ versioning follows [Semantic Versioning](https://semver.org/).
   many as those of A, so the circuit is unchanged
   (`configs/experiments/q8_b6_ae.toml`; `[preprocessing]
   channel_combination`, by default the value of every feature farthest
-  towards a signal among the channels). The run snapshot records the mode;
+  towards a signal among the channels). In a streamed replay such a model
+  is served the channels of every delivered batch from the TDI record the
+  payload of the mission was exported from (`scripts/infer_telemetry.jl
+  --tdi-file`; `ScheduledRecordRun`, `channel_record`), each channel is
+  whitened by its own causal PSD estimate, and alerts are credited from the
+  onset of the A and E network (`mode_events`). The replay snapshot records
+  `channels` and `link_volume_channels = 1`: the mission carried one
+  channel. The run snapshot records the mode;
   training refuses a configuration whose mode differs from that of its
   feature table, and inference refuses features of another mode than the
-  model was trained on. The streamed replay reads the A channel only.
+  model was trained on.
 - The circuit evaluated in place and an adjoint gradient. A
   `CircuitWorkspace` holds the circuit of a model built once, with its
   registers; `predict_probability!` scores a sample on it, bit for bit as

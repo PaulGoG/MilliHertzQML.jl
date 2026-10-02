@@ -1,7 +1,10 @@
 # scripts/infer_telemetry.jl — dispatcher of the telemetry coupling: replay
 # (or follow live) a DeepSpaceTelemetry run directory with a trained
 # classifier, write the scored-window table and the alert-latency table,
-# and draw the alert figure. The consumer only reads the run directory.
+# and draw the alert figure. The consumer only reads the run directory. A
+# model trained on several channels is served the channels of every
+# delivered batch from the TDI record the mission's payload was exported
+# from (--tdi-file).
 
 include(joinpath(@__DIR__, "common.jl"))
 
@@ -31,6 +34,12 @@ function parse_commandline()
         default = ""
         "--events"
         help = "Event table CSV (merger_time_s, label spans and signal onsets) for the alert-latency table"
+        default = nothing
+        "--tdi-file"
+        help = "TDI record (HDF5) the payload of the mission was exported from; required for a model trained on several channels"
+        default = nothing
+        "--tdi-group"
+        help = "TDI group of --tdi-file (default: [preprocessing] tdi_group)"
         default = nothing
         "--live"
         help = "Follow the arrival feed until the run ends instead of replaying it"
@@ -103,6 +112,30 @@ function main()
         context_windows = settings.context_windows,
         psd_sidecar = psd_sidecar,
     )
+    # A model of several channels: the mission delivers the A channel, and
+    # the channels of every delivered batch come from the record itself
+    channels = MilliHertzQML.run_channels(dirname(resolvepath(args["model"])))
+    tdi_file = ""
+    if channels != "A"
+        args["tdi-file"] === nothing && throw(
+            ArgumentError(
+                "the model was trained on the channels $channels; pass --tdi-file, the " *
+                "record the payload of the mission was exported from.",
+            ),
+        )
+        tdi_file = resolvepath(args["tdi-file"])
+        record, record_rate = channel_record(
+            tdi_file;
+            group = override(args["tdi-group"], preprocessing_settings(config).tdi_group),
+            channels = channels,
+        )
+        isapprox(record_rate, geometry.sample_rate; rtol = 1e-9) || throw(
+            ArgumentError(
+                "$tdi_file samples at $record_rate Hz, the mission at $(geometry.sample_rate) Hz.",
+            ),
+        )
+        run = ScheduledRecordRun(run, record)
+    end
     trailing = nothing
     if settings.psd_mode == "trailing"
         rows_per_day = 86400 * geometry.sample_rate
@@ -165,7 +198,11 @@ function main()
     latencies = nothing
     spans = nothing
     if !isempty(events_path)
-        events = MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame)
+        # Alerts are credited from the onset of the channels the detector reads
+        events = mode_events(
+            MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame),
+            channels,
+        )
         latencies = alert_latency_table(
             windows,
             events,
@@ -196,6 +233,11 @@ function main()
                 "run_state" => String(run_state(run)),
                 "mode" => live ? "live" : "replay",
                 "model" => rootrelative(resolvepath(args["model"])),
+                "channels" => channels,
+                # The producer carries one payload column: the link of the
+                # mission was sized for one channel, whatever the detector reads
+                "link_volume_channels" => 1,
+                "tdi_file" => isempty(tdi_file) ? "" : provenance_path(tdi_file),
                 "threshold" => Float64(detector.threshold),
                 "min_coverage" => settings.min_coverage,
                 "tdi_gap_dilation_sec" => settings.tdi_gap_dilation_sec,
