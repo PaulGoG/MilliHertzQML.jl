@@ -232,9 +232,10 @@ MilliHertzQML.jl/
 │   ├── circuit.jl          # Circuit built once per task: in-place forward pass, adjoint gradient
 │   ├── training.jl         # Non-mutating forward pass, class-weighted BCE loss, batch gradient (adjoint, or the Zygote reference)
 │   ├── scaler.jl           # Train-fitted feature scaler onto the phase-encoding interval
+│   ├── controls.jl         # Classical controls of the circuit on the same features: logistic regression, one-hidden-layer network
 │   ├── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
 │   ├── visualization.jl    # Figure interface of the classifier and its studies
-│   ├── vqc_scorer.jl       # The classifier as a window scorer; the detector of a training run
+│   ├── vqc_scorer.jl       # The classifier (circuit or control) as a window scorer; the detector of a training run
 │   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier
 ├── ext/
 │   └── MilliHertzQMLCairoMakieExt.jl        # Training history and the classifier studies
@@ -270,7 +271,7 @@ MilliHertzQML.jl/
 │   ├── default.toml        # Pipeline defaults (simulator)
 │   ├── sangria.toml        # Sangria four-qubit baseline: Welch-whitened two-band features, truth-stream labels
 │   ├── sangria_paper.toml  # Sangria parity run with the raw-window features of Isfan et al. (2025)
-│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, whitening variant, and channel mode
+│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, whitening variant, channel mode, and classical control
 ├── data/
 │   ├── inputs/             # Telemetry records, feature and label CSVs (not tracked)
 │   └── outputs/            # Per-run figures and results (not tracked)
