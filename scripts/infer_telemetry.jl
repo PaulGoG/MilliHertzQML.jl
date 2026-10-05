@@ -4,7 +4,8 @@
 # and draw the alert figure. The consumer only reads the run directory. A
 # model trained on several channels is served the channels of every
 # delivered batch from the TDI record the mission's payload was exported
-# from (--tdi-file).
+# from (--tdi-file, and --tdi-first-row when the payload starts later in the
+# record).
 
 include(joinpath(@__DIR__, "common.jl"))
 
@@ -41,6 +42,14 @@ function parse_commandline()
         "--tdi-group"
         help = "TDI group of --tdi-file (default: [preprocessing] tdi_group)"
         default = nothing
+        "--link-volume-channels"
+        help = "Number of channels the production rate of the mission was scaled for (recorded in the snapshot)"
+        arg_type = Int
+        default = 1
+        "--tdi-first-row"
+        help = "Row of --tdi-file that the first payload row of the mission holds (a mission over a later stretch of the record)"
+        arg_type = Int
+        default = 1
         "--live"
         help = "Follow the arrival feed until the run ends instead of replaying it"
         action = :store_true
@@ -88,6 +97,8 @@ function main()
         throw(ArgumentError("no run directory: pass --run-dir or set [telemetry] run_dir."))
     run_dir = resolvepath(run_dir)
     run_id = isempty(args["run-id"]) ? new_run_id() : args["run-id"]
+    args["link-volume-channels"] >= 1 ||
+        throw(ArgumentError("--link-volume-channels must be at least 1."))
     results_dir = joinpath(paths.results, "run_$run_id")
     plot_dir = joinpath(paths.plots, "run_$run_id")
     startswith(abspath(results_dir), abspath(run_dir)) &&
@@ -134,6 +145,13 @@ function main()
                 "$tdi_file samples at $record_rate Hz, the mission at $(geometry.sample_rate) Hz.",
             ),
         )
+        first_row = args["tdi-first-row"]
+        1 <= first_row <= size(record, 1) || throw(
+            ArgumentError(
+                "--tdi-first-row = $first_row; the record holds $(size(record, 1)) rows.",
+            ),
+        )
+        first_row > 1 && (record = record[first_row:end, :])
         run = ScheduledRecordRun(run, record)
     end
     trailing = nothing
@@ -234,10 +252,12 @@ function main()
                 "mode" => live ? "live" : "replay",
                 "model" => rootrelative(resolvepath(args["model"])),
                 "channels" => channels,
-                # The producer carries one payload column: the link of the
-                # mission was sized for one channel, whatever the detector reads
-                "link_volume_channels" => 1,
+                # The producer carries one payload column, whatever the
+                # detector reads; the volume its link was sized for is stated
+                # by the caller
+                "link_volume_channels" => args["link-volume-channels"],
                 "tdi_file" => isempty(tdi_file) ? "" : provenance_path(tdi_file),
+                "tdi_first_row" => args["tdi-first-row"],
                 "threshold" => Float64(detector.threshold),
                 "min_coverage" => settings.min_coverage,
                 "tdi_gap_dilation_sec" => settings.tdi_gap_dilation_sec,

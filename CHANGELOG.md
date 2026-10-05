@@ -43,9 +43,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   payload of the mission was exported from (`scripts/infer_telemetry.jl
   --tdi-file`; `ScheduledRecordRun`, `channel_record`), each channel is
   whitened by its own causal PSD estimate, and alerts are credited from the
-  onset of the A and E network (`mode_events`). The replay snapshot records
-  `channels` and `link_volume_channels = 1`: the mission carried one
-  channel. The run snapshot records the mode;
+  onset of the A and E network (`mode_events`). `--tdi-first-row` names
+  the row of the record that the first payload row of the mission holds,
+  for a mission over a later stretch of the record. The replay snapshot
+  records `channels` and `link_volume_channels`, the number of channels the
+  production rate of the mission was scaled for (`--link-volume-channels`,
+  1 by default: the mission carried one channel). The run snapshot records
+  the mode;
   training refuses a configuration whose mode differs from that of its
   feature table, and inference refuses features of another mode than the
   model was trained on.
