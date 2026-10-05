@@ -125,6 +125,7 @@ using StreamingInference:
     welch_psd,
     whiten_record,
     window_features,
+    window_indices,
     window_labels,
     window_rows,
     WindowRecord,
@@ -302,6 +303,7 @@ export AbstractClassifier, ClassicalControl, ClassifierScorer, MODEL_KINDS, buil
 export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
 export finalize_replay!, gaps_table, replay_state
 export content_digest, parameter_digest, product_table, scored_at
+export window_indices
 export with_pipeline_root, config_root
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table

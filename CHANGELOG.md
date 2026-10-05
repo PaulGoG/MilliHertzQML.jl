@@ -81,6 +81,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `configs/experiments/q8_b6_s001[_ae]_logistic.toml` and
   `…_perceptron.toml`.
 
+- Records with gaps: the inference stage scores the product of a record
+  with gaps (MilliHertzBase.jl pre-processes it stretch by stretch): the
+  mission time of a row is that of its record window (`window_indices`),
+  and events and false-alarm episodes end at a gap. Training on such a
+  product is refused, since the chronological split and the threshold rule
+  take consecutive rows as consecutive windows.
+
 ### Changed
 - The batch gradient defaults to the adjoint method. Its chunk sums are
   taken by tasks that draw chunks from a shared counter, and serial and

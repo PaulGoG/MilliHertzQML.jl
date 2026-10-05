@@ -7,6 +7,6 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 
 [sources]
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "43fddd264fc4eba40bff53165fc7710862ba274b"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "37b901d65cb24352bd60c2043706f2c1a8d4e321"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "8ab8bfe332669f5c9e036280ad53d83982002c96"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "c5e913ffcc3fc1aa197c07ff0f4df2fbb86e5931"}

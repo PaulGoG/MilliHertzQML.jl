@@ -28,6 +28,19 @@ function inference_geometry(features_path::AbstractString, config::AbstractDict)
 end
 
 """
+    gapped_product(features_path) -> Bool
+
+Whether a feature table is the product of a record with gaps: its sidecar
+lists the stretches between them, and its rows are not consecutive windows
+of the record ([`window_indices`](@ref)).
+"""
+function gapped_product(features_path::AbstractString)
+    sidecar = replace(features_path, r"\.csv$" => ".toml")
+    isfile(sidecar) || return false
+    return haskey(get(TOML.parsefile(sidecar), "features", Dict{String,Any}()), "stretches")
+end
+
+"""
     run_channels(model_dir) -> String
 
 Channel mode of the features a run was trained on, from its `config.toml`
@@ -140,6 +153,12 @@ empty `labels` (or an absent label file) selects blind inference.
 `block = "validation"` or `"test"` restricts the evaluation to one block of
 the training table through the run's `split.toml`.
 
+The features may be the product of a record with gaps
+([`preprocess_record`](@ref)): the mission time of a row is then that of
+its record window, and events and false-alarm episodes end at a gap
+([`event_metrics`](@ref) with the window indices of the sidecar). The
+post-hoc threshold sweep still takes the rows as consecutive.
+
 Artifacts in `<results>/run_<run_id>`: `inference_probabilities.csv`
 (`Window`, `Probability`, `Detection`, and with labels `Label`, `SNR`),
 the snapshot `config_infer.toml` (section `inference`, plus provenance),
@@ -196,6 +215,9 @@ function evaluate_classifier(
             "standalone_" * parameter_digest(Dict("model" => abspath(model_path)))[1:6] :
             String(run_id)
         geometry = inference_geometry(features_path, config)
+        # The record window of every row, where the record has gaps
+        record_windows =
+            gapped_product(features_path) ? window_indices(features_path) : nothing
 
         plot_dir = joinpath(paths.plots, "run_$output_id")
         results_dir = joinpath(paths.results, "run_$output_id")
@@ -258,7 +280,10 @@ function evaluate_classifier(
         # Mission time of a row: its record window index (the table may
         # start after an edge margin) times the step
         days = Float64[
-            (geometry.first_window - 1 + w) * step_duration / 86400 for w in windows
+            (
+                record_windows === nothing ? geometry.first_window - 1 + w :
+                record_windows[w]
+            ) * step_duration / 86400 for w in windows
         ]
 
         # Per-window scores and decisions, the snapshot, and the metrics.
@@ -303,6 +328,7 @@ function evaluate_classifier(
                 y_true;
                 step_size = geometry.step_size,
                 sample_rate = geometry.sample_rate,
+                windows = record_windows === nothing ? nothing : record_windows[windows],
             )
             metrics = merge(
                 metrics_dict(m),

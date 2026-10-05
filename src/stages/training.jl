@@ -261,6 +261,14 @@ function train_classifier(
         run_dir = joinpath(paths.models, "run_$run_id")
         mkpath(run_dir)
         geometry = feature_geometry(trn.train_features, config)
+        # The split and the threshold rule take consecutive rows as
+        # consecutive windows
+        gapped_product(trn.train_features) && throw(
+            ArgumentError(
+                "the feature table $(trn.train_features) is the product of a record " *
+                "with gaps; training on such a product is not supported.",
+            ),
+        )
         # The product is authoritative: a configuration naming another
         # channel mode than its feature table records is refused
         channels = recorded_channels(trn.train_features; default = "A")

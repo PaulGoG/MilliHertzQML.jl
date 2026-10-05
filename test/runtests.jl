@@ -859,6 +859,106 @@ end
     end
 end
 
+@testset "Records with gaps (classifier)" begin
+    mktempdir() do dir
+        rng = StableRNG(23)
+        n = 600
+        labels = zeros(Int, n)
+        labels[250:300] .= 1
+        table = DataFrame(rand(rng, Float32, n, 4), feature_names(:whitened))
+        table.p_low .+= 3.0f0 .* labels
+        function product(stem, stretches)
+            path = joinpath(dir, stem * "_features.csv")
+            CSV.write(path, table)
+            CSV.write(joinpath(dir, stem * "_labels.csv"), DataFrame(Label = labels))
+            features = Dict{String,Any}(
+                "window_size" => 1000,
+                "step_size" => 100,
+                "sample_rate" => 0.2,
+                "psd" => "none",
+                "feature_set" => "whitened",
+                "first_window" => 21,
+                "n_windows" => n,
+            )
+            stretches === nothing || (features["stretches"] = stretches)
+            open(joinpath(dir, stem * "_features.toml"), "w") do io
+                TOML.print(io, Dict{String,Any}("features" => features))
+            end
+            return path
+        end
+        whole = product("whole", nothing)
+        # The same rows as two stretches: the labelled run of rows 250 to 300
+        # straddles the gap between rows 270 and 271
+        gapped = product(
+            "gapped",
+            [
+                Dict(
+                    "first_row" => 1,
+                    "last_row" => 29_900,
+                    "first_window" => 21,
+                    "n_windows" => 270,
+                ),
+                Dict(
+                    "first_row" => 100_001,
+                    "last_row" => 133_900,
+                    "first_window" => 1001,
+                    "n_windows" => 330,
+                ),
+            ],
+        )
+        @test !MilliHertzQML.gapped_product(whole) && MilliHertzQML.gapped_product(gapped)
+        @test window_indices(gapped) == vcat(21:290, 1001:1330)
+        config(features) = Dict{String,Any}(
+            "paths" => Dict{String,Any}(
+                "inputs" => dir,
+                "models" => joinpath(dir, "models"),
+                "plots" => joinpath(dir, "plots"),
+                "results" => joinpath(dir, "results"),
+            ),
+            "model" => Dict{String,Any}(
+                "n_qubits" => 4,
+                "n_layers" => 1,
+                "kind" => "logistic",
+            ),
+            "training" => Dict{String,Any}(
+                "train_features" => features,
+                "train_labels" => replace(features, "_features" => "_labels"),
+                "epochs" => 2,
+                "batch_size" => 32,
+                "threshold_criterion" => "youden",
+            ),
+        )
+        train_classifier(config(whole); run_id = "whole")
+        # Training takes consecutive rows as consecutive windows
+        @test_throws ArgumentError train_classifier(config(gapped); run_id = "gapped")
+        scored(features) = evaluate_classifier(
+            config(whole);
+            run_id = "whole",
+            features = features,
+            labels = replace(features, "_features" => "_labels"),
+        )
+        plain = scored(whole)
+        split = scored(gapped)
+        @test split.probabilities == plain.probabilities
+        # Mission time of a row: that of its record window
+        @test plain.days == collect(21:620) .* 500.0 ./ 86400
+        @test split.days == vcat(21:290, 1001:1330) .* 500.0 ./ 86400
+        # The event ends at the gap, and so do the false-alarm episodes
+        @test plain.metrics["n_events"] == 1 && split.metrics["n_events"] == 2
+        expected = event_metrics(
+            split.decisions,
+            labels;
+            step_size = 100,
+            sample_rate = 0.2,
+            windows = window_indices(gapped),
+        )
+        @test split.metrics["n_false_alarm_episodes"] == expected.n_false_alarm_episodes
+        @test split.metrics["n_detected"] == expected.n_detected
+        @test split.metrics["n_false_alarm_episodes"] >=
+              plain.metrics["n_false_alarm_episodes"]
+    end
+end
+
 include("telemetry_tests.jl")
 include("telemetry_integration_tests.jl")
 
