@@ -4,13 +4,18 @@
 """
     model_settings(config) -> NamedTuple
 
-Validated `[model]` parameters of the classifier.
+Validated `[model]` parameters of the classifier: the register size and
+depth of the circuit, the `kind` of classifier ([`MODEL_KINDS`](@ref)) and
+the `hidden_units` of the `"perceptron"`; `n_qubits` is the feature
+dimension of every kind.
 """
 function model_settings(config::AbstractDict)
     m = section(config, "model")
     return (
         n_qubits = cfgget(m, "n_qubits", 4; type = Int, min = 2, max = 24),
         n_layers = cfgget(m, "n_layers", 4; type = Int, min = 1),
+        kind = cfgget(m, "kind", "circuit"; type = String, choices = MODEL_KINDS),
+        hidden_units = cfgget(m, "hidden_units", 6; type = Int, min = 1),
     )
 end
 

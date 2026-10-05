@@ -668,6 +668,197 @@ end
     @test mode_events(events, "AE").signal_start_index == [3]
 end
 
+@testset "Classical controls" begin
+    σ(z) = 1 / (1 + exp(-z))
+    @test MilliHertzQML.control_parameter_count(8, 0) == 9
+    @test MilliHertzQML.control_parameter_count(8, 6) == 61
+    @test MilliHertzQML.control_parameter_count(8, 9) == 91
+    @test_throws ArgumentError ClassicalControl(0, 0)
+    @test_throws ArgumentError ClassicalControl(2, -1)
+    @test_throws ArgumentError ClassicalControl(2, 0; span = 0)
+    @test_throws DimensionMismatch ClassicalControl(2, 0, π, zeros(Float32, 4))
+    @test ClassicalControl(8, 6; rng = StableRNG(1)) isa AbstractClassifier
+    @test VariationalQuantumClassifier(2, 1; rng = StableRNG(1)) isa AbstractClassifier
+
+    # The models against their formulas in matrix form, on features in [0, π]
+    x = Float32[π/2, π/4]
+    u = Float64.(x) ./ π
+    logistic = ClassicalControl(2, 0, π, Float32[1, -2, 0.5])
+    @test predict_probability(logistic, x) ≈ σ(1 * u[1] - 2 * u[2] + 0.5) atol = 1e-6
+    @test predict_probability(logistic, x) ≈ 0.6224593312018546 atol = 1e-6
+    W₁ = [1.0 2.0; 3.0 4.0]
+    b₁ = [0.1, -0.2]
+    w₂ = [0.5, -1.5]
+    network = ClassicalControl(2, 2, π, Float32.(vcat(vec(W₁), b₁, w₂, 0.3)))
+    @test predict_probability(network, x) ≈ σ(w₂' * tanh.(W₁ * u .+ b₁) + 0.3) atol = 1e-6
+    # The span scales the input: twice the span, half the argument
+    wide = ClassicalControl(2, 0, 2π, Float32[1, -2, 0.5])
+    @test predict_probability(wide, x) ≈ σ(0.5 * (u[1] - 2 * u[2]) + 0.5) atol = 1e-6
+    @test_throws DimensionMismatch predict_probability(logistic, Float32[0.1, 0.2, 0.3])
+
+    rng = StableRNG(2026)
+    X = Float32.(π .* rand(rng, 24, 3))
+    y = Int.(rand(rng, 24) .< 0.4)
+    for hidden in (0, 4)
+        model = ClassicalControl(3, hidden; rng = rng)
+        p = MilliHertzQML.predict_all(model, X)
+        @test p isa Vector{Float32} && length(p) == 24
+        @test p == [predict_probability(model, X[i, :]) for i in 1:24]
+        @test MilliHertzQML.predict_all(model, X; threaded = true) == p
+        @test_throws DimensionMismatch MilliHertzQML.predict_all(model, X[:, 1:2])
+
+        # Mean weighted cross-entropy and its gradient against central
+        # differences of the loss in double precision
+        function mean_loss(θ)
+            trial = ClassicalControl(3, hidden, π, Float32.(θ))
+            q = Float64.(MilliHertzQML.predict_all(trial, X))
+            return -sum(2.5 .* y .* log.(q) .+ (1 .- y) .* log.(1 .- q)) / 24
+        end
+        loss, gradient = batch_gradient(model, X, y; positive_weight = 2.5)
+        @test loss isa Float32 && gradient isa Vector{Float32}
+        @test length(gradient) == length(model.params)
+        @test loss ≈ mean_loss(model.params) rtol = 1e-5
+        reference = FiniteDiff.finite_difference_gradient(
+            mean_loss,
+            Float64.(model.params),
+            Val(:central);
+            absstep = 1e-2,
+        )
+        @test gradient ≈ reference rtol = 2e-2 atol = 2e-3
+        # The keywords of the circuit's step are accepted
+        @test batch_gradient(model, X, y; positive_weight = 2.5, threaded = true)[2] ==
+              gradient
+        @test_throws DimensionMismatch batch_gradient(model, X, y[1:10])
+
+        # A step returns the loss before the update and lowers it afterwards
+        state = Optimisers.setup(Optimisers.Adam(0.05), model.params)
+        before = train_step!(model, state, X, y; positive_weight = 2.5)
+        @test before == loss
+        for _ in 1:50
+            train_step!(model, state, X, y; positive_weight = 2.5)
+        end
+        @test batch_gradient(model, X, y; positive_weight = 2.5)[1] < before
+    end
+
+    # Persistence: the kind is recorded for a control and absent for a circuit
+    mktempdir() do dir
+        scaler = FeatureScaler([0.0, 0.0, -1.0], [3.0, 1.0, 1.0])
+        control = ClassicalControl(3, 4; rng = StableRNG(3))
+        path = save_model(joinpath(dir, "control.jld2"), control; scaler = scaler)
+        loaded, meta, loaded_scaler = load_model(path)
+        @test loaded isa ClassicalControl
+        @test (loaded.n_features, loaded.hidden, loaded.span) == (3, 4, Float32(π))
+        @test loaded.params == control.params && meta isa AbstractDict
+        @test loaded_scaler.lower == scaler.lower && loaded_scaler.upper == scaler.upper
+        circuit = VariationalQuantumClassifier(3, 1; rng = StableRNG(3))
+        circuit_path = save_model(joinpath(dir, "circuit.jld2"), circuit; scaler = scaler)
+        @test !haskey(MilliHertzQML.JLD2.load(circuit_path), "kind")
+        @test load_model(circuit_path)[1] isa VariationalQuantumClassifier
+    end
+
+    # The classifier of the [model] section, drawn from the seeded default stream
+    scaler = FeatureScaler(zeros(4), ones(4); phase_span = π / 2)
+    settings(kind) =
+        model_settings(Dict{String,Any}("model" => Dict{String,Any}("kind" => kind)))
+    @test model_settings(Dict{String,Any}()).kind == "circuit"
+    @test model_settings(Dict{String,Any}()).hidden_units == 6
+    @test MODEL_KINDS == ("circuit", "logistic", "perceptron")
+    @test_throws ArgumentError settings("forest")
+    Random.seed!(11)
+    built = build_classifier(settings("circuit"), scaler)
+    Random.seed!(11)
+    @test built isa VariationalQuantumClassifier &&
+          built.params == VariationalQuantumClassifier(4, 4).params
+    logistic = build_classifier(settings("logistic"), scaler)
+    @test logistic isa ClassicalControl && logistic.hidden == 0
+    @test logistic.n_features == 4 && logistic.span == Float32(π / 2)
+    perceptron = build_classifier(settings("perceptron"), scaler)
+    @test perceptron.hidden == 6 && length(perceptron.params) == 6 * (4 + 2) + 1
+    @test VQCScorer === ClassifierScorer{VariationalQuantumClassifier}
+
+    # Through the stages: training, scoring, and the detector of the run
+    mktempdir() do dir
+        rng = StableRNG(17)
+        n = 600
+        labels = zeros(Int, n)
+        labels[250:300] .= 1
+        table = DataFrame(rand(rng, Float32, n, 4), feature_names(:whitened))
+        table.p_low .+= 3.0f0 .* labels
+        features_path = joinpath(dir, "toy_features.csv")
+        CSV.write(features_path, table)
+        CSV.write(joinpath(dir, "toy_labels.csv"), DataFrame(Label = labels))
+        open(joinpath(dir, "toy_features.toml"), "w") do io
+            TOML.print(
+                io,
+                Dict{String,Any}(
+                    "features" => Dict{String,Any}(
+                        "window_size" => 1000,
+                        "step_size" => 100,
+                        "sample_rate" => 0.2,
+                        "psd" => "none",
+                        "feature_set" => "whitened",
+                    ),
+                ),
+            )
+        end
+        config(kind) = Dict{String,Any}(
+            "paths" => Dict{String,Any}(
+                "inputs" => dir,
+                "models" => joinpath(dir, "models"),
+                "plots" => joinpath(dir, "plots"),
+                "results" => joinpath(dir, "results"),
+            ),
+            "model" => Dict{String,Any}(
+                "n_qubits" => 4,
+                "n_layers" => 1,
+                "kind" => kind,
+                "hidden_units" => 3,
+            ),
+            "training" => Dict{String,Any}(
+                "train_features" => features_path,
+                "train_labels" => joinpath(dir, "toy_labels.csv"),
+                "epochs" => 3,
+                "batch_size" => 32,
+                "threshold_criterion" => "youden",
+            ),
+        )
+        for (kind, hidden) in (("logistic", 0), ("perceptron", 3))
+            run = train_classifier(config(kind); run_id = kind)
+            model, _, scaler = load_model(run.model_path)
+            @test model isa ClassicalControl && model.hidden == hidden
+            @test model.span == scaler.phase_span
+            snapshot = TOML.parsefile(joinpath(run.run_dir, "config.toml"))["model"]
+            @test snapshot["kind"] == kind
+            @test haskey(snapshot, "hidden_units") == (kind == "perceptron")
+            @test length(run.history.epochs) >= 1 && isfinite(run.threshold)
+            scored = evaluate_classifier(
+                config(kind);
+                run_id = kind,
+                features = features_path,
+                labels = joinpath(dir, "toy_labels.csv"),
+            )
+            @test scored.probabilities == MilliHertzQML.predict_all(
+                model,
+                encode_features(scaler, Matrix{Float32}(table)),
+            )
+            # The detector scores a window as the model scores its features
+            detector = detector_from_run(run.model_path; context_windows = 1)
+            @test detector.scorer isa ClassifierScorer{ClassicalControl}
+            window = randn(rng, 1000)
+            f = extract_features(window, 0.2)
+            @test window_score(detector.scorer, window, 0.2) == predict_probability(
+                model,
+                vec(encode_features(scaler, reshape(collect(Float32.(f)), 1, :))),
+            )
+        end
+        # The circuit through the same builder: the kind is in its snapshot
+        run = train_classifier(config("circuit"); run_id = "circuit")
+        @test load_model(run.model_path)[1] isa VariationalQuantumClassifier
+        @test TOML.parsefile(joinpath(run.run_dir, "config.toml"))["model"]["kind"] ==
+              "circuit"
+    end
+end
+
 include("telemetry_tests.jl")
 include("telemetry_integration_tests.jl")
 

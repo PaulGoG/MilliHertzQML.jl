@@ -6,8 +6,8 @@
                       config_path = joinpath(dirname(model_path), "config.toml"),
                       psd_sidecar = "", context_windows = 4) -> StreamingDetector
 
-The [`StreamingDetector`](@ref) of a training run: model and scaler from
-the artifact, the fitted threshold from `threshold.toml`, and the
+The [`StreamingDetector`](@ref) of a training run: classifier (circuit or
+classical control) and scaler from the artifact, the fitted threshold from `threshold.toml`, and the
 conditioning — window geometry, whitening PSD, analysis bands, record
 high-pass, feature set — from the sidecar of the feature table the run was
 trained on (recorded in its `config.toml` snapshot). For a model trained
@@ -102,32 +102,41 @@ function detector_from_run(
 end
 
 """
-    VQCScorer(model, scaler, features)
+    ClassifierScorer(model, scaler, features)
 
-The classifier as an [`AbstractWindowScorer`](@ref): the features of a
-conditioned window — a vector, or a matrix of several channels — under the
-[`FeatureMap`](@ref) `features`, encoded with
-the train-fitted `scaler` ([`encode_features`](@ref)) and scored as the
-probability of the MBHB class ([`predict_probability`](@ref)).
+A classifier ([`AbstractClassifier`](@ref)) as an
+[`AbstractWindowScorer`](@ref): the features of a conditioned window — a
+vector, or a matrix of several channels — under the [`FeatureMap`](@ref)
+`features`, encoded with the train-fitted `scaler`
+([`encode_features`](@ref)) and scored as the probability of the MBHB
+class ([`predict_probability`](@ref)).
 """
-struct VQCScorer <: AbstractWindowScorer
-    model::VariationalQuantumClassifier
+struct ClassifierScorer{M<:AbstractClassifier} <: AbstractWindowScorer
+    model::M
     scaler::FeatureScaler
     features::FeatureMap
 end
 
-window_score(scorer::VQCScorer, window::AbstractVector{<:Real}, sample_rate::Real) =
+"""
+    VQCScorer
+
+The scorer of a variational circuit, alias of
+`ClassifierScorer{VariationalQuantumClassifier}` ([`ClassifierScorer`](@ref)).
+"""
+const VQCScorer = ClassifierScorer{VariationalQuantumClassifier}
+
+window_score(scorer::ClassifierScorer, window::AbstractVector{<:Real}, sample_rate::Real) =
     classifier_score(scorer, window, sample_rate)
-window_score(scorer::VQCScorer, window::AbstractMatrix{<:Real}, sample_rate::Real) =
+window_score(scorer::ClassifierScorer, window::AbstractMatrix{<:Real}, sample_rate::Real) =
     classifier_score(scorer, window, sample_rate)
 
-function classifier_score(scorer::VQCScorer, window, sample_rate)
+function classifier_score(scorer::ClassifierScorer, window, sample_rate)
     features = extract_features(scorer.features, window, sample_rate)
     encoded = encode_features(scorer.scaler, reshape(collect(Float32.(features)), 1, :))
     return predict_probability(scorer.model, vec(encoded))
 end
 
-score_label(::VQCScorer) = "MBHB probability"
+score_label(::ClassifierScorer) = "MBHB probability"
 
 """
     StreamingDetector(model, scaler, threshold; sample_rate, window_size, step_size,
@@ -136,14 +145,14 @@ score_label(::VQCScorer) = "MBHB probability"
                       band_edges = [1e-3, 5e-3, 1e-1], feature_set = :whitened,
                       combination = :mean, context_windows = 4)
 
-The detector of a trained classifier: a [`VQCScorer`](@ref) of `model`,
+The detector of a trained classifier: a [`ClassifierScorer`](@ref) of `model`,
 `scaler` and the feature map of the band keywords, under the conditioning
 keywords of the generic constructor. For a model trained on several
 channels `psd` holds one whitening PSD per channel and `combination` says
 how their features are combined.
 """
 function StreamingDetector(
-    model::VariationalQuantumClassifier,
+    model::AbstractClassifier,
     scaler::FeatureScaler,
     threshold::Real;
     low_band::Tuple{Real,Real} = (1e-3, 5e-3),
@@ -160,5 +169,9 @@ function StreamingDetector(
         band_edges = band_edges,
         combination = combination,
     )
-    return StreamingDetector(VQCScorer(model, scaler, features), threshold; conditioning...)
+    return StreamingDetector(
+        ClassifierScorer(model, scaler, features),
+        threshold;
+        conditioning...,
+    )
 end

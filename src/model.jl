@@ -1,12 +1,24 @@
 # src/model.jl
 
 """
+    AbstractClassifier
+
+Supertype of the classifiers the stages train, persist and score: the
+variational circuit ([`VariationalQuantumClassifier`](@ref)) and its
+classical controls ([`ClassicalControl`](@ref)). A classifier holds its
+trainable parameters in the vector `params` and implements
+[`predict_probability`](@ref), [`predict_all`](@ref) and
+[`train_step!`](@ref).
+"""
+abstract type AbstractClassifier end
+
+"""
     VariationalQuantumClassifier(n_qubits, n_layers, params, ansatz_layers)
 
 Variational quantum classifier (VQC) for gravitational-wave detection.
 Implements data re-uploading by interleaving feature maps and variational layers.
 """
-mutable struct VariationalQuantumClassifier
+mutable struct VariationalQuantumClassifier <: AbstractClassifier
     n_qubits::Int
     n_layers::Int
     params::Vector{Float32}

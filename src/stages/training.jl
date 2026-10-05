@@ -163,7 +163,7 @@ at the 0.5 decision of `model` over the rows of `X` with labels `y`, from
 one forward pass ([`predict_all`](@ref)).
 """
 function epoch_validation(
-    model::VariationalQuantumClassifier,
+    model::AbstractClassifier,
     X::AbstractMatrix{<:Real},
     y::AbstractVector{<:Integer};
     positive_weight::Real,
@@ -189,8 +189,8 @@ end
 Training stage driven by the `[model]`, `[training]`, `[paths]`, and
 `[resources]` sections of `config`:
 
-1. memory pre-flight of one training step against the `[resources]`
-   thresholds;
+1. memory pre-flight of one training step of the circuit against the
+   `[resources]` thresholds;
 2. run directory `<models>/run_<run_id>` with the configuration snapshot
    `config.toml` (sections `model`, `training`, `features`, plus
    provenance) and a copy of the resolved Manifest
@@ -201,7 +201,8 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
 4. chronological split into training, validation, and test blocks with a
    one-window buffer ([`chronological_split`](@ref)), persisted in
    `split.toml`; feature scaler fitted on the training block only;
-5. Adam with exponential learning-rate decay, the positive class weighted
+5. the classifier of `[model] kind` ([`build_classifier`](@ref)) trained
+   by Adam with exponential learning-rate decay, the positive class weighted
    by the negative-to-positive count ratio under
    `class_weight = "balanced"`, batch gradients by `gradient_method`
    ([`batch_gradient`](@ref)) and forward passes over the Julia threads
@@ -245,7 +246,7 @@ function train_classifier(
         trn = training_settings(config)
         resources = resource_settings(config)
         max_epochs = test_mode ? trn.test_mode_epochs : trn.epochs
-        check_memory(
+        mdl.kind == "circuit" && check_memory(
             training_memory_estimate_gib(
                 mdl.n_qubits,
                 mdl.n_layers,
@@ -269,11 +270,14 @@ function train_classifier(
                 "table $(trn.train_features) holds the channels $channels.",
             ),
         )
+        model_table = Dict{String,Any}(
+            "kind" => mdl.kind,
+            "n_qubits" => mdl.n_qubits,
+            "n_layers" => mdl.n_layers,
+        )
+        mdl.kind == "perceptron" && (model_table["hidden_units"] = mdl.hidden_units)
         snapshot = Dict{String,Any}(
-            "model" => Dict{String,Any}(
-                "n_qubits" => mdl.n_qubits,
-                "n_layers" => mdl.n_layers,
-            ),
+            "model" => model_table,
             "training" => Dict{String,Any}(
                 "epochs" => max_epochs,
                 "batch_size" => trn.batch_size,
@@ -375,7 +379,7 @@ function train_classifier(
         n_train = length(y_train)
         n_batches = cld(n_train, trn.batch_size)
 
-        model = VariationalQuantumClassifier(mdl.n_qubits, mdl.n_layers)
+        model = build_classifier(mdl, scaler)
         opt_state = Optimisers.setup(Optimisers.Adam(trn.learning_rate), model.params)
         history = (
             epochs = Int[],
@@ -393,14 +397,14 @@ function train_classifier(
         threaded = trn.threaded && Threads.nthreads() > 1
         method = Symbol(trn.gradient_method)
         workspaces =
-            method == :adjoint ?
+            method == :adjoint && model isa VariationalQuantumClassifier ?
             [
                 CircuitWorkspace(model) for
                 _ in 1:gradient_tasks(trn.batch_size; threaded = threaded)
             ] : nothing
-        @info "training started" batch_size = trn.batch_size max_epochs = max_epochs n_qubits =
-            mdl.n_qubits n_layers = mdl.n_layers gradient_method = trn.gradient_method threaded =
-            threaded threads = Threads.nthreads()
+        @info "training started" kind = mdl.kind batch_size = trn.batch_size max_epochs =
+            max_epochs n_qubits = mdl.n_qubits n_layers = mdl.n_layers gradient_method =
+            trn.gradient_method threaded = threaded threads = Threads.nthreads()
 
         for epoch in 1:max_epochs
             current_lr = trn.learning_rate * trn.lr_decay^(epoch - 1)

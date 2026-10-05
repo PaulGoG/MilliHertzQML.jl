@@ -298,6 +298,7 @@ export windows_touching, newly_evaluable!, StreamingDetector, score_window, Trai
 export AbstractWindowEstimator, AbstractWindowScorer, EstimatorMemory, Stateless, Stateful
 export estimator_memory, window_score, score_label, score_bounds, FeatureMap
 export condition_window, VQCScorer
+export AbstractClassifier, ClassicalControl, ClassifierScorer, MODEL_KINDS, build_classifier
 export reset_estimator!, GapEvent, estimator_gap!, PendingWindow, OrderedCommit
 export finalize_replay!, gaps_table, replay_state
 export content_digest, parameter_digest, product_table, scored_at
@@ -312,6 +313,7 @@ include("model.jl")
 include("circuit.jl")
 include("training.jl")
 include("scaler.jl")
+include("controls.jl")
 include("persistence.jl")
 include("visualization.jl")
 include("vqc_scorer.jl")
@@ -346,6 +348,9 @@ include("stages/inference.jl")
         predict(model, @view(encoded[1, :]))
         predict_all(model, encoded; threaded = false)
         adjoint_batch_gradient(model, encoded, labels, 1.5, false, GRADIENT_CHUNK, nothing)
+        control = ClassicalControl(2, 2; rng = Xoshiro(0))
+        predict_all(control, encoded)
+        batch_gradient(control, encoded, labels; positive_weight = 1.5)
     end
 end
 

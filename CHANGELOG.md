@@ -70,6 +70,15 @@ versioning follows [Semantic Versioning](https://semver.org/).
   adjoint gradient, `q8_b6` and `q8_b6_s001` reproduce their reference
   runs at all four seeds (same selected epoch, thresholds within 1.2e-7,
   the same counts on the blind year).
+- Classical controls of the circuit: `[model] kind = "logistic" |
+  "perceptron"` (`hidden_units`) trains a logistic regression or a
+  one-hidden-layer tanh network (`ClassicalControl`) on the same encoded
+  features through the same training, inference and replay stages
+  (`build_classifier`, `ClassifierScorer`, of which `VQCScorer` is the
+  circuit case); `AbstractClassifier` is their common supertype, and the
+  model artifact records the kind. Configurations
+  `configs/experiments/q8_b6_s001[_ae]_logistic.toml` and
+  `…_perceptron.toml`.
 
 ### Changed
 - The batch gradient defaults to the adjoint method. Its chunk sums are
