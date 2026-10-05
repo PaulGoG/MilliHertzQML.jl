@@ -48,8 +48,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   for a mission over a later stretch of the record. The replay snapshot
   records `channels` and `link_volume_channels`, the number of channels the
   production rate of the mission was scaled for (`--link-volume-channels`,
-  1 by default: the mission carried one channel). The run snapshot records
-  the mode;
+  1 by default). The delivery of a batch is common to the channels, as on
+  LISA, where the combinations are formed on the ground from the same
+  telemetry. The run snapshot records the mode;
   training refuses a configuration whose mode differs from that of its
   feature table, and inference refuses features of another mode than the
   model was trained on.

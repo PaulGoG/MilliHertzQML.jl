@@ -939,6 +939,112 @@ configuration, at four seeds, removes the two limitations of the selected
 one, the conditioning lag and the loss rate above which windows can no
 longer be scored, and it is the streaming configuration of the package.
 
+## The A and E network
+
+The channel E carries, on equal arms, the other noise-orthogonal view of a
+source: the squared signal-to-noise ratios of A and E add, and how a
+source divides between them depends on its sky position and polarisation.
+In the channel mode `[tdi] channels = "AE"` the two channels are whitened
+each by its own PSD estimate and the classifier receives, of every one of
+its eight features, the value farthest towards a signal among the two —
+the larger band power and power spread, the smaller entropy — so the
+circuit, the labels and the protocol are those of the A mode. The
+alternative combination, the features of the averaged periodogram
+(`channel_combination = "mean"`), halves the excess power of a source that
+one channel sees while the noise spread falls only by ``\sqrt 2``; on the
+completed blind record it delays the alert of event 4, which A carries
+almost alone (peak window SNR 1,127 in A against 213 in E), by 12 to 21
+hours, which the extreme of the features does not. The configurations
+`configs/experiments/q8_b6_ae.toml` and `q8_b6_s001_ae.toml` are the
+selected and the streaming configuration in this mode. Each was trained at
+the four seeds with its threshold rule, and the blind year was scored once
+per run.
+
+| Configuration | Seed | Epochs | Threshold | Blind label spans | Blind false-alarm episodes (per 30 d) | ROC area |
+|---|---|---|---|---|---|---|
+| `q8_b6_ae` | 9999 | 39 | 0.718 | 5/5 | 33 (2.72) | 0.812 |
+| | 1009 | 25 | 0.715 | 5/5 | 32 (2.64) | 0.813 |
+| | 2027 | 28 | 0.726 | 5/5 | 27 (2.23) | 0.804 |
+| | 3041 | 29 | 0.738 | 5/5 | 32 (2.64) | 0.785 |
+| `q8_b6_s001_ae` | 9999 | 23 | 0.612 | 5/5 | 40 (3.30) | 0.767 |
+| | 1009 | 26 | 0.593 | 5/5 | 96 (7.92) | 0.783 |
+| | 2027 | 15 | 0.632 | 5/5 | 104 (8.58) | 0.749 |
+| | 3041 | 13 | 0.613 | 5/5 | 82 (6.76) | 0.753 |
+
+On the completed record the second channel changes little: every run
+recovers the five label spans; the false-alarm rate of `q8_b6_ae` lies
+between 2.23 and 2.72 episodes per 30 days, inside the range of 1.57 to
+8.74 of the A configuration and with a smaller spread over the seeds, and
+that of `q8_b6_s001_ae` between 3.30 and 8.58 against 2.97 to 6.76.
+
+**Signal onsets.** The labelling stage writes, beside the onset of A, the
+onset of the network: the first window at which the root of the summed
+squared window SNRs of A and E reaches the threshold of 5
+(`signal_start_index_ae`). On the six blind coalescences it precedes the
+onset of A by 1.0, 0.0, 7.1, 1.3, 8.1 and 7.9 hours; for event 5, the
+weakest in A (peak window SNR 448), the network SNR peaks at 1,200 and the
+onset moves from 7.4 to 15.5 hours before the merger. Alerts of a model of
+this mode are credited from the onset of the network.
+
+**Year replay.** The lossless year-long mission, replayed with the four
+runs of `q8_b6_s001_ae` under causal whitening (one trailing estimate per
+channel), at persistence three; alert time minus merger time [h] at the
+ground station:
+
+| Event | Onset of the network | Seed 9999 | Seed 1009 | Seed 2027 | Seed 3041 |
+|---|---|---|---|---|---|
+| 1 | −35.8 | −26.3 | −28.8 | −26.3 | −26.5 |
+| 2 | −29.1 | −11.4 | −11.4 | −11.4 | −11.4 |
+| 3 | −34.9 | −25.4 | −27.8 | −27.9 | −27.9 |
+| 4 | −33.5 | −21.1 | −21.1 | −21.1 | −21.1 |
+| 5 | −15.5 | −4.5 | −4.5 | −4.6 | −4.6 |
+| 6 | −35.3 | −13.3 | −13.4 | −12.5 | −12.5 |
+| False-alarm episodes (per 30 d) | | 13 (1.07) | 58 (4.77) | 16 (1.32) | 18 (1.48) |
+
+Every seed alerts the six coalescences before their mergers; the A
+configuration misses event 5 at the reference seed. Event 5 is alerted 4.5
+to 4.6 hours ahead against 2.1, event 3 1.1 to 3.6 hours earlier, event 6
+0.5 to 1.3 hours earlier, event 1 3.5 to 6.0 hours earlier at three seeds
+and 2.3 hours later at one; events 2 and 4 are alerted at the same times.
+The false-alarm rate is 1.07 to 1.48 episodes per 30 days at three seeds,
+inside the range of the A configuration (0.49 to 1.56), and 4.77 at seed
+1009, whose rate on the completed record is also among the highest. Four
+seeds do not rank the two modes by false-alarm rate.
+
+**The link.** The telemetry producer carries one payload column, the A
+channel. The replay of a model of this mode takes the delivery of that
+mission and serves A and E of every delivered batch from the TDI record,
+after checking batch by batch that the A column of the record is the
+payload the mission delivered (`scripts/infer_telemetry.jl --tdi-file`,
+`ScheduledRecordRun`): the delivery of a batch is common to its channels.
+For LISA this holds by construction. The combinations A, E and T are
+formed on the ground from the same telemetry, about 75 kbit/s for the
+whole constellation, science data and housekeeping included
+[ColpiEtAl2024](@cite); the volume on the link does not depend on the
+number of combinations an analysis reads, and a lost packet is lost to all
+of them.
+
+**Lossy link.** The seventeen 30-day missions of the lossy-link section,
+replayed with the four runs of `q8_b6_s001_ae`; their payload is the A
+channel of days 65 to 95, so the record is served from its row 1,123,201
+(`--tdi-first-row`). The delivery is that of the A replays and the windows
+scored are the same, mission by mission. Every seed alerts both
+coalescences before their mergers in every mission: event 1 22.5 to 29.3
+hours ahead, and 5.5 hours in the mission with the recorder of two days at
+one seed, where two of the A runs alert at 5.6 hours; event 2 9.5 to 11.6
+hours ahead, as the A runs do. The false-alarm rate over these thirty days
+is 0 to 3.1 episodes per 30 days at two seeds, 1.0 to 8.1 at a third, and
+2.5 to 12.3 at seed 1009 (means of 1.12, 7.15, 2.14 and 1.49 for seeds
+9999, 1009, 2027 and 3041, against 1.05, 0.65, 2.49 and 1.64 for A): the
+run with the highest rate over the year has the highest here. The replay
+results are those of the `gapreplay_<mission>_s001_ae[_s<seed>]` runs.
+
+The A and E network is a mode of the package; the streaming configuration
+is unchanged. Its gain on this year is the weakest coalescence, alerted at
+every seed and two hours earlier, and it costs nothing in the tolerance to
+a lossy link; its false-alarm rate depends on the seed more than that of
+the A configuration.
+
 ## Caveats
 
 - **One blind realisation of five events.** The event recall is 5 of 5 and
@@ -1025,6 +1131,22 @@ julia scripts/infer.jl configs/experiments/q8_b6_s001.toml --run-id q8_b6_s001_p
 julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001.toml --run-dir <DeepSpaceTelemetry run> \
     --model models/run_q8_b6_s001_pi/gw_model.jld2 \
     --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_s001_pi
+# The A and E network: products of the mode (suffix _ae), onsets of the network, replay
+# with the channels served from the TDI record
+julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --h5-file $LDC/LDC2_sangria_training_v2.h5
+julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --truth-csv $UNBLINDED \
+    --output-prefix sangria_ae_blind_points
+julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001_ae.toml \
+    --h5-file $LDC/LDC2_sangria_training_v2.h5 --label-file data/inputs/sangria_labels.csv
+julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001_ae.toml \
+    --h5-file $LDC/LDC2_sangria_blind_v2.h5 \
+    --label-file data/inputs/sangria_blind_points_labels.csv \
+    --output-prefix sangria_b6s001_blind
+julia scripts/train.jl configs/experiments/q8_b6_s001_ae.toml --run-id q8_b6_s001_ae_pi
+julia scripts/infer.jl configs/experiments/q8_b6_s001_ae.toml --run-id q8_b6_s001_ae_pi
+julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001_ae.toml --run-dir <DeepSpaceTelemetry run> \
+    --model models/run_q8_b6_s001_ae_pi/gw_model.jld2 --tdi-file $LDC/LDC2_sangria_blind_v2.h5 \
+    --events data/inputs/sangria_ae_blind_points_events.csv --run-id telemetry_year_s001_ae_pi
 ```
 
 Training runs to early stopping in 16 to 50 epochs; an epoch of the

@@ -40,6 +40,11 @@ before a merger as early detections (see the
 [Sangria Benchmark](benchmark.md) page gives the protocol, every run, and
 the limits of these results.
 
+Trained on the features of the A and E channels (`[tdi] channels = "AE"`),
+the streaming configuration alerts the six coalescences before their
+mergers at each of the four seeds, at 1.07 to 4.77 false alarms per 30
+days ([The A and E network](benchmark.md#The-A-and-E-network)).
+
 ![Classifier output over the Sangria blind year](assets/benchmark_mission_trace.png)
 
 ## Pipeline
