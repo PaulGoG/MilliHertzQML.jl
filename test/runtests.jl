@@ -538,7 +538,6 @@ end
 @testset "Channel modes (classifier)" begin
     # A feature table of the A and E network, trained on and scored only
     # under a configuration and a model of the same mode
-    @test MilliHertzQML.recorded_channels(joinpath(tempdir(), "absent_features.csv")) == "A"
     @test MilliHertzQML.run_channels(joinpath(tempdir(), "absent_run")) == "A"
     mktempdir() do dir
         rng = StableRNG(17)
@@ -571,8 +570,6 @@ end
         pair = product("pair", "AE")
         single = product("single", "A")
         legacy = product("legacy", nothing)
-        @test MilliHertzQML.recorded_channels(pair) == "AE"
-        @test MilliHertzQML.recorded_channels(legacy) == "A"
         config(features, mode) = Dict{String,Any}(
             "paths" => Dict{String,Any}(
                 "inputs" => dir,
@@ -594,6 +591,11 @@ end
         @test_throws ArgumentError train_classifier(config(pair, "A"); run_id = "refused")
         @test_throws ArgumentError train_classifier(
             config(single, "AE");
+            run_id = "refused",
+        )
+        # A table that records no channel set is one of the mode A
+        @test_throws ArgumentError train_classifier(
+            config(legacy, "AE");
             run_id = "refused",
         )
         run = train_classifier(config(pair, "AE"); run_id = "pair")

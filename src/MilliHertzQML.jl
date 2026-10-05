@@ -84,6 +84,7 @@ using StreamingInference:
     provenance_path,
     read_batch,
     record_memory_estimate_gib,
+    recorded_channels,
     remove!,
     replay_run,
     replay_state,

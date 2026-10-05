@@ -28,24 +28,6 @@ function inference_geometry(features_path::AbstractString, config::AbstractDict)
 end
 
 """
-    recorded_channels(features_path) -> String
-
-Channel mode of a feature table, as its sidecar records it (`channels` of
-the `[product]` table, else of `[features]`); `"A"` for a table without a
-sidecar or made before the modes existed.
-"""
-function recorded_channels(features_path::AbstractString)
-    sidecar = replace(features_path, r"\.csv$" => ".toml")
-    isfile(sidecar) || return "A"
-    tables = TOML.parsefile(sidecar)
-    for name in ("product", "features")
-        channels = get(get(tables, name, Dict{String,Any}()), "channels", nothing)
-        channels isa AbstractString && return String(channels)
-    end
-    return "A"
-end
-
-"""
     run_channels(model_dir) -> String
 
 Channel mode of the features a run was trained on, from its `config.toml`
@@ -230,7 +212,7 @@ function evaluate_classifier(
         )
         threshold, threshold_info = load_threshold(model_dir)
         trained_on = run_channels(model_dir)
-        scored_on = recorded_channels(features_path)
+        scored_on = recorded_channels(features_path; default = "A")
         trained_on == scored_on || throw(
             ArgumentError(
                 "the model of $model_dir was trained on features of the channels " *

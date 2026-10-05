@@ -68,8 +68,9 @@ function detector_from_run(
     if !isempty(psd_sidecar)
         isfile(psd_sidecar) ||
             throw(ArgumentError("whitening sidecar not found: $psd_sidecar"))
-        trained = recorded_channels(features_path)
-        supplied = recorded_channels(replace(psd_sidecar, r"\.toml$" => ".csv"))
+        trained = recorded_channels(features_path; default = "A")
+        supplied =
+            recorded_channels(replace(psd_sidecar, r"\.toml$" => ".csv"); default = "A")
         trained == supplied || throw(
             ArgumentError(
                 "the whitening sidecar $psd_sidecar describes the channels $supplied; " *

@@ -262,7 +262,7 @@ function train_classifier(
         geometry = feature_geometry(trn.train_features, config)
         # The product is authoritative: a configuration naming another
         # channel mode than its feature table records is refused
-        channels = recorded_channels(trn.train_features)
+        channels = recorded_channels(trn.train_features; default = "A")
         channels == tdi_settings(config).channels || throw(
             ArgumentError(
                 "[tdi] channels = \"$(tdi_settings(config).channels)\", but the feature " *
