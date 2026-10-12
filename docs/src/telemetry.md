@@ -209,15 +209,18 @@ window is an alert.
 An alert is credited to an event only from the event's **signal onset**
 (`[telemetry] alert_crediting = "signal"`, the default): the first window
 of the signal-only truth stream, inside the label span and past the
-preceding event's span, whose matched-filter SNR reaches the labelling
-threshold (`label_snr_threshold`, 5). The labelling and generation stages
+preceding event's span, in which the signal, high-passed and whitened as
+the observed record is, reaches the labelling threshold
+(`label_snr_threshold`, 3: the norm of the whitened signal in the window,
+`[ldc] psd_model = "record"`). The labelling and generation stages
 write it as `signal_start_index` beside the label span. The credited span
 runs from the onset to the end of the label span; an alarm earlier in the
 label span falls where no single window of the source reaches the
-threshold, is not attributable to it, and counts as a false alarm. The label span itself, four days before to 27 minutes after the
+threshold against the noise the detector faces, is not attributable to
+it, and counts as a false alarm. The label span itself, four days before to 27 minutes after the
 merger for the Sangria labels, is the training convention of Isfan et al.
 [IsfanEtAl2025](@cite) and is much wider than the stretch in which a coalescence is visible: on
-the Sangria blind year the onsets lie 7 to 35 hours before the merger.
+the Sangria blind year the onsets lie 10 to 38 hours before the merger.
 Crediting the whole label span (`alert_crediting = "label"`) counts noise
 alarms of its first days as early detections; it reproduces the alert
 tables of releases up to 1.2.0. An event table with label spans

@@ -24,6 +24,9 @@ function parse_commandline()
         "--truth-csv"
         help = "CSV with columns t, X, Y, Z of the signal-only TDI (blind-set truth); used instead of --h5-file"
         default = nothing
+        "--record-file"
+        help = "Observed TDI record whose whitening PSD conditions the truth stream under [ldc] psd_model = \"record\"; default from [ldc] record_file, else the file of the truth stream"
+        default = nothing
         "--output-prefix"
         help = "Prefix of the output CSV files; default from [ldc] output_prefix"
         default = nothing
@@ -38,6 +41,7 @@ function main()
         config;
         h5_file = args["h5-file"],
         truth_csv = args["truth-csv"],
+        record_file = args["record-file"],
         output_prefix = args["output-prefix"],
     )
     println("Labeling complete.")

@@ -36,19 +36,21 @@ thresholds fitted on the training year and applied unchanged:
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted before the merger | none; all six after it | **5 of 6** (6 of 6 at three further seeds) |
-| Alert time at the ground station | 0.1 to 42 h after the merger | **11 to 24 h before** |
-| Streamed year: false alarms per 30 d | 0.99 | **0.49** (1.15 to 1.56 at the further seeds) |
+| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 0.3 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 0.3 h before to 42 h after the merger | **11 to 28 h before** |
+| Streamed year: false alarms per 30 d | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
 An alert counts for a coalescence only from its signal onset, the first
-window in which the signal of the source reaches a matched-filter SNR of
-5, 7 to 35 hours before the merger on this year; earlier alarms count as
-false alarms. Release 1.2.0 credited the whole four-day label span and
-quoted leads of up to 71 hours; the earliest of those alerts fell where
-the signal of the source does not reach a window SNR of 3, and were noise
-alarms (see the [correction](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
+window in which the signal of the source, conditioned as the record is,
+reaches a norm of 3 against the record's own noise, 10 to 38 hours before
+the merger on this year; earlier alarms count as false alarms. Release
+1.2.0 credited the whole four-day label span and quoted leads of up to 71
+hours; releases 2.0.0 to 2.0.1 credited from an onset defined against the
+instrument noise alone, which the record's noise, the Galactic foreground
+included, exceeds by a factor of about 20 at the frequencies of the
+inspiral (see the [corrections](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
 on the benchmark page).
 
 ![Classifier output and alarms over the year-long replay of the streaming configuration, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
@@ -57,13 +59,27 @@ on the benchmark page).
 whitened causally, from data already delivered to the ground. The
 streaming configuration, trained on a Welch whitening spectrum smoothed in
 log-frequency, alerts five of the six coalescences at the ground station
-11 to 24 hours before their merger, 4 to 18 hours after the signal onset,
-at six false-alarm episodes in the year.*
+11 to 28 hours before their merger, 10 to 21 hours after the signal
+onset, at four false-alarm episodes in the year.*
 
 ![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
 *The same replay in the order in which the ground station received the
 windows; the dotted line is the ground clock.*
+
+Two results qualify the table. On the same eight features and under the
+same protocol, a logistic regression with nine parameters does at least as
+well as the circuit with 64: it alerts the six coalescences before their
+mergers at every seed, at 0.58 to 0.74 false alarms per 30 days, and has
+the larger ROC area on the completed record; the detection results are
+those of the conditioning and the features, for which the circuit is one
+classifier among others. What the circuit's feature map adds is a tolerance
+of loud instrumental transients: on the glitch records of LDC-2b (Spritz),
+at a matched rate of glitch alerts, it alerts the loud coalescence 20 to
+39 hours ahead where a monotone classifier gives 7 to 12 hours, and a
+logistic regression on the cosine and sine of the same angles reproduces
+that without the circuit
+([Classical controls on the same features](https://PaulGoG.github.io/MilliHertzQML.jl/stable/benchmark/#Classical-controls-on-the-same-features)).
 
 Every figure and animation, with captions, is on the
 [Results](https://PaulGoG.github.io/MilliHertzQML.jl/stable/results/) page of
@@ -157,7 +173,8 @@ from the latest release and at
 | Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
 | Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
-| LDC products | Native reader, analytic TDI noise PSD, truth-stream labels; validated on Sangria |
+| LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz |
+| Classical controls | Logistic regression, one-hidden-layer network and a logistic regression on the first harmonics of the encoded angles, through the same stages as the circuit (`[model] kind`) |
 | Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
 | Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
 
@@ -196,15 +213,16 @@ of the simulator and the features.
 - **Four initialisations per configuration.** They settle the recall of
   the band partitions, but not a ranking by false-alarm rate: the rate of
   the selected configuration spans 1.57 to 8.74 per 30 days over its
-  seeds, that of the streaming configuration in the streamed year 0.49 to
-  1.56.
-- **Single channel.** Only A is used; E and T would allow a null-channel
-  veto.
+  seeds, that of the streaming configuration in the streamed year 0.33 to
+  1.32.
+- **Two channels at most.** A alone, or A and E; the T channel carries no
+  feature: its band powers did not separate the glitches of LDC-2b from
+  the signal where the glitches have their power.
 - **Scattered permanent loss.** A window whose conditioning stretch
   contains a delivery hole is not scored: the selected configuration
   tolerates about 0.2 % of lost batches, the streaming one 0.43 % with 81 %
-  of the record scored. The classifier has never been trained on gapped
-  data.
+  of the record scored. A record with gaps is scored stretch by stretch;
+  the classifier is trained on gapless records only.
 - **One year, one direction.** The threshold comes from the earlier year of
   the same mission; a real chain would recalibrate as the mission proceeds.
 - **Saturated encoding.** The two coalescences with the most saturated
@@ -212,9 +230,13 @@ of the simulator and the features.
 - **The completed-record result is non-causal.** It whitens the blind year
   by the PSD of the whole year; the streamed results are causal.
 - **Signal onsets from the combined truth stream.** The onset of a
-  coalescence is where the sum of all MBHB signals first reaches a window
-  SNR of 5, sought past the preceding coalescence; an alert after it may
+  coalescence is where the sum of all MBHB signals first reaches a norm
+  of 3 against the record's own noise, sought past the preceding
+  coalescence; an alert after it may
   still have been raised by a neighbouring source.
+- **The circuit is not what detects.** A logistic regression on the same
+  features matches or beats it on clean data; its feature map, not its
+  entanglement, is what tolerates loud transients.
 
 ## Full file tree
 

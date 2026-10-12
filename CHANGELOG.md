@@ -7,6 +7,20 @@ versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `scripts/label_ldc.jl --record-file`: the observed record whose
+  whitening PSD conditions the truth stream under `[ldc] psd_model =
+  "record"` (MilliHertzBase.jl), with the key `[ldc] record_file`; the
+  configurations `configs/experiments/q8_b6_s001_spritz.toml` and
+  `q8_b6_s001_ae_spritz.toml` run the LDC-2b (Spritz) records under the
+  streaming configuration: pre-processing stretch by stretch, labelling
+  from the truth stream `sky/tdi` and the scalar catalogue `sky/cat`
+  against the record's own noise, inference with the model trained on
+  Sangria.
+- The classical controls of every configuration of the Sangria grid
+  (`configs/experiments/<config>_{logistic,perceptron,harmonic}.toml`) and
+  the manual's section on the controls: level with the circuit on clean
+  data, the glitch tolerance of the angle encoding on the LDC-2b records,
+  and its reproduction by the harmonic control.
 - An estimator interface between the conditioning chain and the method
   applied to each window: `AbstractWindowEstimator`, the scalar
   `AbstractWindowScorer` with `window_score`, `score_label` and
@@ -96,6 +110,19 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
+- The signal onset from which alerts are credited is defined against the
+  record's own noise: the first window in which the truth stream,
+  high-passed and whitened as the observed record is, reaches a norm of 3
+  (`[ldc] psd_model = "record"`, `label_snr_threshold = 3`, the defaults
+  of MilliHertzBase.jl), in place of the matched-filter SNR of 5 against
+  the analytic instrument PSD, which the record's noise exceeds by a
+  factor of about 20 at the frequencies of the inspiral. Every
+  configuration carries the new keys, the labels and event tables of both
+  years and the alert tables of every stored replay were regenerated, and
+  the benchmark page records the correction: the credited alerts are
+  those of 2.0.1 to the tenth of an hour except event 3 of the A runs of
+  the streaming configuration, and the false-alarm rates are lower by 0.1
+  to 0.3 per 30 days.
 - The batch gradient defaults to the adjoint method. Its chunk sums are
   taken by tasks that draw chunks from a shared counter, and serial and
   threaded evaluation give the same bits; the Zygote tape over the

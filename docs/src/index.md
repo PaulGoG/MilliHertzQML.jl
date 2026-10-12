@@ -13,7 +13,7 @@ thresholds fitted on the training year and applied unchanged:
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year | 5 of 5 labelled events, 1.57 false alarms per 30 days | 5 of 5, 2.97 per 30 days |
-| Streamed year, causal whitening | 6 of 6 coalescences alerted, each after its merger, 0.99 per 30 days | 5 of 6, each 11 to 24 hours before its merger, 0.49 per 30 days |
+| Streamed year, causal whitening | 6 of 6 coalescences alerted, one 0.3 hours before its merger and five after, 0.74 per 30 days | 5 of 6, each 11 to 28 hours before its merger, 0.33 per 30 days |
 | Record scored at 0.43 % scattered batch loss | 9 % | 81 % |
 
 The selected configuration, eight qubits, four re-uploading layers and six
@@ -31,19 +31,31 @@ The streaming configuration is the selected one retrained on a Welch
 whitening spectrum smoothed in log-frequency, which shortens the stretch
 of data every window needs from 1.16 days to 2.8 hours. At each of four
 initialisation seeds it alerts five or six of the six coalescences before
-their merger, at 0.49 to 1.56 false alarms per 30 days. An alert counts
+their merger, at 0.33 to 1.32 false alarms per 30 days. An alert counts
 for a coalescence only from its signal onset, the first window in which
-the signal reaches a matched-filter SNR of 5; release 1.2.0 credited the
-whole four-day label span and so counted noise alarms up to 95 hours
-before a merger as early detections (see the
-[correction](benchmark.md#Telemetry-replay-and-alert-latency)). The
+the signal, conditioned as the record is, reaches a norm of 3 against the
+record's own noise; release 1.2.0 credited the whole four-day label span,
+releases 2.0.0 to 2.0.1 an onset defined against the instrument noise
+alone (see the
+[corrections](benchmark.md#Telemetry-replay-and-alert-latency)). The
 [Sangria Benchmark](benchmark.md) page gives the protocol, every run, and
 the limits of these results.
 
-Trained on the features of the A and E channels (`[tdi] channels = "AE"`),
-the streaming configuration alerts the six coalescences before their
-mergers at each of the four seeds, at 1.07 to 4.77 false alarms per 30
-days ([The A and E network](benchmark.md#The-A-and-E-network)).
+Two further results qualify the table. Trained on the features of the A
+and E channels (`[tdi] channels = "AE"`), the streaming configuration
+alerts the six coalescences before their mergers at each of the four
+seeds, at 1.07 to 4.77 false alarms per 30 days
+([The A and E network](benchmark.md#The-A-and-E-network)). And on the same
+eight features, under the same protocol, a logistic regression with nine
+parameters does at least as well as the circuit with 64: it alerts the six
+coalescences at every seed, at 0.58 to 0.74 false alarms per 30 days on A
+and 0.41 to 0.49 on A and E, and has the larger ROC area on the completed
+record. The detection results of this package are those of its
+conditioning and features, for which the variational circuit is one
+classifier among others; what its feature map adds, measured on the glitch
+records of LDC-2b, is a tolerance of loud instrumental transients that a
+logistic regression on the cosine and sine of the same angles reproduces
+([Classical controls on the same features](benchmark.md#Classical-controls-on-the-same-features)).
 
 ![Classifier output over the Sangria blind year](assets/benchmark_mission_trace.png)
 
@@ -118,6 +130,8 @@ The Sangria runs are reproduced by the commands at the end of the
 - [Telemetry Coupling](telemetry.md): the payload export, the replay of a
   producer run, the whitening of a streamed record, and the alert table.
 - [Sangria Benchmark](benchmark.md): the results on the LDC blind year,
-  completed and streamed, over a lossy link, and of the streaming
-  configuration with smoothed whitening.
+  completed and streamed, over a lossy link, of the streaming
+  configuration with smoothed whitening and on the A and E network, and
+  the classical controls on the same features, with the glitch records of
+  LDC-2b.
 - [API Reference](api.md) and [References](references.md).
