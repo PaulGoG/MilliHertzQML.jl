@@ -1332,7 +1332,8 @@ and `$UNBLINDED` at the CSV of the blind year's signal-only TDI (columns
 ```bash
 # Labels, event tables and signal onsets for both years
 julia scripts/label_ldc.jl configs/sangria.toml --h5-file $LDC/LDC2_sangria_training_v2.h5
-julia scripts/label_ldc.jl configs/sangria.toml --truth-csv $UNBLINDED --output-prefix sangria_blind_points
+julia scripts/label_ldc.jl configs/sangria.toml --truth-csv $UNBLINDED \
+    --record-file $LDC/LDC2_sangria_blind_v2.h5 --output-prefix sangria_blind_points
 
 # Band features for both years
 julia scripts/preprocess_ldc.jl configs/experiments/q8_b6.toml \
@@ -1372,7 +1373,7 @@ julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001.toml --run-dir <
 # with the channels served from the TDI record
 julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --h5-file $LDC/LDC2_sangria_training_v2.h5
 julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --truth-csv $UNBLINDED \
-    --output-prefix sangria_ae_blind_points
+    --record-file $LDC/LDC2_sangria_blind_v2.h5 --output-prefix sangria_ae_blind_points
 julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001_ae.toml \
     --h5-file $LDC/LDC2_sangria_training_v2.h5 --label-file data/inputs/sangria_labels.csv
 julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001_ae.toml \
