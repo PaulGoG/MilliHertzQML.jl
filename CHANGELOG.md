@@ -88,6 +88,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   product is refused, since the chronological split and the threshold rule
   take consecutive rows as consecutive windows.
 
+- The classifier kind `"harmonic"`: a logistic regression on the cosine and
+  sine of the encoded angles (`ClassicalControl` with `harmonic = true`,
+  ``2n + 1`` parameters), a classical control with the bounded, periodic
+  feature map of the circuit; configurations
+  `configs/experiments/q8_b6_s001_harmonic.toml` and
+  `q8_b6_s001_ae_harmonic.toml`.
+
 ### Changed
 - The batch gradient defaults to the adjoint method. Its chunk sums are
   taken by tasks that draw chunks from a shared counter, and serial and

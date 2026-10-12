@@ -673,6 +673,15 @@ end
     @test MilliHertzQML.control_parameter_count(8, 0) == 9
     @test MilliHertzQML.control_parameter_count(8, 6) == 61
     @test MilliHertzQML.control_parameter_count(8, 9) == 91
+    @test MilliHertzQML.control_parameter_count(8, 0; harmonic = true) == 17
+    @test_throws ArgumentError ClassicalControl(2, 1; harmonic = true)
+    @test_throws DimensionMismatch ClassicalControl(
+        2,
+        0,
+        π,
+        zeros(Float32, 3);
+        harmonic = true,
+    )
     @test_throws ArgumentError ClassicalControl(0, 0)
     @test_throws ArgumentError ClassicalControl(2, -1)
     @test_throws ArgumentError ClassicalControl(2, 0; span = 0)
@@ -695,12 +704,20 @@ end
     wide = ClassicalControl(2, 0, 2π, Float32[1, -2, 0.5])
     @test predict_probability(wide, x) ≈ σ(0.5 * (u[1] - 2 * u[2]) + 0.5) atol = 1e-6
     @test_throws DimensionMismatch predict_probability(logistic, Float32[0.1, 0.2, 0.3])
+    # The first-harmonic control: a logistic regression on cos and sin of the angles themselves
+    harmonic = ClassicalControl(2, 0, π, Float32[1, -2, 0.5, 0.25, 0.3]; harmonic = true)
+    @test harmonic.harmonic && !logistic.harmonic
+    @test predict_probability(harmonic, x) ≈
+          σ(1 * cos(x[1]) - 2 * cos(x[2]) + 0.5 * sin(x[1]) + 0.25 * sin(x[2]) + 0.3) atol =
+        1e-6
+    # Periodic: a feature clamped at π contributes its cosine only
+    @test predict_probability(harmonic, Float32[π, 0]) ≈ σ(-1 - 2 + 0.3) atol = 1e-6
 
     rng = StableRNG(2026)
     X = Float32.(π .* rand(rng, 24, 3))
     y = Int.(rand(rng, 24) .< 0.4)
-    for hidden in (0, 4)
-        model = ClassicalControl(3, hidden; rng = rng)
+    for (hidden, harmonic) in ((0, false), (4, false), (0, true))
+        model = ClassicalControl(3, hidden; harmonic = harmonic, rng = rng)
         p = MilliHertzQML.predict_all(model, X)
         @test p isa Vector{Float32} && length(p) == 24
         @test p == [predict_probability(model, X[i, :]) for i in 1:24]
@@ -710,7 +727,7 @@ end
         # Mean weighted cross-entropy and its gradient against central
         # differences of the loss in double precision
         function mean_loss(θ)
-            trial = ClassicalControl(3, hidden, π, Float32.(θ))
+            trial = ClassicalControl(3, hidden, π, Float32.(θ); harmonic = harmonic)
             q = Float64.(MilliHertzQML.predict_all(trial, X))
             return -sum(2.5 .* y .* log.(q) .+ (1 .- y) .* log.(1 .- q)) / 24
         end
@@ -750,6 +767,12 @@ end
         @test (loaded.n_features, loaded.hidden, loaded.span) == (3, 4, Float32(π))
         @test loaded.params == control.params && meta isa AbstractDict
         @test loaded_scaler.lower == scaler.lower && loaded_scaler.upper == scaler.upper
+        @test !loaded.harmonic
+        periodic = ClassicalControl(3, 0; harmonic = true, rng = StableRNG(4))
+        periodic_path =
+            save_model(joinpath(dir, "harmonic.jld2"), periodic; scaler = scaler)
+        reloaded = load_model(periodic_path)[1]
+        @test reloaded.harmonic && reloaded.params == periodic.params
         circuit = VariationalQuantumClassifier(3, 1; rng = StableRNG(3))
         circuit_path = save_model(joinpath(dir, "circuit.jld2"), circuit; scaler = scaler)
         @test !haskey(MilliHertzQML.JLD2.load(circuit_path), "kind")
@@ -762,7 +785,7 @@ end
         model_settings(Dict{String,Any}("model" => Dict{String,Any}("kind" => kind)))
     @test model_settings(Dict{String,Any}()).kind == "circuit"
     @test model_settings(Dict{String,Any}()).hidden_units == 6
-    @test MODEL_KINDS == ("circuit", "logistic", "perceptron")
+    @test MODEL_KINDS == ("circuit", "logistic", "perceptron", "harmonic")
     @test_throws ArgumentError settings("forest")
     Random.seed!(11)
     built = build_classifier(settings("circuit"), scaler)
@@ -774,6 +797,9 @@ end
     @test logistic.n_features == 4 && logistic.span == Float32(π / 2)
     perceptron = build_classifier(settings("perceptron"), scaler)
     @test perceptron.hidden == 6 && length(perceptron.params) == 6 * (4 + 2) + 1
+    periodic = build_classifier(settings("harmonic"), scaler)
+    @test periodic isa ClassicalControl && periodic.harmonic && periodic.hidden == 0
+    @test length(periodic.params) == 2 * 4 + 1 && periodic.span == Float32(π / 2)
     @test VQCScorer === ClassifierScorer{VariationalQuantumClassifier}
 
     # Through the stages: training, scoring, and the detector of the run
@@ -822,10 +848,12 @@ end
                 "threshold_criterion" => "youden",
             ),
         )
-        for (kind, hidden) in (("logistic", 0), ("perceptron", 3))
+        for (kind, hidden) in (("logistic", 0), ("perceptron", 3), ("harmonic", 0))
             run = train_classifier(config(kind); run_id = kind)
             model, _, scaler = load_model(run.model_path)
-            @test model isa ClassicalControl && model.hidden == hidden
+            @test model isa ClassicalControl &&
+                  model.hidden == hidden &&
+                  model.harmonic == (kind == "harmonic")
             @test model.span == scaler.phase_span
             snapshot = TOML.parsefile(joinpath(run.run_dir, "config.toml"))["model"]
             @test snapshot["kind"] == kind

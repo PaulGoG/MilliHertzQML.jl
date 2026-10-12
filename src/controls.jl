@@ -7,14 +7,17 @@
 
 The classifiers of `[model] kind`: `"circuit"` (the variational quantum
 classifier, [`VariationalQuantumClassifier`](@ref)), `"logistic"`
-(logistic regression) and `"perceptron"` (one hidden tanh layer of
-`hidden_units` units); the last two are [`ClassicalControl`](@ref)s.
+(logistic regression), `"perceptron"` (one hidden tanh layer of
+`hidden_units` units) and `"harmonic"` (a logistic regression on the cosine
+and sine of the encoded angles); the last three are
+[`ClassicalControl`](@ref)s.
 """
-const MODEL_KINDS = ("circuit", "logistic", "perceptron")
+const MODEL_KINDS = ("circuit", "logistic", "perceptron", "harmonic")
 
 """
-    ClassicalControl(n_features, hidden, span, params)
-    ClassicalControl(n_features, hidden = 0; span = π, rng = Random.default_rng())
+    ClassicalControl(n_features, hidden, span, params; harmonic = false)
+    ClassicalControl(n_features, hidden = 0; span = π, harmonic = false,
+                     rng = Random.default_rng())
 
 Classical control of the variational classifier on the same encoded
 features. With the encoded features ``x \\in [0, \\phi]^{n}`` (the output
@@ -27,6 +30,12 @@ of [`encode_features`](@ref), ``\\phi`` = `span` [rad], ``n`` =
   ``p = \\sigma(w_2 \\cdot \\tanh(W_1 u + b_1) + b_2)``, ``m (n + 2) + 1``
   parameters, `params = [vec(W₁); b₁; w₂; b₂]` with ``W_1`` of size
   ``m \\times n`` stored column-major;
+- `harmonic`, logistic regression on the first harmonics of the angles
+  themselves (not divided by the span, as the rotations of the circuit take
+  them): ``p = \\sigma\\bigl(\\sum_i (a_i \\cos x_i + c_i \\sin x_i) + b\\bigr)``,
+  ``2n + 1`` parameters, `params = [a; c; b]`; bounded and periodic in every
+  feature as the circuit's response is, without the circuit. Requires
+  `hidden == 0`;
 
 with ``\\sigma(z) = 1 / (1 + e^{-z})``. The second constructor draws the
 parameters from a zero-mean normal distribution of standard deviation 0.5
@@ -38,36 +47,46 @@ on `rng`, as those of the circuit.
 - `span`: encoding span ``\\phi`` of the features [rad]; positive, finite.
 - `params`: parameter vector of length
   [`control_parameter_count`](@ref)`(n_features, hidden)`.
+- `harmonic`: the first-harmonic model, with `hidden == 0`.
 
-Throws an `ArgumentError` for an invalid `n_features`, `hidden` or `span`
-and a `DimensionMismatch` for a parameter vector of the wrong length.
+Throws an `ArgumentError` for an invalid `n_features`, `hidden` or `span`,
+or for `harmonic` with `hidden != 0`, and a `DimensionMismatch` for a
+parameter vector of the wrong length.
 """
 struct ClassicalControl <: AbstractClassifier
     n_features::Int
     hidden::Int
     span::Float32
     params::Vector{Float32}
+    harmonic::Bool
     function ClassicalControl(
         n_features::Integer,
         hidden::Integer,
         span::Real,
-        params::AbstractVector{<:Real},
+        params::AbstractVector{<:Real};
+        harmonic::Bool = false,
     )
         n_features >= 1 || throw(
             ArgumentError("n_features = $n_features; at least 1 feature is required."),
         )
         hidden >= 0 ||
             throw(ArgumentError("hidden = $hidden; must be 0 (logistic) or positive."))
+        (harmonic && hidden != 0) && throw(
+            ArgumentError(
+                "harmonic = true requires hidden = 0; " *
+                "the first-harmonic control is a logistic regression.",
+            ),
+        )
         (span > 0 && isfinite(span)) ||
             throw(ArgumentError("span = $span rad; must be positive and finite."))
-        n_params = control_parameter_count(n_features, hidden)
+        n_params = control_parameter_count(n_features, hidden; harmonic = harmonic)
         length(params) == n_params || throw(
             DimensionMismatch(
                 "parameter vector has length $(length(params)); expected $n_params " *
                 "for n_features = $n_features and hidden = $hidden.",
             ),
         )
-        return new(n_features, hidden, Float32(span), Vector{Float32}(params))
+        return new(n_features, hidden, Float32(span), Vector{Float32}(params), harmonic)
     end
 end
 
@@ -75,25 +94,35 @@ function ClassicalControl(
     n_features::Integer,
     hidden::Integer = 0;
     span::Real = π,
+    harmonic::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
 )
+    n_params = control_parameter_count(n_features, hidden; harmonic = harmonic)
     return ClassicalControl(
         n_features,
         hidden,
         span,
-        randn(rng, Float32, control_parameter_count(n_features, hidden)) .* 0.5f0,
+        randn(rng, Float32, n_params) .* 0.5f0;
+        harmonic = harmonic,
     )
 end
 
 """
-    control_parameter_count(n_features, hidden) -> Int
+    control_parameter_count(n_features, hidden; harmonic = false) -> Int
 
 Number of parameters of a [`ClassicalControl`](@ref): `n_features + 1`
 for the logistic regression (`hidden == 0`), `hidden (n_features + 2) + 1`
-for the network of `hidden` tanh units.
+for the network of `hidden` tanh units, and `2 n_features + 1` for the
+first-harmonic model (`harmonic`).
 """
-control_parameter_count(n_features::Integer, hidden::Integer) =
-    hidden == 0 ? n_features + 1 : hidden * (n_features + 2) + 1
+function control_parameter_count(
+    n_features::Integer,
+    hidden::Integer;
+    harmonic::Bool = false,
+)
+    harmonic && return 2 * n_features + 1
+    return hidden == 0 ? n_features + 1 : hidden * (n_features + 2) + 1
+end
 
 # Views of the network parameters into `params`: W₁ (hidden × n_features,
 # column-major), b₁, w₂, and the scalar b₂
@@ -123,12 +152,23 @@ function logistic_logit(θ, x, span::Float32, n::Integer)
     return z
 end
 
+# Logit of the first-harmonic model at the encoded angles x
+function harmonic_logit(θ, x, n::Integer)
+    z = θ[2n+1]
+    for i in 1:n
+        xi = Float32(x[i])
+        z += θ[i] * cos(xi) + θ[n+i] * sin(xi)
+    end
+    return z
+end
+
 """
     predict_probability(model::ClassicalControl, x) -> Float32
 
 Probability of the MBHB class of one encoded feature vector `x` (length
 `n_features`, values in ``[0, \\phi]`` with ``\\phi`` = `model.span`)
-under the logistic regression or the network of `model`
+under the logistic regression, the first-harmonic model or the network of
+`model`
 ([`ClassicalControl`](@ref)), evaluated in single precision without
 allocation. Throws a `DimensionMismatch` for a vector of another length.
 """
@@ -139,7 +179,9 @@ function predict_probability(model::ClassicalControl, x)
             "expected n_features = $(model.n_features).",
         ),
     )
-    if model.hidden == 0
+    if model.harmonic
+        z = harmonic_logit(model.params, x, model.n_features)
+    elseif model.hidden == 0
         z = logistic_logit(model.params, x, model.span, model.n_features)
     else
         W₁, b₁, w₂, b₂ = network_parameters(model)
@@ -209,6 +251,9 @@ the layout of `params`. The gradient is analytic: with
 ``\\partial \\ell / \\partial z`` = [`weighted_bce_derivative`](@ref)
 ``(p, y) \\, p (1 - p)`` and ``u = x / \\phi``, the logistic regression has
 ``\\partial z / \\partial w_i = u_i`` and ``\\partial z / \\partial b = 1``;
+the first-harmonic model has ``\\partial z / \\partial a_i = \\cos x_i``,
+``\\partial z / \\partial c_i = \\sin x_i`` and
+``\\partial z / \\partial b = 1``;
 the network, with ``h_j = \\tanh a_j`` and
 ``\\delta_j = w_{2,j} (1 - h_j^2)``, has
 ``\\partial z / \\partial w_{2,j} = h_j``, ``\\partial z / \\partial b_2 = 1``,
@@ -234,7 +279,24 @@ function batch_gradient(
     θ = model.params
     gradient = zeros(Float32, length(θ))
     loss = 0.0f0
-    if m == 0
+    if model.harmonic
+        for k in 1:n_samples
+            x = @view X_batch[k, :]
+            y = y_batch[k]
+            p = 1.0f0 / (1.0f0 + exp(-harmonic_logit(θ, x, n)))
+            loss += weighted_bce(p, y; positive_weight = positive_weight)
+            dℓdz =
+                weighted_bce_derivative(p, y; positive_weight = positive_weight) *
+                p *
+                (1.0f0 - p)
+            for i in 1:n
+                xi = Float32(x[i])
+                gradient[i] += dℓdz * cos(xi)
+                gradient[n+i] += dℓdz * sin(xi)
+            end
+            gradient[2n+1] += dℓdz
+        end
+    elseif m == 0
         for k in 1:n_samples
             x = @view X_batch[k, :]
             y = y_batch[k]
@@ -314,10 +376,11 @@ The classifier of the `[model]` settings `mdl` ([`model_settings`](@ref)):
 for `kind = "circuit"` a [`VariationalQuantumClassifier`](@ref) of
 `n_qubits` qubits and `n_layers` layers, for `"logistic"` and
 `"perceptron"` a [`ClassicalControl`](@ref) without or with
-`hidden_units` hidden units, on the encoding span of `scaler`. `n_qubits`
-is the feature dimension of every kind. The parameters are drawn from the
-default random stream, which the caller seeds. Throws an `ArgumentError`
-for a kind outside [`MODEL_KINDS`](@ref).
+`hidden_units` hidden units, for `"harmonic"` the first-harmonic
+[`ClassicalControl`](@ref) (`harmonic = true`), on the encoding span of
+`scaler`. `n_qubits` is the feature dimension of every kind. The parameters
+are drawn from the default random stream, which the caller seeds. Throws an
+`ArgumentError` for a kind outside [`MODEL_KINDS`](@ref).
 """
 function build_classifier(mdl::NamedTuple, scaler::FeatureScaler)
     mdl.kind == "circuit" && return VariationalQuantumClassifier(mdl.n_qubits, mdl.n_layers)
@@ -325,6 +388,8 @@ function build_classifier(mdl::NamedTuple, scaler::FeatureScaler)
         return ClassicalControl(mdl.n_qubits, 0; span = scaler.phase_span)
     mdl.kind == "perceptron" &&
         return ClassicalControl(mdl.n_qubits, mdl.hidden_units; span = scaler.phase_span)
+    mdl.kind == "harmonic" &&
+        return ClassicalControl(mdl.n_qubits, 0; span = scaler.phase_span, harmonic = true)
     throw(
         ArgumentError(
             "[model] kind = \"$(mdl.kind)\"; expected one of " *

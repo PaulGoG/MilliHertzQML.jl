@@ -37,9 +37,10 @@ end
                scaler = nothing)
 
 Persist a [`ClassicalControl`](@ref) to a JLD2 file: `kind = "control"`,
-its feature dimension `n_features`, hidden units `hidden`, encoding `span`
-and parameter vector `params`, the feature `scaler` as the circuit method
-stores it, and the `metadata` dictionary. Returns `path`.
+its feature dimension `n_features`, hidden units `hidden`, the flag
+`harmonic` of the first-harmonic model, encoding `span` and parameter
+vector `params`, the feature `scaler` as the circuit method stores it, and
+the `metadata` dictionary. Returns `path`.
 """
 function save_model(
     path::AbstractString,
@@ -54,6 +55,7 @@ function save_model(
         hidden = model.hidden,
         span = model.span,
         params = model.params,
+        harmonic = model.harmonic,
         scaler_lower = scaler === nothing ? nothing : scaler.lower,
         scaler_upper = scaler === nothing ? nothing : scaler.upper,
         scaler_phase_span = scaler === nothing ? nothing : scaler.phase_span,
@@ -70,7 +72,9 @@ artifact without a `kind` key, or with `kind = "circuit"`, holds a
 `VariationalQuantumClassifier`: the circuit is rebuilt from the stored
 hyperparameters and the stored parameter vector dispatched into the ansatz
 layers. `kind = "control"` holds a [`ClassicalControl`](@ref); any other
-kind is refused with an `ArgumentError`. Returns the feature scaler as
+kind is refused with an `ArgumentError`. An artifact of a control written
+before the first-harmonic model existed has no `harmonic` key and loads as
+the model it was: `harmonic = false`. Returns the feature scaler as
 well (`nothing` for artifacts saved without one). An artifact written
 before the phase-encoding span was persisted is restored with the full
 period ``2\\pi`` its scaler was trained with, and a warning names it: such
@@ -85,7 +89,8 @@ function load_model(path::AbstractString)
             d["n_features"],
             d["hidden"],
             d["span"],
-            Vector{Float32}(d["params"]),
+            Vector{Float32}(d["params"]);
+            harmonic = get(d, "harmonic", false),
         )
     elseif kind == "circuit"
         model = VariationalQuantumClassifier(d["n_qubits"], d["n_layers"])

@@ -69,7 +69,7 @@ output_prefix = "telemetry_complex"   # prefix of the output feature/label CSVs
 [model]
 n_qubits = 4    # register size of the circuit and feature dimension of every kind; >= 2, <= 24
 n_layers = 4    # data re-uploading layers; >= 1
-kind = "circuit"    # classifier; one of: "circuit" (variational quantum classifier) | "logistic" (logistic regression) | "perceptron" (one hidden tanh layer)
+kind = "circuit"    # classifier; one of: "circuit" (variational quantum classifier) | "logistic" (logistic regression) | "perceptron" (one hidden tanh layer) | "harmonic" (logistic regression on the first harmonics of the encoded angles)
 hidden_units = 6    # hidden units of the "perceptron"; >= 1
 
 [training]

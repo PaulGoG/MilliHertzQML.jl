@@ -36,7 +36,7 @@ output_prefix = "sangria_b6s001_train"   # prefix of the output feature/label CS
 [model]
 n_qubits = 8    # VQC register size; >= 2, <= 24; must equal the feature dimension
 n_layers = 4    # data re-uploading layers; >= 1
-kind = "perceptron" # classifier; one of: "circuit" (variational quantum classifier) | "logistic" (logistic regression) | "perceptron" (one hidden tanh layer)
+kind = "perceptron" # classifier; one of: "circuit" (variational quantum classifier) | "logistic" (logistic regression) | "perceptron" (one hidden tanh layer) | "harmonic" (logistic regression on the first harmonics of the encoded angles)
 hidden_units = 6    # hidden units of the "perceptron"; >= 1
 
 [training]
