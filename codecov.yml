@@ -1,0 +1,11 @@
+# Codecov configuration. Coverage is uploaded by the CI leg on the current
+# Julia release (.github/workflows/CI.yml); the project and patch statuses
+# are informational, so that the commit status rests on the tests.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true

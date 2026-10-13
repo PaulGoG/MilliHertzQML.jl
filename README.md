@@ -13,54 +13,68 @@ massive black hole binary (MBHB) coalescences in LISA-like milliHertz
 telemetry, both in a completed record and streamed through a simulated
 telemetry mission as the data reaches the ground. The circuits are
 simulated with `Yao.jl` and differentiated by its reversible (adjoint)
-mode; the optimiser comes from `Optimisers.jl`. The classification approach follows Isfan et al., *Class.
-Quantum Grav.* **42** 225001 (2025), DOI
+mode; the optimiser comes from `Optimisers.jl`. The classification
+approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001
+(2025), DOI
 [10.1088/1361-6382/ae1787](https://doi.org/10.1088/1361-6382/ae1787),
 reimplemented in Julia in place of the original Python and Qiskit code.
 
-The package is the classifier of a set of three.
-[StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl)
-holds what depends neither on the physical domain nor on the method:
-conditioning of a streamed record, the estimator interface, the replay,
-evaluation, configuration and provenance.
-[MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl) holds the
-gravitational-wave layer: LISA noise, waveforms, LDC products, labelling,
-and the coupling to a telemetry producer. `using MilliHertzQML` gives the
-interface of all three.
+The package is the classifier of a set of three:
+
+- [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl)
+  holds what depends neither on the physical domain nor on the method:
+  the conditioning of a streamed record, the estimator interface, the
+  replay of a telemetry mission, evaluation, configuration and provenance;
+- [MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl) holds
+  the gravitational-wave layer: the LISA noise models, waveforms, the
+  readers of the LISA Data Challenge (LDC) products, labelling, and the
+  coupling to a telemetry producer;
+- MilliHertzQML.jl holds the circuit, its training, and the classical
+  controls on the same features, and re-exports the two layers, so that
+  `using MilliHertzQML` gives the whole pipeline.
+
+This README describes `main`. Its manual is built at
+[PaulGoG.github.io/MilliHertzQML.jl/dev](https://PaulGoG.github.io/MilliHertzQML.jl/dev/),
+and the links below point there. The manual of the latest release, 2.0.1,
+is at [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); it
+predates the separation of the layers and the correction of 12 October
+2026 noted under [At a glance](#at-a-glance).
 
 ## At a glance
 
-On the LISA Data Challenge 2a "Sangria" blind year, with decision
-thresholds fitted on the training year and applied unchanged:
+Two configurations of one model, eight qubits with four re-uploading
+layers on eight features per window (six band powers between 0.3 and
+40 mHz, the spectral entropy and the spread of the log power), run on the
+LISA Data Challenge 2a "Sangria" blind year with decision thresholds
+fitted on the training year and applied unchanged. The selected
+configuration, `q8_b6`, whitens every window by a Welch estimate of the
+noise spectrum; the streaming configuration, `q8_b6_s001`, by the same
+estimate smoothed in log-frequency by 0.01 dex, which shortens the stretch
+of data a window needs from 1.16 days to 2.8 hours and makes the causal
+replay usable.
 
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
-| Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 0.3 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
-| Alert time at the ground station | 0.3 h before to 42 h after the merger | **11 to 28 h before** |
-| Streamed year: false alarms per 30 d | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
-| Conditioning lag of every alert | 1.16 days | **2.8 hours** |
-| Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+| Completed blind year: labelled events detected | 5 of 5 | 5 of 5 |
+| Completed blind year: false alarms per 30 days | **1.57** | 2.97 |
+| Streamed year: coalescences alerted before their merger | 1 of 6 | **5 of 6** (6 of 6 at three further seeds) |
+| Streamed year: alert time at the ground station, relative to the merger | 0.3 h before to 42 h after | **11 to 28 h before** |
+| Streamed year: false alarms per 30 days | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
+| Stretch of data a window needs before it is scored | 1.16 days | **2.8 hours** |
+| Part of the record scored when 0.43 % of the batches are lost | 9 % | **81 %** |
 
 An alert counts for a coalescence only from its signal onset, the first
 window in which the signal of the source, conditioned as the record is,
 reaches a norm of 3 against the record's own noise, 10 to 38 hours before
-the merger on this year; earlier alarms count as false alarms. Release
-1.2.0 credited the whole four-day label span and quoted leads of up to 71
-hours; releases 2.0.0 to 2.0.1 credited from an onset defined against the
-instrument noise alone, which the record's noise, the Galactic foreground
-included, exceeds by a factor of about 20 at the frequencies of the
-inspiral (see the [corrections](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)
-on the benchmark page).
+the merger on this year; earlier alarms count as false alarms.
 
 ![Classifier output and alarms over the year-long replay of the streaming configuration, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
 
 *The blind year streamed through a simulated telemetry mission and
 whitened causally, from data already delivered to the ground. The
-streaming configuration, trained on a Welch whitening spectrum smoothed in
-log-frequency, alerts five of the six coalescences at the ground station
-11 to 28 hours before their merger, 10 to 21 hours after the signal
-onset, at four false-alarm episodes in the year.*
+streaming configuration alerts five of the six coalescences at the ground
+station 11 to 28 hours before their merger, 10 to 21 hours after the
+signal onset, at four false-alarm episodes in the year.*
 
 ![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
@@ -71,22 +85,32 @@ Two results qualify the table. On the same eight features and under the
 same protocol, a logistic regression with nine parameters does at least as
 well as the circuit with 64: it alerts the six coalescences before their
 mergers at every seed, at 0.58 to 0.74 false alarms per 30 days, and has
-the larger ROC area on the completed record; the detection results are
-those of the conditioning and the features, for which the circuit is one
-classifier among others. What the circuit's feature map adds is a tolerance
-of loud instrumental transients: on the glitch records of LDC-2b (Spritz),
-at a matched rate of glitch alerts, it alerts the loud coalescence 20 to
-39 hours ahead where a monotone classifier gives 7 to 12 hours, and a
-logistic regression on the cosine and sine of the same angles reproduces
-that without the circuit
-([Classical controls on the same features](https://PaulGoG.github.io/MilliHertzQML.jl/stable/benchmark/#Classical-controls-on-the-same-features)).
+the larger ROC area on the completed record. The detection results are
+therefore those of the conditioning and the features, for which the
+circuit is one classifier among others. What the circuit's feature map
+adds is a tolerance of loud instrumental transients: on the glitch records
+of LDC-2b (Spritz), at a matched rate of alerts on glitches, it alerts the
+loud coalescence 20 to 39 hours ahead where a classifier monotone in the
+features gives 7 to 12 hours; a logistic regression on the cosine and sine
+of the same encoded angles reproduces that without the circuit
+([Classical controls on the same features](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Classical-controls-on-the-same-features)).
+
+**Corrections.** Release 1.2.0 credited an alert anywhere in the four-day
+label span of a coalescence and quoted leads of up to 71 hours; releases
+2.0.0 to 2.0.1 credited from an onset defined against the instrument
+noise alone, which the record's noise, the Galactic foreground included,
+exceeds by a factor of about 20 at the frequencies of the inspiral. The
+numbers above follow the rule stated after the table, adopted on
+12 October 2026; the benchmark page records the
+[corrections](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency).
 
 Every figure and animation, with captions, is on the
-[Results](https://PaulGoG.github.io/MilliHertzQML.jl/stable/results/) page of
+[Results](https://PaulGoG.github.io/MilliHertzQML.jl/dev/results/) page of
 the manual; the
-[Sangria Benchmark](https://PaulGoG.github.io/MilliHertzQML.jl/stable/benchmark/)
+[Sangria Benchmark](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/)
 page gives the protocol, every run of the grid, the comparisons with the
-published method and a classical baseline, and the limits of each result.
+published method and with the classical controls, and the limits of each
+result.
 
 ## File structure
 
@@ -96,7 +120,7 @@ MilliHertzQML.jl/
 ├── configs/             # default, Sangria, and experiment configurations
 ├── src/                 # the classifier, on StreamingInference.jl and MilliHertzBase.jl
 ├── ext/                 # CairoMakie extension (classifier figures)
-├── scripts/             # entry points, own environment
+├── scripts/             # entry points of the pipeline stages, own environment
 ├── test/                # suite with static QA, own environment
 ├── bench/               # benchmarks, own environment
 ├── docs/                # Documenter manual, own environment
@@ -106,23 +130,24 @@ MilliHertzQML.jl/
 
 The full tree is at the end of this page.
 
-## Environment
+## Installation
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
-of packages added by URL; continuous integration runs the suite on 1.13
-and the current release. It builds on StreamingInference.jl and
-MilliHertzBase.jl, pinned by URL and commit. If your git configuration
-rewrites GitHub URLs to SSH, set `JULIA_PKG_USE_CLI_GIT=true` so that Pkg
-clones through the git command line. It is not registered in the
-General registry: a downstream environment adds it by URL, pinned to a
-release tag,
+of packages added by URL, and is not registered in the General registry.
+The latest release, 2.0.1, is a single package; `main` (3.0.0-DEV), which
+this README describes, builds on StreamingInference.jl and
+MilliHertzBase.jl, pinned by URL and commit in every environment.
+Continuous integration runs the suite on Julia 1.13 and on the current
+release. A downstream environment adds the package by URL, pinned to the
+release tag or following `main`:
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v2.0.1")
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v2.0.1")  # the release
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl")                  # main
 ```
 
-or develops a clone by path. From a clone:
+The pipeline is run from a clone:
 
 ```bash
 git clone https://github.com/PaulGoG/MilliHertzQML.jl.git
@@ -131,54 +156,21 @@ julia activate.jl
 ```
 
 Every environment (the root, `scripts/`, `test/`, `bench/`, `docs/`)
-carries an `activate.jl` that activates and instantiates it; the auxiliary
-environments consume the package by path and activate themselves, so the
-entry points below run as written. `Manifest.toml` files are not tracked.
-Every environment pins the two layers at a commit. The script environment
-also pins two unregistered packages of mine at the commits of their
-release tags:
+carries an `activate.jl` that activates and instantiates it, and every
+entry point includes its own first, so the commands below run as written.
+The auxiliary environments consume the package by path; `Manifest.toml`
+files are not tracked. The script and test environments also pin
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.1.1`, the telemetry producer (in the test environment too), and
+`v2.1.1`, the telemetry producer whose missions the streaming path
+replays, and the script environment
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
-`v2.0.1`, the constellation response of the simulator. Where git rewrites
-GitHub URLs to SSH, instantiate them with `JULIA_PKG_USE_CLI_GIT=true`.
+`v2.0.1`, the constellation response of the simulator; both are
+unregistered packages of mine, pinned at the commits of those tags. If
+your git configuration rewrites GitHub URLs to SSH, set
+`JULIA_PKG_USE_CLI_GIT=true` so that Pkg clones through the git command
+line.
 
-## Entry points
-
-```bash
-julia activate.jl                                   # instantiate the root environment
-julia scripts/generate_data.jl configs/default.toml --run-id sim01
-julia scripts/preprocess_ldc.jl configs/default.toml \
-    --h5-file data/inputs/simulated_telemetry_complex.h5 \
-    --label-file data/inputs/simulated_telemetry_complex_labels.csv \
-    --output-prefix telemetry_sim
-julia scripts/train.jl configs/default.toml --run-id <RUN_ID>
-julia scripts/infer.jl configs/default.toml --run-id <RUN_ID> --block test
-julia scripts/infer_telemetry.jl configs/default.toml --run-dir <RUN_DIR> \
-    --model models/run_<RUN_ID>/gw_model.jld2       # replay a telemetry mission
-julia test/runtests.jl                              # static QA, unit tests, pipeline smoke test
-julia bench/benchmarks.jl                           # performance measurements
-julia docs/make.jl                                  # manual, written to docs/build/
-```
-
-The manual is deployed at
-[PaulGoG.github.io/MilliHertzQML.jl/stable](https://PaulGoG.github.io/MilliHertzQML.jl/stable/)
-from the latest release and at
-[`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/) from `main`.
-
-## Component status
-
-| Component | State |
-|---|---|
-| Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
-| Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
-| Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
-| LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz |
-| Classical controls | Logistic regression, one-hidden-layer network and a logistic regression on the first harmonics of the encoded angles, through the same stages as the circuit (`[model] kind`) |
-| Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
-| Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
-
-## Pipeline
+## Pipeline and entry points
 
 ```mermaid
 flowchart LR
@@ -200,11 +192,50 @@ path replays the same model against a telemetry mission and scores each
 window once its conditioning stretch, the part of the record around it
 over which it is filtered and whitened, has reached the ground. The
 threshold is fitted once, in the batch path, and carried unchanged into
-both. The manual describes the
-[configuration and provenance](https://PaulGoG.github.io/MilliHertzQML.jl/stable/architecture/),
-the [telemetry coupling](https://PaulGoG.github.io/MilliHertzQML.jl/stable/telemetry/),
-and the [physics](https://PaulGoG.github.io/MilliHertzQML.jl/stable/physics/)
-of the simulator and the features.
+both. Every stage is a library function behind a thin script; each script
+takes a TOML configuration and names its inputs on the command line, and
+every parameter comes from the configuration. In the order of the
+diagram, on the simulated record of `configs/default.toml`:
+
+```bash
+julia activate.jl                                   # instantiate the root environment
+julia scripts/generate_data.jl configs/default.toml --run-id sim01   # simulated record and labels into data/inputs/
+julia scripts/preprocess_ldc.jl configs/default.toml \
+    --h5-file data/inputs/simulated_telemetry_complex.h5 \
+    --label-file data/inputs/simulated_telemetry_complex_labels.csv \
+    --output-prefix telemetry_sim                   # whitened band features per window
+julia scripts/train.jl configs/default.toml --run-id <RUN_ID>               # weights and threshold
+julia scripts/infer.jl configs/default.toml --run-id <RUN_ID> --block test  # the completed record
+julia scripts/export_telemetry_payload.jl configs/default.toml \
+    --h5-file data/inputs/simulated_telemetry_complex.h5 \
+    --catalog data/inputs/simulated_telemetry_complex_events.csv \
+    --output-prefix telemetry_sim                   # payload and scenario of a DeepSpaceTelemetry mission
+julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTelemetry run> \
+    --model models/run_<RUN_ID>/gw_model.jld2       # replay the mission: scored windows, alert table, figure
+julia test/runtests.jl                              # static QA, unit tests, pipeline smoke test
+julia bench/benchmarks.jl                           # performance measurements
+julia docs/make.jl                                  # manual, written to docs/build/
+```
+
+For an LDC record, `scripts/label_ldc.jl` takes the place of the
+generation step: it writes the labels, the event table and the signal
+onsets from the truth stream of the product, and `preprocess_ldc.jl` reads
+the product itself; the
+[benchmark page](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Reproducing)
+lists the commands that reproduce the Sangria results. `scripts/animate.jl`
+draws the GIF of a training history or of a replay.
+
+## Component status
+
+| Component | State |
+|---|---|
+| Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
+| Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
+| Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
+| LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz |
+| Classical controls | Logistic regression, one-hidden-layer network and a logistic regression on the first harmonics of the encoded angles, through the same stages as the circuit (`[model] kind`) |
+| Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and generation gaps handled |
+| Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
 
 ## Limitations
 
@@ -232,8 +263,8 @@ of the simulator and the features.
 - **Signal onsets from the combined truth stream.** The onset of a
   coalescence is where the sum of all MBHB signals first reaches a norm
   of 3 against the record's own noise, sought past the preceding
-  coalescence; an alert after it may
-  still have been raised by a neighbouring source.
+  coalescence; an alert after it may still have been raised by a
+  neighbouring source.
 - **The circuit is not what detects.** A logistic regression on the same
   features matches or beats it on clean data; its feature map, not its
   entanglement, is what tolerates loud transients.
@@ -302,6 +333,7 @@ MilliHertzQML.jl/
 │   ├── workflows/CI.yml    # Tests on the compat floor and the current release, formatting check, coverage
 │   ├── workflows/Documentation.yml  # Manual built on every push, deployed to GitHub Pages
 │   └── dependabot.yml      # Weekly updates of the Julia and GitHub Actions dependencies
+├── codecov.yml             # Coverage statuses informational; the commit status rests on the tests
 ├── .JuliaFormatter.toml    # Formatter configuration
 ├── .gitignore
 ├── CHANGELOG.md            # Notable changes (Keep a Changelog format)
