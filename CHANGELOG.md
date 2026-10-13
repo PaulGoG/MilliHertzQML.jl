@@ -110,6 +110,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
+- The script and test environments pin DeepSpaceTelemetry.jl 2.6.0
+  (the tick clock, the gap table and the declared-hole feed, the run
+  descriptor, the reference run adapter, multi-column payloads) and
+  CurvatureDistinguishability.jl 2.0.4 (CSV.jl 1.1 admitted), in place of
+  2.1.1 and 2.0.1; the replay of a one-column mission is unchanged, and a
+  mission with several payload columns is refused by MilliHertzBase.jl
+  until the replay reads them.
 - The signal onset from which alerts are credited is defined against the
   record's own noise: the first window in which the truth stream,
   high-passed and whitened as the observed record is, reaches a norm of 3

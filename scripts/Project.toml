@@ -13,8 +13,8 @@ StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
-CurvatureDistinguishability = {rev = "bf82733675f386698bd5966b65e24e8868e1c0be", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
-DeepSpaceTelemetry = {rev = "7af7e4647ace73e2932397cbba33a299249e2495", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "f18bf3411b864c330ce1a0015098f78d349027cd"}
+CurvatureDistinguishability = {rev = "66a15a133ce09351d00c0df2f02aaac94854369a", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
+DeepSpaceTelemetry = {rev = "48fd43696544e64dff59e8833396531a70b48de0", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "c84b4beeb1e44d46b61881a387ddf5de44dcf900"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "c5e913ffcc3fc1aa197c07ff0f4df2fbb86e5931"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "42a2c2c74b725ca177d6da4fd4c384e4b714671d"}

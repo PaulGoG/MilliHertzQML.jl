@@ -161,10 +161,10 @@ entry point includes its own first, so the commands below run as written.
 The auxiliary environments consume the package by path; `Manifest.toml`
 files are not tracked. The script and test environments also pin
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.1.1`, the telemetry producer whose missions the streaming path
+`v2.6.0`, the telemetry producer whose missions the streaming path
 replays, and the script environment
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
-`v2.0.1`, the constellation response of the simulator; both are
+`v2.0.4`, the constellation response of the simulator; both are
 unregistered packages of mine, pinned at the commits of those tags. If
 your git configuration rewrites GitHub URLs to SSH, set
 `JULIA_PKG_USE_CLI_GIT=true` so that Pkg clones through the git command
