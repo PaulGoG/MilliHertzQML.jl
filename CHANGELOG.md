@@ -114,9 +114,30 @@ versioning follows [Semantic Versioning](https://semver.org/).
   (the tick clock, the gap table and the declared-hole feed, the run
   descriptor, the reference run adapter, multi-column payloads) and
   CurvatureDistinguishability.jl 2.0.4 (CSV.jl 1.1 admitted), in place of
-  2.1.1 and 2.0.1; the replay of a one-column mission is unchanged, and a
-  mission with several payload columns is refused by MilliHertzBase.jl
-  until the replay reads them.
+  2.1.1 and 2.0.1. Producer runs are read through StreamingInference.jl's
+  DeepSpaceTelemetry extension, which builds on the producer's reference
+  run adapter (it was MilliHertzBase.jl's extension).
+- `scripts/infer_telemetry.jl` serves a model the channels it was trained
+  on from the payload columns of a mission that carried them (the A and E
+  network as one two-column payload, exported under `[tdi] channels =
+  "AE"`), the A column to a model of the A channel, and the record
+  (`--tdi-file`) for a mission that carried the A channel alone or when
+  given explicitly. The snapshot `config_telemetry.toml` records the
+  payload columns of the run and those served, and the producer's identity
+  of the run under `[producer]` (its `descriptor.toml`: run identifier,
+  version and commit, configuration digest, clock).
+- Replays honour the holes the producer declares: generation gaps and a
+  full recorder (the declared-hole feed of DeepSpaceTelemetry 2.6.0, and
+  for earlier producers the generation gaps of their event logs) become
+  permanent holes from their declaration, widened by
+  `tdi_gap_dilation_sec` like a lost batch, so that the window whose
+  stretch begins within that margin after such a gap is no longer scored;
+  replays of runs without declared holes are unchanged. A live replay
+  (`--live`) ends when the producer's record is final rather than when its
+  figures are written.
+- `scripts/export_telemetry_payload.jl` exports the channels of the
+  configuration's mode (`[tdi] channels`): the A channel as one column, the
+  A and E network as two named columns of one payload.
 - The signal onset from which alerts are credited is defined against the
   record's own noise: the first window in which the truth stream,
   high-passed and whitened as the observed record is, reaches a norm of 3

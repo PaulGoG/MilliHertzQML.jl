@@ -57,16 +57,20 @@ julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTeleme
 ### Run interface
 
 The consumer never writes into a producer run directory. It reads the
-directory through the producer's own API, in the package extension that
-loads with DeepSpaceTelemetry.jl (`open_telemetry_run`), so that a change
-of the run-directory contract surfaces as a version bump, checked against
-`[telemetry] producer_compat`, or as an API error rather than as silent
-format drift. The run exposes its geometry (`run_geometry`: sampling
-rate, segment length, batch size, samples per batch, mission epoch,
-producer version), its batches (`list_batches`: delivered, lost or pruned,
-each with the payload rows it covers), the payload of a delivered batch
-(`read_batch`), the arrival feed in mission-time order (`arrival_events`),
-and the lifecycle state (`run_state`). The rows of a batch are the payload
+directory through the producer's reference run adapter, which is
+versioned with the run-directory contract, in the extension of
+StreamingInference.jl that loads with DeepSpaceTelemetry.jl 2.6 or later
+(`open_telemetry_run`), so that a change of the contract surfaces as a
+version bump, checked against `[telemetry] producer_compat`, rather than
+as silent format drift. The run exposes its geometry (`run_geometry`:
+sampling rate, segment length, batch size, samples per batch, mission
+epoch, producer version), its batches (`list_batches`: delivered, lost or
+pruned, each with the payload rows it covers), the payload of a delivered
+batch (`read_batch`), the arrival feed in mission-time order
+(`arrival_events`), the holes the producer declares (`declared_holes`),
+the lifecycle state (`run_state`) and whether the record is final
+(`record_final`), and the producer's own identity of the run
+(`run_descriptor`, its `descriptor.toml`). The rows of a batch are the payload
 row the producer stamps on it (`payload_row`, from DeepSpaceTelemetry
 2.1.0), checked against its content epoch, or else the row of that epoch;
 never its stored index, since the two differ once the producer discards
@@ -78,13 +82,29 @@ or an emitter restart: those versions read the payload sequentially, so
 after such an event every batch carries rows other than those of its
 content epoch.
 
+A run may carry several payload columns under one link accounting
+(DeepSpaceTelemetry 2.6.0): one batch, one transfer, one loss for all of
+them. `scripts/infer_telemetry.jl` serves a model the channels it was
+trained on from those columns when the run carries them
+(`telemetry_run_columns`), and the A column to a model of the A channel. A
+mission that carried the A channel alone serves the other channels of
+every delivered batch from the TDI record its payload was exported from
+(`--tdi-file`, `ScheduledRecordRun`, which refuses a record whose A
+channel is not the payload the mission delivered). The snapshot
+`config_telemetry.toml` records the columns the run carries and those
+served, and, under `[producer]`, the producer's identity of the run: its
+run identifier, version and commit, configuration digest and clock.
+
 ### Scheduling and conditioning
 
 Replaying the feed (`replay_run`) maintains the coverage of delivered rows
 as a set of disjoint intervals (`Coverage`), so the order of arrivals,
 live batches first and the archive backfilled newest-first, does not
 matter. A lost or pruned batch is a permanent hole, widened by
-`tdi_gap_dilation_sec` on each side, that later arrivals never fill.
+`tdi_gap_dilation_sec` on each side, that later arrivals never fill, and
+so is every hole the producer declares, from the instant of its
+declaration; arrivals and declarations are consumed in mission-time
+order.
 
 A window is scored once, at the mission time of the arrival that completes
 its **conditioning stretch**: its own rows widened by `context_windows`
@@ -126,12 +146,15 @@ skipped and counted, or refused (`late_policy`). Every scored row then
 records `release_at` beside `complete_at`, and alerts are timed by it
 (`scored_at`); `replay_state` returns the finalised replay, from which
 `windows_table` and `gaps_table` are read. Rows the producer never
-generated (a scheduled generation gap, an emitter restart) reach the
-consumer only as a jump in the content epoch, not as a lost batch, so the
-windows around them are not known to be lost: they hold back the later
-windows until the order horizon or the end of the feed, and are declared
-`:horizon` or `:undelivered`. Reading the producer's declared gaps is
-future work.
+generated (a scheduled generation gap, a full recorder, an emitter
+restart) or never delivered by the end of the run reach the consumer as
+holes the producer declares with their cause (`declared_holes`: the
+declared-hole feed of DeepSpaceTelemetry 2.6.0, and for earlier producers
+the generation gaps of their event logs, each known from the end of the
+gap). A stateful estimator is told of the windows such a hole settles when
+it is declared, with the producer's cause (`:scheduled`, `:recorder`,
+`:stream`, `:undelivered`, `:not_generated`), and the later windows are
+released as they complete.
 
 ### Whitening PSD
 
@@ -246,9 +269,12 @@ span and:
 The benchmark page counts an event whose only alert is shared as not
 detected on its own. In live mode (`follow_run`, `[telemetry] mode =
 "live"` or `--live`) the feed is polled every `poll_interval_sec` and
-consumed beyond the events already processed until the run reaches a
-terminal sentinel and the feed is drained; the two modes share the same
-state machine (`process_event!`) and give identical tables.
+consumed beyond the events and declared holes already processed until
+the producer reports the record final (`record_final`: the run has ended,
+or only its derived products are still being written) and both feeds are
+drained; only the batches that fresh arrivals name are resolved. The two
+modes share the same state machine (`process_event!`, `process_hole!`)
+and give identical tables.
 
 ### Gaps and figures
 

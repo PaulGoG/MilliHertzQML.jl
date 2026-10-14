@@ -15,6 +15,6 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 [sources]
 CurvatureDistinguishability = {rev = "66a15a133ce09351d00c0df2f02aaac94854369a", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
 DeepSpaceTelemetry = {rev = "48fd43696544e64dff59e8833396531a70b48de0", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "c84b4beeb1e44d46b61881a387ddf5de44dcf900"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "5fed7bb4a9737eed8b4548e293b132d138ef0a03"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "42a2c2c74b725ca177d6da4fd4c384e4b714671d"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "45df6001bc7a070e1b755d7428941ed859656fbe"}

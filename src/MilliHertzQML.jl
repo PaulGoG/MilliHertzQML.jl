@@ -97,6 +97,7 @@ using StreamingInference:
     roc_curve,
     rootrelative,
     row_time,
+    run_descriptor,
     run_geometry,
     run_state,
     RunGeometry,
@@ -117,6 +118,7 @@ using StreamingInference:
     STRIP_HEIGHT,
     synthesize_noise,
     tapered_periodogram,
+    telemetry_run_columns,
     threshold_rows,
     threshold_sweep,
     time_row,
@@ -307,6 +309,7 @@ export window_indices
 export with_pipeline_root, config_root
 export whitening_psd_from_sidecar, ReplayState, process_event!, windows_table, replay_run
 export follow_run, detector_from_run, open_telemetry_run, alert_latency_table
+export telemetry_run_columns, run_descriptor
 export event_merger_times
 export export_telemetry_payload, samples_per_batch, catalog_events
 

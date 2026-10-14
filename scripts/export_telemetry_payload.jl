@@ -1,7 +1,9 @@
 # scripts/export_telemetry_payload.jl — dispatcher of the payload-export
-# stage (`export_telemetry_payload`): the A channel of an HDF5 TDI product
-# as the amplitude CSV and scenario fragment ingested by the telemetry
-# producer. Every parameter comes from the configuration; the command line
+# stage (`export_telemetry_payload`): the channels of the configuration's
+# mode ([tdi] channels) of an HDF5 TDI product as the payload CSV and
+# scenario fragment ingested by the telemetry producer — the A channel as
+# one amplitude column, the A and E network as two named columns of one
+# payload. Every parameter comes from the configuration; the command line
 # names the configuration file and the external inputs only.
 
 include(joinpath(@__DIR__, "common.jl"))
@@ -17,7 +19,7 @@ Command line of the payload-export stage: an optional positional `config`
 """
 function parse_commandline()
     s = ArgParseSettings(;
-        description = "Export the A channel of an HDF5 TDI product as a telemetry payload.",
+        description = "Export the channels of an HDF5 TDI product ([tdi] channels) as a telemetry payload.",
     )
     @add_arg_table! s begin
         "config"
@@ -54,7 +56,7 @@ function main()
     println(
         "  $(result.n_rows) rows at $(result.sample_rate) Hz from $(result.start_sim_time)",
     )
-    println("  Payload:  $(result.payload_path)")
+    println("  Payload:  $(result.payload_path) (columns $(join(result.columns, ", ")))")
     println("  Scenario: $(result.scenario_path)")
     println("  Markers:  $(length(result.markers))")
     report_timing()

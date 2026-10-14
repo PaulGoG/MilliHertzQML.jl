@@ -1037,8 +1037,11 @@ inside the range of the A configuration (0.33 to 1.32), and 4.69 at seed
 1009, whose rate on the completed record is also among the highest. Four
 seeds do not rank the two modes by false-alarm rate.
 
-**The link.** The telemetry producer carries one payload column, the A
-channel. The replay of a model of this mode takes the delivery of that
+**The link.** The mission carried one payload column, the A channel, as
+every mission of this page; DeepSpaceTelemetry 2.6 can carry both channels
+as columns of one payload (`[tdi] channels = "AE"` in the export), which
+makes the common delivery hold by construction. The replay of a model of
+this mode takes the delivery of that
 mission and serves A and E of every delivered batch from the TDI record,
 after checking batch by batch that the A column of the record is the
 payload the mission delivered (`scripts/infer_telemetry.jl --tdi-file`,

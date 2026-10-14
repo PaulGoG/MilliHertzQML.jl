@@ -2,10 +2,11 @@
 # (or follow live) a DeepSpaceTelemetry run directory with a trained
 # classifier, write the scored-window table and the alert-latency table,
 # and draw the alert figure. The consumer only reads the run directory. A
-# model trained on several channels is served the channels of every
-# delivered batch from the TDI record the mission's payload was exported
-# from (--tdi-file, and --tdi-first-row when the payload starts later in the
-# record).
+# model trained on several channels reads them from the payload columns of a
+# mission that carried them (DeepSpaceTelemetry 2.6 or later); a mission that
+# carried the A channel alone is served the channels of every delivered batch
+# from the TDI record its payload was exported from (--tdi-file, and
+# --tdi-first-row when the payload starts later in the record).
 
 include(joinpath(@__DIR__, "common.jl"))
 
@@ -37,7 +38,7 @@ function parse_commandline()
         help = "Event table CSV (merger_time_s, label spans and signal onsets) for the alert-latency table"
         default = nothing
         "--tdi-file"
-        help = "TDI record (HDF5) the payload of the mission was exported from; required for a model trained on several channels"
+        help = "TDI record (HDF5) the payload of the mission was exported from; serves the channels of a model trained on several when the run does not carry them as payload columns"
         default = nothing
         "--tdi-group"
         help = "TDI group of --tdi-file (default: [preprocessing] tdi_group)"
@@ -106,7 +107,24 @@ function main()
     mkpath(results_dir)
     mkpath(plot_dir)
 
-    run = open_telemetry_run(run_dir; producer_compat = settings.producer_compat)
+    # The channels the model reads: a producer run (DeepSpaceTelemetry 2.6 or
+    # later) may carry them as payload columns of one mission; a mission that
+    # carried the A channel alone, or a replay given the record explicitly,
+    # takes the channels of every delivered batch from the record the payload
+    # was exported from (--tdi-file)
+    channels = MilliHertzQML.run_channels(dirname(resolvepath(args["model"])))
+    wanted = [String(c) for c in channel_names(channels)]
+    carried = telemetry_run_columns(run_dir)
+    from_record =
+        channels != "A" && (args["tdi-file"] !== nothing || !issubset(wanted, carried))
+    # The A channel is the one column of a one-column run, else the column A
+    columns =
+        length(carried) == 1 ? nothing : (channels == "A" || from_record ? "A" : wanted)
+    run = open_telemetry_run(
+        run_dir;
+        producer_compat = settings.producer_compat,
+        columns = columns,
+    )
     geometry = run_geometry(run)
     psd_sidecar = settings.psd_sidecar
     if settings.psd_mode == "trailing"
@@ -123,14 +141,12 @@ function main()
         context_windows = settings.context_windows,
         psd_sidecar = psd_sidecar,
     )
-    # A model of several channels: the mission delivers the A channel, and
-    # the channels of every delivered batch come from the record itself
-    channels = MilliHertzQML.run_channels(dirname(resolvepath(args["model"])))
     tdi_file = ""
-    if channels != "A"
+    if from_record
         args["tdi-file"] === nothing && throw(
             ArgumentError(
-                "the model was trained on the channels $channels; pass --tdi-file, the " *
+                "the model was trained on the channels $channels and the run carries " *
+                "the payload columns $(join(carried, ", ")); pass --tdi-file, the " *
                 "record the payload of the mission was exported from.",
             ),
         )
@@ -252,9 +268,12 @@ function main()
                 "mode" => live ? "live" : "replay",
                 "model" => rootrelative(resolvepath(args["model"])),
                 "channels" => channels,
-                # The producer carries one payload column, whatever the
-                # detector reads; the volume its link was sized for is stated
-                # by the caller
+                "payload_columns" => carried,
+                "served_columns" =>
+                    columns === nothing ? carried :
+                    columns isa AbstractString ? [columns] : columns,
+                # The volume the producer's link was sized for is stated by
+                # the caller
                 "link_volume_channels" => args["link-volume-channels"],
                 "tdi_file" => isempty(tdi_file) ? "" : provenance_path(tdi_file),
                 "tdi_first_row" => args["tdi-first-row"],
@@ -276,6 +295,8 @@ function main()
                 "n_windows" => nrow(windows),
                 "n_alarms" => n_alarms[],
             ),
+            # The producer's own identity of the run (descriptor.toml)
+            "producer" => run_descriptor(run),
         ),
     )
     if nrow(windows) > 0
