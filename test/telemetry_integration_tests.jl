@@ -70,10 +70,13 @@
         run_dir = tick_mission(dir, scenario, "coupling_test")
         @test isfile(joinpath(run_dir, "RUN_COMPLETE"))
         @test isfile(joinpath(run_dir, "config_snapshot.toml"))
-        # The producer's identity of its code, recorded for a copy installed
-        # by commit as these environments pin it (2.6.1)
+        # The producer's identity of its code (2.6.1): the tree hash and the
+        # dirty flag key it, the commit is recorded for a copy installed by
+        # commit, as these environments pin it
         descriptor = run_descriptor(open_telemetry_run(run_dir))
         @test descriptor["mode"] == "tick"
+        @test occursin(r"^[0-9a-f]{40}$", descriptor["git_tree_sha1"])
+        @test descriptor["git_dirty"] == false
         @test occursin(r"^[0-9a-f]{40}$", descriptor["git_commit"])
 
         run = open_telemetry_run(run_dir; producer_compat = "1.0")
