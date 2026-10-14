@@ -110,7 +110,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
-- The script and test environments pin DeepSpaceTelemetry.jl 2.6.1
+- The script and test environments pin DeepSpaceTelemetry.jl 2.6.2
   (the tick clock, the gap table and the declared-hole feed, the run
   descriptor, the reference run adapter, multi-column payloads, and from
   2.6.1 the commit and tree hash of the producer's code in the descriptor

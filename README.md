@@ -161,7 +161,7 @@ entry point includes its own first, so the commands below run as written.
 The auxiliary environments consume the package by path; `Manifest.toml`
 files are not tracked. The script and test environments also pin
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.6.1`, the telemetry producer whose missions the streaming path
+`v2.6.2`, the telemetry producer whose missions the streaming path
 replays, and the script environment
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
 `v2.0.4`, the constellation response of the simulator; both are
