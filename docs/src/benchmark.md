@@ -10,9 +10,9 @@ ground.
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted before the merger | none; all six after it | **5 of 6** (6 of 6 at three further seeds) |
-| Alert time at the ground station | 0.1 to 42 h after the merger | **11 to 24 h before** |
-| Streamed year: false alarms per 30 d | 0.99 | **0.49** (1.15 to 1.56 at the further seeds) |
+| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 0.3 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 0.3 h before to 42 h after the merger | **11 to 28 h before** |
+| Streamed year: false alarms per 30 d | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
@@ -606,21 +606,29 @@ noise model, without the Galactic foreground. The noise the detector
 faces is the record's own: every feature is whitened by the measured PSD
 of the record, which exceeds the instrument model by a factor of 18 to 35
 at 1 to 5 mHz on the Sangria blind year. Against that noise the signal
-reaches a window SNR of about 1 at the onsets of those releases, and the
-first alerts of the loud coalescences fall where it reaches 4. The onset
+reaches a window norm of 3 to 5 at the onsets of those releases, and the
+first alerts of the loud coalescences fall where it reaches about 4. The onset
 is now the first window in which the truth stream, high-passed and
 whitened as the record is, reaches a norm of 3 (`[ldc] psd_model =
 "record"`, `label_snr_threshold = 3`); on this year the onsets move from
 7 to 35 hours to 10 to 38 hours before the merger, the table above. Every
 alert table of this page was re-credited under the new rule from its
 stored window table. The alerts credited to the coalescences are those of
-releases 2.0.0 to 2.0.1 to the tenth of an hour, except event 3 of the A
-runs of the streaming configuration, whose earlier alert 27.8 to 28.7
-hours ahead now lies inside the span (24.3 to 24.8 before), and the
-false-alarm rates are lower by 0.1 to 0.3 per 30 days where the longer
-spans absorb alarms the earlier onset left outside (the selected run from
-0.49 to 0.33 per 30 days). The 30-day missions of the lossy-link study are
-unchanged.
+releases 2.0.0 to 2.0.1 to the tenth of an hour, except event 3, whose
+earlier alert now lies inside the span: the A runs of the streaming
+configuration alert it 27.8 to 28.7 hours ahead (24.3 to 24.8 before),
+both replays of the selected configuration 0.3 hours ahead (0.1 and 0.6
+hours after the merger before). The false-alarm rates are lower by up to
+0.3 per 30 days where the longer spans absorb alarms the earlier onset
+left outside (the selected run of the streaming configuration from 0.49
+to 0.33 per 30 days). The calibration counts of the persistence rule below
+are those of the training year's onsets under the new rule; the
+persistence it selects is unchanged. The 30-day missions of the lossy-link
+study are unchanged. This paragraph as first published stated a window
+SNR of about 1 at the former onsets, read from the ratio of the peak SNRs
+alone, and named only event 3 of the streaming configuration; the
+measurement places the former onsets at a norm of 3 to 5 (amended 15
+October 2026).
 
 **Persistence.** An isolated alarmed window cannot be distinguished from
 the false-alarm population, so an alert is raised by the arrival that
@@ -635,8 +643,9 @@ the standard because the Definition Study [ColpiEtAl2024](@cite) sets none
 for its low-latency alert pipelines — with a waiting time within half of
 the Definition Study's one-hour processing budget. On the calibration
 block of the selected model (validation and test, 109 days) two
-consecutive windows leave 1.38 false alerts per 30 days and three 0.83:
-the persistence is three. Release 1.2.0 also required every calibration
+consecutive windows leave 1.10 false alerts per 30 days and three 0.55
+(1.38 and 0.83 under the onsets of releases 2.0.0 to 2.0.1): the
+persistence is three. Release 1.2.0 also required every calibration
 event to keep an alert with a window of margin, which fixed two; with four
 calibration events that criterion rests on a single short alarm run, and
 it is no longer applied. At three, the shortest alarmed calibration event,
@@ -712,7 +721,7 @@ its merger, and counts 3.1 false-alarm episodes per 30 days; under the
 full-record PSD it counts 1.0. The difference arises from the initial
 interval of the trailing estimate on a 30-day record, before one Welch
 segment of delivered data exists (over the year the causal replay
-delivers 0.99 against 0.74 under the full-record PSD), and it is the
+delivers 0.74 against 0.66 under the full-record PSD), and it is the
 scale against which the rows below are read.
 
 ![The seventeen missions and two consumer-side variants: windows scored as a fraction of the reference, coalescences detected, false-alarm episodes per 30 days under causal whitening](assets/benchmark_gap_study.png)
@@ -892,9 +901,10 @@ the conditioning lag falls from 1.16 days to 2.8 hours.
 
 **Persistence.** By the rule of the telemetry section, the calibration
 blocks of the four seeds, credited from the signal onset and pooled, count
-1.38 false alerts per 30 days at two consecutive windows and 0.96 at
-three: the persistence is three. Seed by seed the rule would give three,
-three, four and two (seeds 9999, 1009, 2027 and 3041). At three, two of
+1.17 false alerts per 30 days at two consecutive windows and 0.76 at
+three (1.38 and 0.96 under the onsets of releases 2.0.0 to 2.0.1): the
+persistence is three. Seed by seed the rule would give three, two, four
+and two (seeds 9999, 1009, 2027 and 3041). At three, two of
 the twelve alarmed calibration events, each alarmed for two windows (seeds
 1009 and 3041), are not alerted, and each seed leaves one of its four
 calibration events unalarmed.
@@ -919,7 +929,7 @@ arrival at the ground station of the batch that completes the alert:
 
 Under causal whitening every seed alerts events 1 to 4 and 6 on their own
 and before their merger, 11 to 29 hours ahead at the ground station and
-10 to 21 hours after the signal onset. Event 5, the weakest coalescence,
+8 to 21 hours after the signal onset. Event 5, the weakest coalescence,
 whose window SNR reaches 3 only 9.8 hours before its merger, is alerted
 2.1 hours before it at three seeds and not at all at seed 9999. The
 false-alarm rate spans 0.33 to 1.32 episodes per 30 days; the credited
@@ -929,7 +939,7 @@ onset of its coalescence. The alert times agree between the seeds to
 within six hours where they alert; the false-alarm rate does not, and it is
 the quantity the reference seed understates. Under the full-record PSD the same
 coalescences are alerted, event 5 after its merger or not at all at three
-seeds, at 0.41 to 2.47 per 30 days. The score baseline of the smoothed
+seeds, at 0.41 to 2.39 per 30 days. The score baseline of the smoothed
 model follows the annual modulation of the noise level, which that of the
 selected model does not: under the full-record PSD it falls towards 0.1 at
 the beginning and at the end of the year and approaches the threshold
