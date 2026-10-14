@@ -110,9 +110,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
-- The script and test environments pin DeepSpaceTelemetry.jl 2.6.0
+- The script and test environments pin DeepSpaceTelemetry.jl 2.6.1
   (the tick clock, the gap table and the declared-hole feed, the run
-  descriptor, the reference run adapter, multi-column payloads) and
+  descriptor, the reference run adapter, multi-column payloads, and from
+  2.6.1 the commit and tree hash of the producer's code in the descriptor
+  of a run made from a copy installed by commit, which the replay snapshot
+  copies under `[producer]`) and
   CurvatureDistinguishability.jl 2.0.4 (CSV.jl 1.1 admitted), in place of
   2.1.1 and 2.0.1. Producer runs are read through StreamingInference.jl's
   DeepSpaceTelemetry extension, which builds on the producer's reference

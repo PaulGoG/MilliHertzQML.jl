@@ -1,7 +1,8 @@
 # Integration test of the classifier on a producer run: a minimal
-# DeepSpaceTelemetry mission ingests an exported payload at 0.2 Hz into a
-# temporary run root, and the detector of a classifier replays the run
-# directory through MilliHertzBase's extension. Included by runtests.jl.
+# DeepSpaceTelemetry mission on the producer's tick clock ingests an
+# exported payload at 0.2 Hz into a temporary run root, and the detector of
+# a classifier replays the run directory through StreamingInference's
+# extension. Included by runtests.jl.
 
 @testset "Telemetry coupling (DeepSpaceTelemetry run)" begin
     TelemetryCore = DeepSpaceTelemetry.TelemetryCore
@@ -14,6 +15,18 @@
     payload[burst] .+= 3e-19 .* sin.(2π * 5e-3 .* (0:999) ./ fs)
     epoch = Dates.DateTime(2035, 1, 1, 6)
     previous_root = TelemetryCore.DATA_ROOT[]
+    # A scenario run on the tick clock: the same span, deterministic, seconds
+    function tick_mission(dir, scenario, run_id)
+        path = joinpath(dir, "$run_id.toml")
+        open(io -> TOML.print(io, scenario), path, "w")
+        cfg = TelemetryCore.tick_configuration(TelemetryCore.load_config(path))
+        TelemetryCore.DATA_ROOT[] = joinpath(dir, "producer")
+        try
+            return Supervisor.run_mission(cfg; run_id = run_id, orig_stdout = devnull)
+        finally
+            TelemetryCore.DATA_ROOT[] = previous_root
+        end
+    end
     mktempdir() do dir
         payload_path = joinpath(dir, "payload.csv")
         CSV.write(payload_path, DataFrame(Amplitude = Float32.(payload)))
@@ -54,14 +67,14 @@
                 "hdf5_export" => false,
             ),
         )
-        TelemetryCore.DATA_ROOT[] = joinpath(dir, "producer")
-        run_dir = try
-            Supervisor.run_mission(scenario; run_id = "coupling_test", orig_stdout = devnull)
-        finally
-            TelemetryCore.DATA_ROOT[] = previous_root
-        end
+        run_dir = tick_mission(dir, scenario, "coupling_test")
         @test isfile(joinpath(run_dir, "RUN_COMPLETE"))
         @test isfile(joinpath(run_dir, "config_snapshot.toml"))
+        # The producer's identity of its code, recorded for a copy installed
+        # by commit as these environments pin it (2.6.1)
+        descriptor = run_descriptor(open_telemetry_run(run_dir))
+        @test descriptor["mode"] == "tick"
+        @test occursin(r"^[0-9a-f]{40}$", descriptor["git_commit"])
 
         run = open_telemetry_run(run_dir; producer_compat = "1.0")
         geometry = run_geometry(run)
@@ -142,12 +155,7 @@
                 ),
             ],
         )
-        TelemetryCore.DATA_ROOT[] = joinpath(dir, "producer")
-        gap_dir = try
-            Supervisor.run_mission(gapped; run_id = "coupling_gap", orig_stdout = devnull)
-        finally
-            TelemetryCore.DATA_ROOT[] = previous_root
-        end
+        gap_dir = tick_mission(dir, gapped, "coupling_gap")
         gap_run = open_telemetry_run(gap_dir)
         # Batches past the payload end carry the producer's zero padding.
         gap_delivered =
