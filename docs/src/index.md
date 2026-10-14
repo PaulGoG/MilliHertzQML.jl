@@ -12,8 +12,22 @@ thresholds fitted on the training year and applied unchanged:
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year | 5 of 5 labelled events, 1.57 false alarms per 30 days | 5 of 5, 2.97 per 30 days |
-| Streamed year, causal whitening | 6 of 6 coalescences alerted, each after its merger, 0.99 per 30 days | 5 of 6, each 11 to 24 hours before its merger, 0.49 per 30 days |
+| Streamed year, causal whitening | 6 of 6 coalescences alerted, one 0.3 hours before its merger and five after, 0.74 per 30 days | 5 of 6, each 11 to 28 hours before its merger, 0.33 per 30 days |
 | Record scored at 0.43 % scattered batch loss | 9 % | 81 % |
+
+!!! warning "Correction, 12 October 2026"
+    The streamed-year alert tables first published with this release
+    credited alerts from a signal onset defined against the analytic
+    instrument noise, without the Galactic foreground that the noise of
+    the record contains. They were re-credited after the release from the
+    stored replays, with the onset defined against the record's own noise,
+    which the code of this release does not compute. The credited alerts
+    are unchanged except those of event 3, now credited at an earlier
+    alert; the false-alarm rates are lower by up to 0.3 per 30 days; the
+    completed-record results and the 30-day missions of the lossy-link
+    study are not affected. The replay figures are those of the release.
+    See [Telemetry replay and alert
+    latency](benchmark.md#Telemetry-replay-and-alert-latency).
 
 The selected configuration, eight qubits, four re-uploading layers and six
 sub-mHz band powers, was chosen on the training year by a rule fixed
@@ -30,12 +44,13 @@ The streaming configuration is the selected one retrained on a Welch
 whitening spectrum smoothed in log-frequency, which shortens the stretch
 of data every window needs from 1.16 days to 2.8 hours. At each of four
 initialisation seeds it alerts five or six of the six coalescences before
-their merger, at 0.49 to 1.56 false alarms per 30 days. An alert counts
+their merger, at 0.33 to 1.32 false alarms per 30 days. An alert counts
 for a coalescence only from its signal onset, the first window in which
-the signal reaches a matched-filter SNR of 5; release 1.2.0 credited the
-whole four-day label span and so counted noise alarms up to 95 hours
-before a merger as early detections (see the
-[correction](benchmark.md#Telemetry-replay-and-alert-latency)). The
+the signal, conditioned as the record is, reaches a norm of 3 against the
+record's own noise; release 1.2.0 credited the whole four-day label span,
+releases 2.0.0 to 2.0.1 an onset defined against the instrument noise
+alone (see the
+[corrections](benchmark.md#Telemetry-replay-and-alert-latency)). The
 [Sangria Benchmark](benchmark.md) page gives the protocol, every run, and
 the limits of these results.
 

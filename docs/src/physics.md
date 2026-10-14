@@ -81,6 +81,8 @@ Two anchors validate the port against the Sangria training product (tests that r
 
 `scripts/label_ldc.jl` builds point-wise labels from a truth stream: the A channel of the signal-only TDI is scanned with a windowed matched filter against the analytic PSD (`windowed_snr`), mergers come from the catalogue's coalescence times or, without a catalogue (the blind set's unblinded MBHB stream), from the SNR peaks (`snr_peaks`), and the positive span is either the paper's fixed window ``[t_c - 4\,\mathrm{d}, t_c + 27\,\mathrm{min}]`` (`fixed_spans`) or the detectable span of the simulator's convention (`detectable_spans`). Neighbouring mergers (Sangria sources 2, 3, 4 within four days) produce one merged label run, which event-level metrics count as one event. With fixed spans the event table also records each event's signal onset (`signal_onsets`), the first window inside its span, and past the preceding event's span, whose SNR reaches `label_snr_threshold`; alerts of a streamed replay are credited from it (see [Telemetry Coupling](telemetry.md#Alerts)).
 
+**Correction, 12 October 2026.** The onset so defined measures the signal against the instrument noise alone, whereas the features are whitened by the record's own noise, the Galactic foreground included. The alert tables of this manual were re-credited after the release from the first window in which the A channel of the truth stream, high-passed and whitened as the observed record is, reaches a norm of 3, a rule implemented after this release in the labelling of MilliHertzBase.jl (see the [benchmark page](benchmark.md#Telemetry-replay-and-alert-latency)).
+
 ## Known physical deficiencies
 
 Retained so that the documentation reflects the code as it stands; these are the open items.

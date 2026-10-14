@@ -8,16 +8,34 @@ are fitted on the training year and applied unchanged to the blind year.
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted before the merger | none; all six after it | **5 of 6** (6 of 6 at three further seeds) |
-| Alert time at the ground station | 0.1 to 42 h after the merger | **11 to 24 h before** |
-| Streamed year: false alarms per 30 d | 0.99 | **0.49** (1.15 to 1.56 at the further seeds) |
+| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 0.3 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 0.3 h before to 42 h after the merger | **11 to 28 h before** |
+| Streamed year: false alarms per 30 d | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
+!!! warning "Correction, 12 October 2026"
+    The streamed-year alert tables first published with this release
+    credited alerts from a signal onset defined against the analytic
+    instrument noise, without the Galactic foreground that the noise of
+    the record contains. They were re-credited after the release from the
+    stored replays, with the onset defined against the record's own noise,
+    which the code of this release does not compute. The credited alerts
+    are unchanged except those of event 3, now credited at an earlier
+    alert; the false-alarm rates are lower by up to 0.3 per 30 days; the
+    completed-record results and the 30-day missions of the lossy-link
+    study are not affected. The replay figures are those of the release.
+    See [Telemetry replay and alert
+    latency](benchmark.md#Telemetry-replay-and-alert-latency).
+
 Alerts are credited to a coalescence only from its signal onset, the first
-window in which its signal reaches a matched-filter SNR of 5; the figures
-of release 1.2.0 credited the whole four-day label span (see the
-[correction](benchmark.md#Telemetry-replay-and-alert-latency)).
+window in which its signal, conditioned as the record is, reaches a norm
+of 3 against the record's own noise; the figures of release 1.2.0 credited
+the whole four-day label span, those of this release an onset against the
+instrument noise alone: the replay figures below begin their shaded spans
+at those onsets and mark event 3 at the alert then credited, while the
+captions give the re-credited numbers (see the
+[corrections](benchmark.md#Telemetry-replay-and-alert-latency)).
 
 ## The completed blind year
 
@@ -66,7 +84,7 @@ seeds](benchmark.md#The-grid-over-four-seeds).
 ground-station passes and whitened causally, from data already delivered,
 by the streaming configuration, trained on a Welch whitening spectrum
 smoothed by 0.01 dex in log-frequency. Five of the six coalescences are
-alerted at the ground station 11 to 24 hours before their merger, at six
+alerted at the ground station 11 to 28 hours before their merger, at four
 false-alarm episodes in the year; the shaded spans run from the signal
 onset of each coalescence to 27 minutes after its merger. The lower panel
 gives the alert time of every coalescence against the availability
@@ -83,16 +101,16 @@ of the received data is the availability latency.*
 ![Classifier output and alarms over the year-long replay of the selected configuration under causal whitening](assets/benchmark_telemetry_alerts_causal.png)
 
 *The selected configuration on the same mission. Its conditioning stretch
-of 1.16 days delays every alert past the merger: all six coalescences are
-alerted, 0.1 to 42 hours after it, at 0.99 false-alarm episodes per 30
-days.* See the [telemetry
+of 1.16 days delays the alerts: all six coalescences are alerted, five of
+them 1.9 to 42 hours after the merger and event 3 0.3 hours before it, at
+0.74 false-alarm episodes per 30 days.* See the [telemetry
 replay](benchmark.md#Telemetry-replay-and-alert-latency).
 
 ![Classifier output and alarms over the year-long replay of the selected configuration whitened by the full-record PSD](assets/benchmark_telemetry_alerts.png)
 
 *The selected configuration whitened by the full-record PSD of the blind
 year, which no mission has while it observes: a non-causal upper
-reference, with the same alerts to within half an hour, at 0.74
+reference, with the same alerts to within half an hour, at 0.66
 false-alarm episodes per 30 days.*
 
 ## A lossy link

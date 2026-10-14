@@ -189,6 +189,20 @@ alarms of its first days as early detections; it reproduces the alert
 tables of releases up to 1.2.0. An event table with label spans
 but without onsets is refused under signal crediting.
 
+**Correction, 12 October 2026.** The matched-filter SNR above is computed
+against the analytic instrument PSD named by `[ldc] psd_model`, without
+the Galactic foreground, whereas every feature is whitened by the measured
+PSD of the record, which exceeds that model by a factor of 18 to 35 at 1
+to 5 mHz on the Sangria blind year. The alert tables of this manual were
+re-credited after the release from an onset defined against the noise the
+detector faces: the first window in which the signal, high-passed and
+whitened as the observed record is, reaches a norm of 3, 10 to 38 hours
+before the merger on the Sangria blind year. That rule is implemented
+after this release, in the labelling of MilliHertzBase.jl
+(`[ldc] psd_model = "record"`, `label_snr_threshold = 3`); the code of
+this release computes the onset described above (see the [benchmark
+page](benchmark.md#Telemetry-replay-and-alert-latency)).
+
 For every event the table gives the earliest alert touching its credited
 span and:
 
