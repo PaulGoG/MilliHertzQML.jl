@@ -7,6 +7,18 @@ versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A confirmation tier of the alerts: `[telemetry]
+  alert_confirmation_persistence = 11` in every configuration that
+  replays a mission (0 disables it). The windows overlap tenfold, so a
+  transient shorter than a step can alarm ten consecutive windows and pass
+  any persistence up to ten; an alert is confirmed by the arrival that
+  completes eleven consecutive alarmed windows touching the credited span,
+  which needs alarms on windows sharing no sample. The value follows from
+  the window geometry and is not fitted. `scripts/infer_telemetry.jl`
+  passes it to `alert_latency_table` (StreamingInference `d59c63a`),
+  whose table gains the confirmation columns; the preliminary alert and
+  its columns are unchanged. The alert figure marks the confirmations
+  (StreamingInference `eb78e11`, pinned with MilliHertzBase `ebe8ebf`).
 - `scripts/label_ldc.jl --record-file`: the observed record whose
   whitening PSD conditions the truth stream under `[ldc] psd_model =
   "record"` (MilliHertzBase.jl), with the key `[ldc] record_file`; the
@@ -235,6 +247,20 @@ versioning follows [Semantic Versioning](https://semver.org/).
   3 GB Sangria training product.
 
 ### Fixed
+- The manual's statements of the correction of 12 October 2026, amended
+  on 15 October: the former onsets lie where the signal has a window norm
+  of 3 to 5 against the record's noise (the paragraph said about 1, a
+  reading of the peak-SNR ratio that the measurement does not support);
+  event 3 of both replays of the selected configuration is also credited
+  at its earlier alert, 0.3 hours before the merger; the summary table of
+  the benchmark page, the full-record rates of the streaming configuration
+  (0.41 to 2.39 per 30 days), the delay of the alerts after the signal
+  onset over the four seeds (8 to 21 hours) and the comparison of the two
+  whitenings over the year (0.74 against 0.66) carry the re-credited
+  values; the calibration counts of the persistence rule are those of the
+  training year's onsets under the new rule (1.10 and 0.55 per 30 days at
+  two and three windows for the selected configuration, 1.17 and 0.76
+  pooled for the streaming one), the persistence they select unchanged.
 - `scripts/animate.jl --telemetry-run` under CSV.jl 1.1, which the script
   environment resolves with DeepSpaceTelemetry.jl 2.6.0: the window table
   is read with its instants as `DateTime` (CSV.jl 1.1 infers a timestamp

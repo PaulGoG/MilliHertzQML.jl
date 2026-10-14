@@ -244,6 +244,7 @@ function main()
             processing_latency_hours = settings.processing_latency_hours,
             persistence = settings.alert_persistence,
             crediting = Symbol(settings.alert_crediting),
+            confirmation_persistence = settings.alert_confirmation_persistence,
         )
         write_csv(joinpath(results_dir, "alert_latency.csv"), latencies)
         spans =
@@ -255,6 +256,10 @@ function main()
                     round(row.latency_total_h; digits = 2)
             else
                 @info "event missed" label = row.label
+            end
+            if settings.alert_confirmation_persistence > 0 && row.confirmed
+                @info "alert confirmed" label = row.label confirmation_latency_data_h =
+                    round(row.confirmation_latency_data_h; digits = 2)
             end
         end
     end
@@ -288,6 +293,8 @@ function main()
                 "psd_segment_length" => settings.psd_segment_length,
                 "processing_latency_hours" => settings.processing_latency_hours,
                 "alert_persistence" => settings.alert_persistence,
+                "alert_confirmation_persistence" =>
+                    settings.alert_confirmation_persistence,
                 "alert_crediting" => settings.alert_crediting,
                 "events_csv" =>
                     isempty(events_path) ? "" : rootrelative(resolvepath(events_path)),

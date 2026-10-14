@@ -266,6 +266,23 @@ span and:
   runs raise no alert and are not counted;
 - `alert_persistence` and `alert_crediting`, the criteria applied.
 
+**Confirmation.** The windows overlap: 1000 samples advanced by 100 put
+every sample in ten consecutive windows, so a transient shorter than a
+step, a glitch for instance, can alarm ten consecutive windows and raise
+an alert at any persistence up to ten. `[telemetry]
+alert_confirmation_persistence` (11 in the configurations; 0 disables it)
+adds a second tier: the alert is confirmed by the arrival that completes
+that many consecutive alarmed windows touching the credited span, which
+needs alarms on windows sharing no sample. The value is fixed by the
+window geometry (window length over step, plus one), not fitted, and must
+exceed both the persistence and that overlap. The table then also gives
+`confirmed`, `t_confirmation`, `confirmation_latency_data_h`,
+`confirmation_latency_total_h`, the false confirmations per 30 days and
+`alert_confirmation_persistence`; the columns of the first tier are
+unchanged. The confirmation follows the alert by at least eight steps
+(67 minutes); on an early inspiral, whose alarms come in short runs, it
+can follow by many hours.
+
 The benchmark page counts an event whose only alert is shared as not
 detected on its own. In live mode (`follow_run`, `[telemetry] mode =
 "live"` or `--live`) the feed is polled every `poll_interval_sec` and
