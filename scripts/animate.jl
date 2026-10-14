@@ -81,7 +81,7 @@ function replay_geometry(windows::DataFrame)
     row.row_end > row.row_start ||
         throw(ArgumentError("window $(row.window) spans a single row."))
     interval =
-        Dates.value(row.content_end - row.content_start) / 1000 /
+        (row.content_end - row.content_start) / Millisecond(1) / 1000 /
         (row.row_end - row.row_start)
     epoch =
         row.content_start - Millisecond(round(Int, 1000 * interval * (row.row_start - 1)))
@@ -139,8 +139,18 @@ function replay_animation(
     out_dir::AbstractString,
     run_id::AbstractString,
 )
-    windows =
-        MilliHertzQML.CSV.read(joinpath(results_dir, "telemetry_windows.csv"), DataFrame)
+    # Instants are read as DateTime, the type the replay wrote: CSV.jl 1.1
+    # infers a timestamp type of its own
+    windows = MilliHertzQML.CSV.read(
+        joinpath(results_dir, "telemetry_windows.csv"),
+        DataFrame;
+        types = Dict(
+            "content_start" => DateTime,
+            "content_end" => DateTime,
+            "complete_at" => DateTime,
+            "completing_batch" => String,
+        ),
+    )
     settings = section(
         MilliHertzQML.TOML.parsefile(joinpath(results_dir, "config_telemetry.toml")),
         "telemetry",

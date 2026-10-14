@@ -211,6 +211,13 @@ versioning follows [Semantic Versioning](https://semver.org/).
   3 GB Sangria training product.
 
 ### Fixed
+- `scripts/animate.jl --telemetry-run` under CSV.jl 1.1, which the script
+  environment resolves with DeepSpaceTelemetry.jl 2.6.0: the window table
+  is read with its instants as `DateTime` (CSV.jl 1.1 infers a timestamp
+  type of its own, on which the replay figure has no method), and the
+  sample interval of the replay is taken in milliseconds whatever period
+  the difference of two instants carries (a nanosecond period made it
+  10⁶ times too large).
 - A feature sidecar records the parameters of an analytic whitening PSD
   (`observation_years`; `ldc_model`, `ldc_tdi2`, `ldc_observation_years`),
   which 2.x read back with defaults whatever the product had been made
