@@ -267,7 +267,7 @@ function main()
         joinpath(results_dir, "config_telemetry.toml"),
         Dict{String,Any}(
             "telemetry" => Dict{String,Any}(
-                "run_dir" => run_dir,
+                "run_dir" => provenance_path(run_dir),
                 "producer_version" => geometry.package_version,
                 "run_state" => String(run_state(run)),
                 "mode" => live ? "live" : "replay",
