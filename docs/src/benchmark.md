@@ -98,10 +98,11 @@ A channel, ``A = (Z - X)/\sqrt{2}`` (`tdi_to_aet`).
 
 Labels come from the truth stream rather than from the classifier's own
 notion of a detection (`label_truth_stream`). A merger is a peak of the
-windowed matched-filter SNR against the analytic Sangria TDI PSD, separated
-from its neighbours by at least a day and reaching SNR 8; a window is
-labelled positive when it overlaps the fixed span of four days before to
-27 minutes after a coalescence. The training year carries 13 such events
+windowed norm of the truth stream, high-passed and whitened by the
+record's own PSD as the observed record is (`[ldc] psd_model =
+"record"`), separated from its neighbours by at least a day and reaching
+8; a window is labelled positive when it overlaps the fixed span of four
+days before to 27 minutes after a coalescence. The training year carries 13 such events
 and the blind year 6 coalescences that merge into **5 labelled runs**, two
 of them falling within a day of each other.
 
@@ -605,11 +606,14 @@ stated explicitly.
 **Crediting.** An alarm is credited to a coalescence only where the
 signal of the coalescence can be seen. The label span, four days before
 to 27 minutes after the merger, is the training convention of Isfan et
-al. [IsfanEtAl2025](@cite) and is far wider than that: the matched-filter SNR of the signal-only
-A channel in a single 1000-sample window, against the analytic Sangria
-PSD without the Galactic confusion noise and therefore an upper bound,
-stays below 3 up to 40 hours before each merger and first reaches 5
-between 35 and 7 hours before it.
+al. [IsfanEtAl2025](@cite) and is far wider than that. Against the
+record's own noise, the signal-only A channel in a single 1000-sample
+window first reaches a norm of 3 between 38 and 10 hours before each
+merger: that window is the signal onset in force. The matched-filter SNR
+of the same window against the analytic Sangria PSD, which omits the
+Galactic confusion noise and is therefore an upper bound, stays below 3
+up to 40 hours before each merger and first reaches 5 between 35 and 7
+hours before it; both rows are kept in the table.
 
 | Event | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|

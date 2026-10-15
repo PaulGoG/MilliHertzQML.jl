@@ -168,27 +168,27 @@ The full tree is at the end of this page.
 
 ## Installation
 
-This README describes `main`. Its manual is built at
-[PaulGoG.github.io/MilliHertzQML.jl/dev](https://PaulGoG.github.io/MilliHertzQML.jl/dev/),
-and the links of this page point there. The manual of the latest release,
-2.0.1, is at [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/).
-It predates the separation of the layers and carries dated corrections.
-The numbers of `main` differ from it, as the section
+This README describes release 3.0.0. Its manual is at
+[`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); the
+manual of `main` is at
+[`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/), and the links
+of this page point there. Earlier releases credited alerts by other
+onset rules; the section
 [Corrections to earlier releases](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Corrections-to-earlier-releases)
-of the benchmark page explains.
+of the benchmark page lists the dated differences, and the
+[changelog](CHANGELOG.md) opens with what a user of 2.0.1 must change.
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
 of packages added by URL, and is not registered in the General registry.
-The latest release, 2.0.1, is a single package; `main` (3.0.0-DEV), which
-this README describes, builds on StreamingInference.jl and
-MilliHertzBase.jl, pinned by URL and commit in every environment.
-Continuous integration runs the suite on Julia 1.13 and on the current
-release. A downstream environment adds the package by URL, pinned to the
-release tag or following `main`:
+Release 3.0.0 builds on StreamingInference.jl 0.1.0 and MilliHertzBase.jl
+0.1.0, pinned by URL and commit in every environment, so a downstream
+environment adds this package alone, at the release tag or following
+`main`. Continuous integration runs the suite on Julia 1.13 and on the
+current release.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v2.0.1")  # the release
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.0.0")  # the release
 Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl")                  # main
 ```
 
@@ -410,7 +410,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {2.0.1},
+  version = {3.0.0},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }

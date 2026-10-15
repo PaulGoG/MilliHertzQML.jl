@@ -6,6 +6,50 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-10-15
+
+### Migration from 2.0.1
+
+The package is split into three. MilliHertzQML.jl keeps the classifier
+and its stages; everything domain-general (configuration, provenance,
+signal processing, features, evaluation, the estimator interface, the
+streamed replay) is StreamingInference.jl 0.1.0, and everything about
+gravitational waves (noise model, waveforms, response, LDC products,
+whitening, the generation, pre-processing, labelling and payload-export
+stages, the producer extensions) is MilliHertzBase.jl 0.1.0. Both are
+pinned by URL and commit in every environment of this repository, and
+`using MilliHertzQML` still exports every public name. Julia 1.13 is the
+floor.
+
+What a user of 2.0.1 must change:
+
+- Installation: `Pkg.add(url = ..., rev = "v3.0.0")` resolves the two
+  layers from the `[sources]` of this package; nothing else to add.
+- Paths: `project_root()` is the pipeline root (the scope of
+  `with_pipeline_root`, else `STREAMINGINFERENCE_ROOT`, else the nearest
+  package directory above the active environment), no longer the installed
+  package's directory; every script runs inside the root of its
+  configuration file.
+- Products of 2.x: feature sidecars whitened by an analytic PSD lack the
+  keys the replay now requires, and every product has a new identity
+  digest; regenerate them with `scripts/preprocess_ldc.jl` (the former
+  files are kept as `_#k`).
+- Labels and alert times: the signal onset is measured against the
+  record's own noise (`[ldc] psd_model = "record"`, threshold 3); regenerate
+  the labels and event tables with `scripts/label_ldc.jl` and re-credit
+  stored alert tables, or read the dated corrections on the benchmark page.
+- Calls: `synthesize_noise`, `whiten_record`, `matched_filter_snr` and
+  `scale_to_snr` require `psd`; `StreamingDetector` holds the conditioning
+  only (the feature set is in `detector.scorer.features`); `train_step!`
+  takes the state of `Optimisers.setup`; `WindowRecord` has a thirteenth
+  field; the output directory of a standalone inference run is named from
+  the model path's digest.
+- Configurations: new sections and keys (`[tdi] channels`, `[calibration]`,
+  `[telemetry] alert_confirmation_persistence`, `[preprocessing]
+  tdi_components`, `[ldc] psd_model` and `record_file`, `[training]
+  gradient_method`, `[model] kind`); a 2.0.1 configuration still loads, the
+  new keys taking their defaults.
+
 ### Added
 - The calibration stage: `calibrate_classifier` (`scripts/calibrate.jl`,
   `[calibration]`: `block_fraction`, `scaler`, `noise_quantiles`,
