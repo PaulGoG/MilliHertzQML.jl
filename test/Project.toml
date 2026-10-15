@@ -23,6 +23,6 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
 DeepSpaceTelemetry = {rev = "4352f565558d485c8d6cdd624e9ec6f40936aa24", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "5ec913712fcdd7f008ec8fe42340b96b96a154cf"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "5c8980e4d2a5dcfb01b47ad7b2acf5ea19a276ce"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "efd441ac3612a33785110d816e4d5c36f1b9f551"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "e6c25c1ad4fdcb5e6e76bfb83b0f83d5ff4945d8"}

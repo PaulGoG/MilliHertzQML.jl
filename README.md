@@ -225,6 +225,9 @@ flowchart LR
   P -->|"features, labels, PSD"| T[train.jl]
   T -->|"weights + threshold"| I[infer.jl]
   T -->|"weights + threshold"| S[infer_telemetry.jl]
+  T -->|"weights + threshold"| C[calibrate.jl]
+  P -->|"features of a new record"| C
+  C -->|"scaler + threshold refitted"| I
   P --> X[export_telemetry_payload.jl]
   X -->|"payload + scenario"| M(["DeepSpaceTelemetry<br/>mission"])
   M -->|"run directory"| S
@@ -251,6 +254,9 @@ julia scripts/preprocess_ldc.jl configs/default.toml \
     --output-prefix telemetry_sim                   # whitened band features per window
 julia scripts/train.jl configs/default.toml --run-id <RUN_ID>               # weights and threshold
 julia scripts/infer.jl configs/default.toml --run-id <RUN_ID> --block test  # the completed record
+julia scripts/calibrate.jl configs/default.toml --run-id <CAL_ID> --model models/run_<RUN_ID>/gw_model.jld2 \
+    --features data/inputs/<record>_features.csv    # scaler and threshold on a new record's own noise
+julia scripts/infer.jl configs/default.toml --run-id <CAL_ID> --features data/inputs/<record>_features.csv --labels "" --block evaluation
 julia scripts/export_telemetry_payload.jl configs/default.toml \
     --h5-file data/inputs/simulated_telemetry_complex.h5 \
     --catalog data/inputs/simulated_telemetry_complex_events.csv \
@@ -270,6 +276,12 @@ the product itself; the
 lists the commands that reproduce the Sangria results. `scripts/animate.jl`
 draws the GIF of a training history or of a replay.
 
+A record the model was not trained on is calibrated before it is scored —
+scaler and threshold on its own noise, `scripts/calibrate.jl` — as the
+manual's
+[New data sets](https://PaulGoG.github.io/MilliHertzQML.jl/dev/newdata/)
+page describes.
+
 ## Component status
 
 | Component | State |
@@ -277,8 +289,9 @@ draws the GIF of a training history or of a replay.
 | Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
 | Features and training | Whitened band powers per window, whitening by a model or a Welch power spectral density (PSD), optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
-| LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz |
+| LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz and on Yorsh (a composite record summed from component streams) |
 | Classical controls | Logistic regression, one-hidden-layer network and a logistic regression on the first harmonics of the encoded angles, through the same stages as the circuit (`[model] kind`) |
+| Calibration on new data | The scaler and threshold of a training run refitted on a new record's own noise (`scripts/calibrate.jl`: the noise matched by quantiles, or the training rule, or the threshold alone), the record's evaluation block scored at the new operating point |
 | Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and the holes the producer declares (generation gaps, full recorder) handled; the A and E channels read from one two-column mission or from the TDI record |
 | Documentation | Manual with the results, the benchmark and its protocol; deficiencies listed on the physics and architecture pages |
 
@@ -334,7 +347,7 @@ MilliHertzQML.jl/
 │   ├── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
 │   ├── visualization.jl    # Figure interface of the classifier and its studies
 │   ├── vqc_scorer.jl       # The classifier (circuit or control) as a window scorer; the detector of a training run
-│   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier
+│   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier, calibrate_classifier (a new record's scaler and threshold)
 ├── ext/
 │   └── MilliHertzQMLCairoMakieExt.jl        # Training history and the classifier studies
 ├── scripts/
@@ -346,6 +359,7 @@ MilliHertzQML.jl/
 │   ├── preprocess_ldc.jl   # preprocess_record
 │   ├── train.jl            # train_classifier, terminal dashboard, file logger, training figure
 │   ├── infer.jl            # evaluate_classifier and the diagnostic figures
+│   ├── calibrate.jl        # calibrate_classifier on a new record
 │   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
 │   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert table, figure
 │   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
@@ -369,7 +383,7 @@ MilliHertzQML.jl/
 │   ├── default.toml        # Pipeline defaults (simulator)
 │   ├── sangria.toml        # Sangria four-qubit baseline: Welch-whitened two-band features, truth-stream labels
 │   ├── sangria_paper.toml  # Sangria parity run with the raw-window features of Isfan et al. (2025)
-│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, whitening variant, channel mode, and classical control
+│   └── experiments/        # Sangria experiments: one configuration per model width, depth, band partition, whitening variant, channel mode, and classical control, and the LDC-2b and LDC-1b records
 ├── data/
 │   ├── inputs/             # Telemetry records, feature and label CSVs (not tracked)
 │   └── outputs/            # Per-run figures and results (not tracked)

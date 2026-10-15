@@ -244,7 +244,7 @@ export weighted_bce, sample_loss, batch_gradient
 export CircuitWorkspace, load_parameters!, predict_probability!, accumulate_gradient!
 export gradient_tasks
 export load_data, load_features, extract_features, feature_names
-export FeatureScaler, fit_scaler, encode_features
+export FeatureScaler, fit_scaler, match_scaler, encode_features
 export save_model, load_model
 export chronological_split, roc_curve, roc_auc, contiguous_runs, event_metrics
 export select_threshold, threshold_sweep, threshold_rows
@@ -266,6 +266,7 @@ export cfgget, override, section
 export analysis_band, pipeline_paths, feature_geometry
 export generation_settings, preprocessing_settings, model_settings, training_settings
 export inference_settings, ldc_settings, resource_settings, telemetry_settings
+export calibration_settings, CALIBRATION_SCALERS
 export tdi_settings, channel_names, channel_suffix, CHANNEL_MODES, network_periodogram
 export ScheduledRecordRun, channel_record, mode_events
 export TIMER,
@@ -282,7 +283,7 @@ export backup_existing!, write_toml, write_csv
 export training_memory_estimate_gib, record_memory_estimate_gib, check_memory
 export generate_telemetry, preprocess_record, label_truth_stream, channel_catalog
 export whitening_psd, window_features, window_labels
-export train_classifier, evaluate_classifier
+export train_classifier, evaluate_classifier, calibrate_classifier
 export FIGURE_SIZE, PANEL_HEIGHT, STRIP_HEIGHT, figure_size, FIGURE_COLORS, FIGURE_STROKES
 export figure_theme, save_figure
 export figure_training_history, figure_mission_trace, figure_roc, figure_sensitivity
@@ -324,6 +325,7 @@ include("visualization.jl")
 include("vqc_scorer.jl")
 include("stages/training.jl")
 include("stages/inference.jl")
+include("stages/calibration.jl")
 
 # Precompilation of the paths every script enters: circuit construction,
 # feature scaling, the forward pass (non-mutating and in place) and the

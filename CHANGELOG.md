@@ -7,6 +7,29 @@ versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The calibration stage: `calibrate_classifier` (`scripts/calibrate.jl`,
+  `[calibration]`: `block_fraction`, `scaler`, `noise_quantiles`,
+  `reference_features`, `reference_labels`) refits the scaler and the
+  decision threshold of a training run on a new record's own noise — the
+  scaler by matching the record's noise quantiles to the angles of the
+  training noise (`match_scaler`), by the training rule on the calibration
+  block, or kept; the threshold under the training criterion on the
+  calibration block — and persists a calibration run (`gw_model.jld2`,
+  `threshold.toml`, `split.toml` with `calibration` and `evaluation`,
+  `calibration.toml`); the threshold candidates of the training grid are
+  extended into the upper tail of the block's scores (`[calibration]
+  tail_candidates`, StreamingInference's `threshold_sweep`), without
+  which a block without signal cannot reach a false-alarm target below
+  the quantile step. `evaluate_classifier` scores any block of the split
+  the run persisted (`--block evaluation`; StreamingInference's
+  `[inference] block` accepts any block name). The manual page "New data
+  sets" gives the procedure.
+- `[preprocessing] tdi_components` (MilliHertzBase.jl): a record read as
+  the sum of component streams; the configurations
+  `configs/experiments/q8_b6_s001_yorsh.toml` and
+  `q8_b6_s001_ae_yorsh.toml` run the LDC-1b (Yorsh) record, two years
+  without a massive black hole binary, as a background record under the
+  streaming configuration.
 - A confirmation tier of the alerts: `[telemetry]
   alert_confirmation_persistence = 11` in every configuration that
   replays a mission (0 disables it). The windows overlap tenfold, so a

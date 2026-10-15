@@ -118,9 +118,10 @@ end
 """
     block_rows(model_dir, block, n_windows) -> UnitRange{Int}
 
-Row range of `block` (`"validation"` or `"test"`) of the training table
-from the `split.toml` of the run in `model_dir`; the table must hold the
-`n_windows` of the split.
+Row range of `block` of the table a run was fitted on, from the
+`split.toml` of the run in `model_dir` (`validation` and `test` of a
+training run, `calibration` and `evaluation` of a calibration run); the
+table must hold the `n_windows` of the split.
 """
 function block_rows(model_dir::AbstractString, block::AbstractString, n_windows::Integer)
     path = joinpath(model_dir, "split.toml")
@@ -130,6 +131,15 @@ function block_rows(model_dir::AbstractString, block::AbstractString, n_windows:
         ),
     )
     split = TOML.parsefile(path)["split"]
+    blocks = sort([k for (k, v) in split if v isa AbstractVector && length(v) == 2])
+    block in blocks || throw(
+        ArgumentError(
+            "block = $(repr(block)) is not a block of the split in $model_dir; " *
+            "its blocks are " *
+            join(blocks, ", ") *
+            ".",
+        ),
+    )
     split["n_windows"] == n_windows || throw(
         DimensionMismatch(
             "block = $block applies to the training table of $(split["n_windows"]) " *
@@ -148,10 +158,12 @@ Inference stage driven by the `[inference]` and `[paths]` sections of
 `config`; the keyword arguments override the corresponding configuration
 keys when given. The model is `model` (a `.jld2` written by
 [`save_model`](@ref)) or `gw_model.jld2` of the training run `run_id`;
-its directory must hold the `threshold.toml` of the training stage. An
-empty `labels` (or an absent label file) selects blind inference.
-`block = "validation"` or `"test"` restricts the evaluation to one block of
-the training table through the run's `split.toml`.
+its directory must hold the `threshold.toml` of the training or
+calibration stage. An empty `labels` (or an absent label file) selects
+blind inference. `block` restricts the evaluation to one block of the
+split the run persisted in `split.toml`: `"validation"` or `"test"` of a
+training run, `"calibration"` or `"evaluation"` of a calibration run
+([`calibrate_classifier`](@ref)).
 
 The features may be the product of a record with gaps
 ([`preprocess_record`](@ref)): the mission time of a row is then that of
@@ -192,11 +204,6 @@ function evaluate_classifier(
             throw(ArgumentError("feature table not found: $features_path"))
         label_spec = labels === nothing ? inf.labels : labels
         block_name = block === nothing ? inf.block : String(block)
-        block_name in ("all", "validation", "test") || throw(
-            ArgumentError(
-                "block = $(repr(block_name)); expected all, validation, or test.",
-            ),
-        )
         has_labels = !isempty(label_spec) && isfile(resolvepath(label_spec))
         labels_path = has_labels ? resolvepath(label_spec) : ""
 

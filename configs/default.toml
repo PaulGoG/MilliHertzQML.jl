@@ -45,6 +45,7 @@ channels = "A"   # TDI channel mode of every product; one of: "A" | "AE" (featur
 
 [preprocessing]
 tdi_group = "obs/tdi"   # HDF5 group or compound dataset holding t, X, Y, Z
+tdi_components = []     # HDF5 objects (t, X, Y, Z each) summed into the record, the layout of the LDC products shipped as component streams; [] reads tdi_group
 h5_file = "data/inputs/simulated_telemetry_complex.h5"   # HDF5 record; overridden by --h5-file
 window_size = 1000   # sliding-window length [samples]; >= 2
 step_size = 100      # sliding-window step [samples]; in [1, window_size]
@@ -99,9 +100,17 @@ seed = 9999                # RNG seed for the data split and initialisation; non
 [inference]
 features = "data/inputs/telemetry_complex_features.csv"   # inference feature CSV
 labels = "data/inputs/telemetry_complex_labels.csv"       # inference label CSV; "" for blind mode
-block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
+block = "all"        # rows evaluated; "all", or a block named in the scored run's split.toml ("validation" | "test" of a training run, "calibration" | "evaluation" of a calibration run)
 step_size = 100      # window step [samples], used only without a feature sidecar; >= 1
 sample_rate = 0.2    # sampling frequency [Hz], used only without a feature sidecar; > 0
+
+[calibration]
+block_fraction = 0.3           # chronological first fraction of the record's windows fitting the scaler and threshold; in [0.05, 0.95]; the evaluation block follows after a buffer of one window
+scaler = "match"               # feature scaler of the calibrated model; one of: "match" (the record's noise encoded where the training noise was, by the quantiles noise_quantiles) | "refit" (the training rule, [training] scaler_quantiles, on the calibration block) | "keep" (the parent model's)
+noise_quantiles = [0.5, 0.99]  # quantiles of the noise windows matched under "match"; ascending, in [0, 1]
+reference_features = ""        # feature table of the noise the parent model was trained on under "match"; "" takes [training] train_features
+reference_labels = ""          # its label table; "" takes [training] train_labels
+tail_candidates = 200          # candidate thresholds added to the upper tail of the calibration block's scores (log-spaced down to one window); >= 0, 0 keeps the training grid
 
 [ldc]
 h5_file = ""                    # LDC training product with truth stream and catalogue (or pass --h5-file / --truth-csv)

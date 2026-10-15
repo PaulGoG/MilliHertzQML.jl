@@ -110,6 +110,68 @@ function training_settings(config::AbstractDict)
 end
 
 """
+    CALIBRATION_SCALERS
+
+The scaler rules of the calibration stage: `"match"` encodes the record's
+noise where the training noise was by its quantiles, `"refit"` applies the
+training rule — `[training] scaler_quantiles` on the calibration block —
+and `"keep"` keeps the parent model's scaler and refits the threshold only.
+"""
+const CALIBRATION_SCALERS = ("match", "refit", "keep")
+
+"""
+    calibration_settings(config) -> NamedTuple
+
+Validated `[calibration]` parameters of the calibration of a trained
+classifier on a new record ([`calibrate_classifier`](@ref)): the
+chronological `block_fraction` of the record's windows that fits the
+scaler and the threshold (in [0.05, 0.95], default 0.3), the `scaler` rule
+(`"match"`, `"refit"`, `"keep"`; [`CALIBRATION_SCALERS`](@ref)), the
+`noise_quantiles` matched under `"match"` (two ascending values in [0, 1],
+default `[0.5, 0.99]`), the reference product of the noise the parent
+model was trained on, `reference_features` and `reference_labels` (empty,
+the default: `[training] train_features` and `train_labels`), and
+`tail_candidates` (>= 0, default 200), the candidate thresholds added to
+the upper tail of the calibration block's scores
+([`threshold_sweep`](@ref)), without which a block without signal cannot
+reach a false-alarm target below the quantile step of the grid. The
+threshold criterion, its targets, `min_fit_episodes`, `scaler_quantiles`
+and `phase_span` are those of `[training]`.
+"""
+function calibration_settings(config::AbstractDict)
+    c = section(config, "calibration")
+    quantiles = cfgget(c, "noise_quantiles", [0.5, 0.99]; type = AbstractVector)
+    (
+        length(quantiles) == 2 &&
+        all(q -> q isa Real, quantiles) &&
+        0 <= quantiles[1] < quantiles[2] <= 1
+    ) || throw(
+        ArgumentError(
+            "configuration key `noise_quantiles` = $(repr(quantiles)); " *
+            "expected two ascending values in [0, 1].",
+        ),
+    )
+    reference_features = cfgget(c, "reference_features", ""; type = String)
+    reference_labels = cfgget(c, "reference_labels", ""; type = String)
+    return (
+        block_fraction = cfgget(
+            c,
+            "block_fraction",
+            0.3;
+            type = Float64,
+            min = 0.05,
+            max = 0.95,
+        ),
+        scaler = cfgget(c, "scaler", "match"; type = String, choices = CALIBRATION_SCALERS),
+        noise_quantiles = (Float64(quantiles[1]), Float64(quantiles[2])),
+        reference_features = isempty(reference_features) ? "" :
+                             resolvepath(reference_features),
+        reference_labels = isempty(reference_labels) ? "" : resolvepath(reference_labels),
+        tail_candidates = cfgget(c, "tail_candidates", 200; type = Int, min = 0),
+    )
+end
+
+"""
     training_memory_estimate_gib(n_qubits, n_layers, batch_size;
                                  gradient_method = "adjoint") -> Float64
 

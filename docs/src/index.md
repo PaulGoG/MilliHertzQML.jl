@@ -106,6 +106,10 @@ load.
 4. `scripts/infer.jl` (`evaluate_classifier`) applies the persisted
    threshold to a feature table and reports window- and event-level
    metrics with diagnostic figures.
+5. `scripts/calibrate.jl` (`calibrate_classifier`) refits the scaler and
+   the threshold of a training run on a new record's own noise, and
+   `scripts/infer.jl --block evaluation` scores the rest of that record;
+   the page [New data sets](newdata.md) gives the procedure.
 
 **Streaming path**, on a telemetry mission:
 `scripts/export_telemetry_payload.jl` writes a product as the payload of
@@ -150,4 +154,7 @@ The Sangria runs are reproduced by the commands at the end of the
   configuration with smoothed whitening and on the A and E network, and
   the classical controls on the same features, with the glitch records of
   LDC-2b.
+- [New data sets](newdata.md): why the scaler and the threshold of a
+  training run do not transfer to another record, the calibration on the
+  record's own noise, and the procedure for a new record.
 - [API Reference](api.md) and [References](references.md).

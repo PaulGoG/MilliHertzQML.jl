@@ -30,6 +30,7 @@ makedocs(
         "Quantum Architecture" => "architecture.md",
         "Telemetry Coupling" => "telemetry.md",
         "Sangria Benchmark" => "benchmark.md",
+        "New Data Sets" => "newdata.md",
         "API Reference" => "api.md",
         "References" => "references.md",
     ],

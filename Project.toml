@@ -30,8 +30,8 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 MilliHertzQMLCairoMakieExt = "CairoMakie"
 
 [sources]
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "5ec913712fcdd7f008ec8fe42340b96b96a154cf"}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "efd441ac3612a33785110d816e4d5c36f1b9f551"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "5c8980e4d2a5dcfb01b47ad7b2acf5ea19a276ce"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "e6c25c1ad4fdcb5e6e76bfb83b0f83d5ff4945d8"}
 
 [compat]
 CairoMakie = "0.15"

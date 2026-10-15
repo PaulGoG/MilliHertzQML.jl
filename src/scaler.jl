@@ -66,6 +66,77 @@ function fit_scaler(
 end
 
 """
+    match_scaler(reference, X_ref, X_new; quantiles = (0.5, 0.99)) -> FeatureScaler
+
+Scaler of a new record whose noise is encoded where the reference noise
+was. For every feature ``j``, the quantiles ``q_\\mathrm{ref}(p)`` of
+column ``j`` of `X_ref` (the noise windows the model was trained on)
+receive under `reference` the angles ``a(p) = \\phi\\,(q_\\mathrm{ref}(p) -
+\\ell_j)/(u_j - \\ell_j)`` (the affine map of the reference without its
+clamp); the new bounds are those of the affine map that sends the same
+quantiles ``q_\\mathrm{new}(p)`` of column ``j`` of `X_new` (the noise
+windows of the new record) to those angles:
+
+```math
+u_j' - \\ell_j' = \\phi\\,\\frac{q_\\mathrm{new}(p_2) - q_\\mathrm{new}(p_1)}{a(p_2) - a(p_1)},
+\\qquad
+\\ell_j' = q_\\mathrm{new}(p_1) - a(p_1)\\,\\frac{u_j' - \\ell_j'}{\\phi}.
+```
+
+The encoding span ``\\phi`` is that of `reference`. Both matrices are
+samples × features with the feature count of `reference`
+(`DimensionMismatch` otherwise); `quantiles` are two ascending values in
+``[0, 1]``; a column whose two quantiles coincide, in either matrix,
+cannot be matched (`ArgumentError` naming the column).
+"""
+function match_scaler(
+    reference::FeatureScaler,
+    X_ref::AbstractMatrix{<:Real},
+    X_new::AbstractMatrix{<:Real};
+    quantiles::Tuple{Real,Real} = (0.5, 0.99),
+)
+    0 <= quantiles[1] < quantiles[2] <= 1 ||
+        throw(ArgumentError("quantiles = $quantiles; need 0 <= lower < upper <= 1."))
+    n_features = length(reference.lower)
+    size(X_ref, 2) == n_features == size(X_new, 2) || throw(
+        DimensionMismatch(
+            "the reference matrix has $(size(X_ref, 2)) columns and the new one " *
+            "$(size(X_new, 2)); the scaler expects $n_features.",
+        ),
+    )
+    φ = Float64(reference.phase_span)
+    lower = Vector{Float64}(undef, n_features)
+    upper = Vector{Float64}(undef, n_features)
+    for j in 1:n_features
+        lo, hi = Float64(reference.lower[j]), Float64(reference.upper[j])
+        q_ref1 = Float64(quantile(view(X_ref, :, j), quantiles[1]))
+        q_ref2 = Float64(quantile(view(X_ref, :, j), quantiles[2]))
+        q_new1 = Float64(quantile(view(X_new, :, j), quantiles[1]))
+        q_new2 = Float64(quantile(view(X_new, :, j), quantiles[2]))
+        a1 = φ * (q_ref1 - lo) / (hi - lo)
+        a2 = φ * (q_ref2 - lo) / (hi - lo)
+        Δa = a2 - a1
+        Δq = q_new2 - q_new1
+        Δa > 0 || throw(
+            ArgumentError(
+                "feature column $j: the reference quantiles $(quantiles) coincide; " *
+                "the column cannot be matched.",
+            ),
+        )
+        Δq > 0 || throw(
+            ArgumentError(
+                "feature column $j: the quantiles $(quantiles) of the new record " *
+                "coincide; the column cannot be matched.",
+            ),
+        )
+        scale = Δq / Δa
+        lower[j] = q_new1 - a1 * scale
+        upper[j] = lower[j] + φ * scale
+    end
+    return FeatureScaler(lower, upper; phase_span = reference.phase_span)
+end
+
+"""
     encode_features(scaler, X) -> Matrix{Float32}
 
 `X` (samples × features) clamped to the scaler bounds and mapped linearly

@@ -60,6 +60,7 @@ The pipeline is a library with thin command-line entry points. Every stage is a 
 | Window features | `preprocess_record(config; h5_file, tdi_group, label_file, output_prefix, force)` | `scripts/preprocess_ldc.jl` |
 | Training | `train_classifier(config; run_id, test_mode, on_epoch)` | `scripts/train.jl` |
 | Inference | `evaluate_classifier(config; run_id, model, features, labels, block)` | `scripts/infer.jl` |
+| Calibration (a new record) | `calibrate_classifier(config; run_id, model, features, labels, scaler)` | `scripts/calibrate.jl` |
 | Payload export (telemetry) | `export_telemetry_payload(config; h5_file, tdi_group, catalog, output_prefix)` | `scripts/export_telemetry_payload.jl` |
 | Telemetry replay | `replay_run` / `follow_run` on `open_telemetry_run(run_dir)` with `detector_from_run(model)` | `scripts/infer_telemetry.jl` |
 

@@ -343,6 +343,37 @@ include("circuit_tests.jl")
     @test_throws ArgumentError fit_scaler(X; quantiles = (0.9, 0.1))
     @test_throws DimensionMismatch encode_features(scaler, X[:, 1:3])
     @test_throws ArgumentError FeatureScaler([0.0, 1.0], [1.0, 1.0])
+    # A scaler matched on the noise of another record: the new noise lands
+    # where the reference noise was; an affine image of the reference is
+    # recovered exactly from two quantiles
+    reference = FeatureScaler([0.0], [10.0])
+    X_ref = reshape(collect(0.0:0.01:10.0), :, 1)
+    X_new = 2 .* X_ref .+ 3
+    matched = match_scaler(reference, X_ref, X_new; quantiles = (0.5, 0.99))
+    @test isapprox(matched.lower, [3.0]; atol = 1e-4) &&
+          isapprox(matched.upper, [23.0]; atol = 1e-4)
+    @test matched.phase_span == reference.phase_span
+    @test isapprox(
+        encode_features(matched, X_new),
+        encode_features(reference, X_ref);
+        atol = 1e-5,
+    )
+    X2_ref = hcat(X_ref, 5 .* X_ref .- 1)
+    ref2 = FeatureScaler([0.0, -1.0], [10.0, 49.0])
+    X2_new = hcat(2 .* X_ref .+ 3, 0.5 .* (5 .* X_ref .- 1) .+ 7)
+    m2 = match_scaler(ref2, X2_ref, X2_new)
+    @test isapprox(m2.lower, [3.0, 6.5]; atol = 1e-4) &&
+          isapprox(m2.upper, [23.0, 31.5]; atol = 1e-4)
+    @test_throws DimensionMismatch match_scaler(reference, X_ref, X2_new)
+    @test_throws DimensionMismatch match_scaler(reference, X2_ref, X_new)
+    @test_throws ArgumentError match_scaler(reference, X_ref, fill(1.0, 100, 1))
+    @test_throws ArgumentError match_scaler(reference, fill(1.0, 100, 1), X_new)
+    @test_throws ArgumentError match_scaler(
+        reference,
+        X_ref,
+        X_new;
+        quantiles = (0.99, 0.5),
+    )
 end
 
 @testset "Threshold file migration" begin
@@ -666,6 +697,239 @@ end
     @test channel_suffix("AE") == "_ae"
     events = DataFrame(signal_start_index = [5], signal_start_index_ae = [3])
     @test mode_events(events, "AE").signal_start_index == [3]
+end
+
+@testset "Calibration on a new record" begin
+    mktempdir() do dir
+        rng = StableRNG(23)
+        n = 600
+        labels = zeros(Int, n)
+        labels[250:300] .= 1
+        reference = DataFrame(rand(rng, Float32, n, 4), feature_names(:whitened))
+        reference.p_low .+= 3.0f0 .* labels
+        function product(stem, table, point_labels)
+            path = joinpath(dir, stem * "_features.csv")
+            CSV.write(path, table)
+            point_labels === nothing || CSV.write(
+                joinpath(dir, stem * "_labels.csv"),
+                DataFrame(Label = point_labels),
+            )
+            sidecar = Dict{String,Any}(
+                "features" => Dict{String,Any}(
+                    "window_size" => 1000,
+                    "step_size" => 100,
+                    "sample_rate" => 0.2,
+                    "psd" => "none",
+                    "feature_set" => "whitened",
+                    "channels" => "A",
+                ),
+                "product" => Dict{String,Any}("channels" => "A"),
+            )
+            open(io -> TOML.print(io, sidecar), joinpath(dir, stem * "_features.toml"), "w")
+            return path
+        end
+        ref = product("reference", reference, labels)
+        # The new record: noise alone, every feature under another affine map
+        noise = DataFrame(
+            rand(rng, Float32, n, 4) .* Float32[2 0.5 1 3] .+ Float32[3 -1 0 10],
+            feature_names(:whitened),
+        )
+        new = product("new", noise, nothing)
+        config = Dict{String,Any}(
+            "paths" => Dict{String,Any}(
+                "inputs" => dir,
+                "models" => joinpath(dir, "models"),
+                "plots" => joinpath(dir, "plots"),
+                "results" => joinpath(dir, "results"),
+            ),
+            "model" => Dict{String,Any}("n_qubits" => 4, "n_layers" => 1),
+            "training" => Dict{String,Any}(
+                "train_features" => ref,
+                "train_labels" => replace(ref, "_features" => "_labels"),
+                "epochs" => 1,
+                "batch_size" => 32,
+                "threshold_criterion" => "far",
+                "target_far_per_30d" => 3.0,
+                "min_fit_episodes" => 0,
+            ),
+            "calibration" => Dict{String,Any}(
+                "block_fraction" => 0.3,
+                "scaler" => "match",
+                "noise_quantiles" => [0.5, 0.99],
+            ),
+        )
+        trained = train_classifier(config; run_id = "parent")
+        parent_model = trained.model_path
+        parent, _, parent_scaler = load_model(parent_model)
+        split = TOML.parsefile(joinpath(trained.run_dir, "split.toml"))["split"]
+        train_rows = split["train"][1]:split["train"][2]
+        X_ref = load_features(ref)
+        X_new = load_features(new)
+        n_cal = floor(Int, 0.3 * n)
+        buffer = cld(1000, 100)
+
+        # "match": the parent's parameters with the matched scaler, the
+        # threshold of the calibration block, the artifacts of a run
+        result = calibrate_classifier(
+            config;
+            run_id = "cal_match",
+            model = parent_model,
+            features = new,
+        )
+        @test result.blocks.calibration == 1:n_cal
+        @test result.blocks.evaluation == (n_cal+buffer+1):n
+        run_dir = joinpath(dir, "models", "run_cal_match")
+        for file in (
+            "gw_model.jld2",
+            "threshold.toml",
+            "split.toml",
+            "calibration.toml",
+            "config.toml",
+            "manifest_snapshot.toml",
+            "threshold_sweep.csv",
+        )
+            @test isfile(joinpath(run_dir, file))
+        end
+        model, meta, scaler = load_model(joinpath(run_dir, "gw_model.jld2"))
+        @test model.params == parent.params
+        @test meta["calibration"]["scaler"] == "match"
+        ref_noise = X_ref[[i for i in train_rows if labels[i] == 0], :]
+        expected = match_scaler(
+            parent_scaler,
+            ref_noise,
+            X_new[1:n_cal, :];
+            quantiles = (0.5, 0.99),
+        )
+        @test scaler.lower == expected.lower && scaler.upper == expected.upper
+        @test scaler.phase_span == parent_scaler.phase_span
+        thr = TOML.parsefile(joinpath(run_dir, "threshold.toml"))["threshold"]
+        @test thr["block"] == "calibration" && thr["criterion"] == "far"
+        @test thr["fit_windows"] == n_cal && thr["fit_positive_windows"] == 0
+        @test thr["parent_threshold"] == Float64(trained.threshold)
+        @test thr["value"] == result.threshold
+        cal = TOML.parsefile(joinpath(run_dir, "calibration.toml"))["calibration"]
+        @test cal["scaler"] == "match" && cal["blind"] == true
+        @test cal["calibration_noise_windows"] == n_cal
+        @test cal["reference_noise_windows"] == size(ref_noise, 1)
+        @test cal["scaler_lower"] == Float64.(expected.lower)
+        @test cal["parent_scaler_upper"] == Float64.(parent_scaler.upper)
+        @test cal["tail_candidates"] == 200
+        blocks = TOML.parsefile(joinpath(run_dir, "split.toml"))["split"]
+        @test blocks["n_windows"] == n && blocks["buffer_windows"] == buffer
+        @test blocks["calibration"] == [1, n_cal]
+        @test blocks["evaluation"] == [n_cal + buffer + 1, n]
+        snapshot = TOML.parsefile(joinpath(run_dir, "config.toml"))
+        @test snapshot["features"]["channels"] == "A"
+        @test snapshot["calibration"]["block_fraction"] == 0.3
+        # The evaluation block scored through the inference stage; the
+        # blocks of a training run are not in this split
+        scored = evaluate_classifier(
+            config;
+            run_id = "cal_match",
+            features = new,
+            labels = "",
+            block = "evaluation",
+        )
+        @test length(scored.probabilities) == n - n_cal - buffer
+        @test scored.threshold == Float32(thr["value"])
+        @test_throws ArgumentError evaluate_classifier(
+            config;
+            run_id = "cal_match",
+            features = new,
+            labels = "",
+            block = "test",
+        )
+        @test_throws ArgumentError evaluate_classifier(
+            config;
+            run_id = "parent",
+            features = ref,
+            labels = "",
+            block = "evaluation",
+        )
+
+        # "keep": the parent's scaler, a threshold of its own
+        kept = calibrate_classifier(
+            config;
+            run_id = "cal_keep",
+            model = parent_model,
+            features = new,
+            scaler = "keep",
+        )
+        _, _, kept_scaler = load_model(kept.model_path)
+        @test kept_scaler.lower == parent_scaler.lower
+        @test kept_scaler.upper == parent_scaler.upper
+        # "refit": the training rule on the calibration block
+        refit = calibrate_classifier(
+            config;
+            run_id = "cal_refit",
+            model = parent_model,
+            features = new,
+            scaler = "refit",
+        )
+        _, _, refit_scaler = load_model(refit.model_path)
+        fitted = fit_scaler(
+            X_new[1:n_cal, :];
+            quantiles = (0.005, 0.995),
+            phase_span = parent_scaler.phase_span,
+        )
+        @test refit_scaler.lower == fitted.lower && refit_scaler.upper == fitted.upper
+        # With labels, the positives of the calibration block are not noise
+        new_labels = zeros(Int, n)
+        new_labels[100:120] .= 1
+        labelled = product("labelled", noise, new_labels)
+        with_labels = calibrate_classifier(
+            config;
+            run_id = "cal_labelled",
+            model = parent_model,
+            features = labelled,
+            labels = replace(labelled, "_features" => "_labels"),
+        )
+        cal_l =
+            TOML.parsefile(joinpath(with_labels.run_dir, "calibration.toml"))["calibration"]
+        @test cal_l["blind"] == false && cal_l["calibration_noise_windows"] == n_cal - 21
+        thr_l = TOML.parsefile(joinpath(with_labels.run_dir, "threshold.toml"))["threshold"]
+        @test thr_l["fit_positive_windows"] == 21
+        # Refusals
+        @test_throws ArgumentError calibrate_classifier(
+            config;
+            run_id = "",
+            model = parent_model,
+            features = new,
+        )
+        @test_throws ArgumentError calibrate_classifier(
+            config;
+            run_id = "x",
+            model = joinpath(dir, "absent.jld2"),
+            features = new,
+        )
+        @test_throws ArgumentError calibrate_classifier(
+            config;
+            run_id = "x",
+            model = parent_model,
+            features = new,
+            scaler = "other",
+        )
+        @test_throws ArgumentError calibrate_classifier(
+            config;
+            run_id = "x",
+            features = new,
+        )
+        @test_throws ArgumentError calibration_settings(
+            Dict("calibration" => Dict("block_fraction" => 1.5)),
+        )
+        @test_throws ArgumentError calibration_settings(
+            Dict("calibration" => Dict("noise_quantiles" => [0.9, 0.1])),
+        )
+        @test_throws ArgumentError calibration_settings(
+            Dict("calibration" => Dict("scaler" => "other")),
+        )
+        @test calibration_settings(Dict{String,Any}()).scaler == "match"
+        @test calibration_settings(Dict{String,Any}()).noise_quantiles == (0.5, 0.99)
+        @test calibration_settings(Dict{String,Any}()).tail_candidates == 200
+        @test_throws ArgumentError calibration_settings(
+            Dict("calibration" => Dict("tail_candidates" => -1)),
+        )
+    end
 end
 
 @testset "Classical controls" begin
