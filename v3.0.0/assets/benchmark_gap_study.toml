@@ -1,0 +1,28 @@
+written_at = "2026-09-30T23:39:36.380"
+
+[environment]
+manifest_sha256 = "b8c7d2a3421224c12a9fae6afb5f895e13afd5afeee407510110ce628662c65f"
+active_project = "test/Project.toml"
+
+[figure]
+files = ["gap_study.pdf", "gap_study.png"]
+run_id = "gap_study"
+size_pt = [1200, 904]
+px_per_unit = 4
+
+[hardware]
+total_memory_gib = 30.76
+cpu_model = "Intel(R) Core(TM) Ultra 7 155H"
+blas_threads = 6
+distributed_workers = 1
+machine_id = "10f031174590"
+kernel = "Linux"
+versioninfo = """Julia Version 1.13.1\nCommit 96ca370cf0e (2026-09-25 19:34 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
+julia_threads = 12
+cpu_threads_logical = 22
+julia_version = "1.13.1"
+
+[git]
+git_commit = "v2.0.0-4-g14eaf6e"
+git_dirty = false
+package_version = "2.0.0"
