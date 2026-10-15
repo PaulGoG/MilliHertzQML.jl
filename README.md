@@ -8,14 +8,30 @@
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A variational quantum classifier with data re-uploading that detects
-massive black hole binary (MBHB) coalescences in LISA-like milliHertz
-telemetry, both in a completed record and streamed through a simulated
-telemetry mission as the data reaches the ground. The circuits are
-simulated with `Yao.jl` and differentiated by its reversible (adjoint)
-mode; the optimiser comes from `Optimisers.jl`. The classification
-approach follows Isfan et al., *Class. Quantum Grav.* **42** 225001
-(2025), DOI
+MilliHertzQML.jl is a variational quantum classifier that flags the
+coalescences of massive black hole binaries (MBHBs) in LISA
+time-delay-interferometry (TDI) data. It scores the data window by window,
+in a completed record and in a replay of the record streamed through a
+simulated telemetry downlink.
+
+The data are those of the LISA Data Challenge (LDC) 2a "Sangria" data set:
+one simulated year for training, and a second, "blind" year whose source
+catalogue was withheld until evaluation. On the completed blind year, the
+selected configuration, chosen on the training year, detects the five
+labelled coalescence spans (two of the six coalescences share one span)
+at 1.57 false alarms per 30 days. With the blind
+year streamed through a simulated downlink and whitened causally, from
+data already on the ground, the streaming configuration alerts five of the
+six coalescences 11 to 29 hours before their merger.
+
+The principal limit is that a logistic regression on the same eight
+features does at least as well as the circuit. The detection rests on the
+conditioning of the data and on the features, not on the circuit.
+
+The circuit uses data re-uploading. It is simulated with `Yao.jl` and
+differentiated by its reversible (adjoint) mode; the optimiser comes from
+`Optimisers.jl`. The classification approach follows Isfan et al.,
+*Class. Quantum Grav.* **42** 225001 (2025), DOI
 [10.1088/1361-6382/ae1787](https://doi.org/10.1088/1361-6382/ae1787),
 reimplemented in Julia in place of the original Python and Qiskit code.
 
@@ -27,31 +43,24 @@ The package is the classifier of a set of three:
   replay of a telemetry mission, evaluation, configuration and provenance;
 - [MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl) holds
   the gravitational-wave layer: the LISA noise models, waveforms, the
-  readers of the LISA Data Challenge (LDC) products, labelling, and the
-  coupling to a telemetry producer;
+  readers of the LDC products, labelling, and the coupling to a telemetry
+  producer;
 - MilliHertzQML.jl holds the circuit, its training, and the classical
   controls on the same features, and re-exports the two layers, so that
   `using MilliHertzQML` gives the whole pipeline.
-
-This README describes `main`. Its manual is built at
-[PaulGoG.github.io/MilliHertzQML.jl/dev](https://PaulGoG.github.io/MilliHertzQML.jl/dev/),
-and the links below point there. The manual of the latest release, 2.0.1,
-is at [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); it
-predates the separation of the layers and the correction of 12 October
-2026 noted under [At a glance](#at-a-glance).
 
 ## At a glance
 
 Two configurations of one model, eight qubits with four re-uploading
 layers on eight features per window (six band powers between 0.3 and
 40 mHz, the spectral entropy and the spread of the log power), run on the
-LISA Data Challenge 2a "Sangria" blind year with decision thresholds
-fitted on the training year and applied unchanged. The selected
-configuration, `q8_b6`, whitens every window by a Welch estimate of the
-noise spectrum; the streaming configuration, `q8_b6_s001`, by the same
-estimate smoothed in log-frequency by 0.01 dex, which shortens the stretch
-of data a window needs from 1.16 days to 2.8 hours and makes the causal
-replay usable.
+Sangria blind year with decision thresholds fitted on the training year
+and applied unchanged. The selected configuration, `q8_b6`, was chosen on
+the training year by a rule fixed before the blind year was scored; it
+whitens every window by a Welch estimate of the noise spectrum. The
+streaming configuration, `q8_b6_s001`, whitens by the same estimate
+smoothed in log-frequency by 0.01 dex, which shortens the conditioning lag
+from 1.16 days to 2.8 hours and makes the causal replay usable.
 
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
@@ -60,13 +69,43 @@ replay usable.
 | Streamed year: coalescences alerted before their merger | 1 of 6 | **5 of 6** (6 of 6 at three further seeds) |
 | Streamed year: alert time at the ground station, relative to the merger | 1.6 h before to 40 h after | **11 to 29 h before** |
 | Streamed year: false alarms per 30 days | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
-| Stretch of data a window needs before it is scored | 1.16 days | **2.8 hours** |
+| Conditioning lag (data after a window needed before it can be scored) | 1.16 days | **2.8 hours** |
 | Part of the record scored when 0.43 % of the batches are lost | 9 % | **81 %** |
 
-An alert counts for a coalescence only from its signal onset, the first
-window in which the signal of the source, conditioned as the record is,
-reaches a norm of 3 against the record's own noise, 10 to 38 hours before
-the merger on this year; earlier alarms count as false alarms.
+The rows of the table read as follows.
+
+- **Label spans.** The blind year holds six coalescences. Events 1 and 2
+  merge 29.5 hours apart and share one label span, so the rows of the
+  completed blind year count five label spans.
+- **Signal onset and credited span.** The signal onset of a coalescence is
+  the first window in which its signal reaches a norm of 3, 10 to 38 hours
+  before the merger on this year. The norm is taken over one 1000-sample
+  window of the signal-only truth stream, high-passed and whitened as the
+  record is: it is the optimal single-window signal-to-noise ratio against
+  the record's own noise. The credited span of a coalescence runs from its
+  signal onset to the end of its label span. An alert counts for the
+  coalescence only inside it.
+- **False alarm.** An episode, not a window. On the completed record, a
+  run of alarmed windows outside every label span, per 30 days of the
+  record. In the streamed year, a run of at least three consecutive
+  alarmed windows outside every credited span, per 30 days of scored data.
+- **Alert time.** The arrival at the ground station of the batch that
+  completes the alert, minus the merger time. It includes the conditioning
+  lag and the downlink delay. It excludes the one-hour ground-processing
+  budget.
+- **Conditioning lag.** The stretch of data after a window that must be
+  delivered before the window can be scored. Each window is whitened in a
+  stretch of twenty window lengths on each side in the selected
+  configuration, and of two in the streaming one.
+- **Part of the record scored.** Measured on a 30-day mission whose link
+  loses 0.43 % of the batches permanently (nominal Bernoulli loss 0.5 %),
+  relative to the lossless mission.
+- **Preliminary alert and confirmation.** The streamed-year alerts are
+  preliminary alerts, raised by three consecutive alarmed windows. A
+  confirmation needs eleven. The streaming configuration confirms three to
+  five of the six coalescences before their merger at its four seeds; the
+  selected configuration confirms none before the merger
+  ([Telemetry replay and alert latency](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency)).
 
 ![Classifier output and alarms over the year-long replay of the streaming configuration, with the alert time of every coalescence at the ground station](docs/src/assets/benchmark_telemetry_alerts_smoothed.png)
 
@@ -74,7 +113,7 @@ the merger on this year; earlier alarms count as false alarms.
 whitened causally, from data already delivered to the ground. The
 streaming configuration alerts five of the six coalescences at the ground
 station 11 to 29 hours before their merger, 9 to 21 hours after the
-signal onset, at five false-alarm episodes in the year.*
+signal onset (seed 9999), at five false-alarm episodes in the year.*
 
 ![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
@@ -85,24 +124,21 @@ Two results qualify the table. On the same eight features and under the
 same protocol, a logistic regression with nine parameters does at least as
 well as the circuit with 64: it alerts the six coalescences before their
 mergers at every seed, at 0.58 to 0.82 false alarms per 30 days, and has
-the larger ROC area on the completed record. The detection results are
-therefore those of the conditioning and the features, for which the
-circuit is one classifier among others. What the circuit's feature map
-adds is a tolerance of loud instrumental transients: on the glitch records
-of LDC-2b (Spritz), at a matched rate of alerts on glitches, it alerts the
-loud coalescence 20 to 39 hours ahead where a classifier monotone in the
-features gives 7 to 12 hours; a logistic regression on the cosine and sine
-of the same encoded angles reproduces that without the circuit
-([Classical controls on the same features](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Classical-controls-on-the-same-features)).
+the larger area under the receiver operating characteristic (ROC) on the
+completed record. The detection results are therefore those of the
+conditioning and the features, for which the circuit is one classifier
+among others. What the circuit's feature map adds is a tolerance of instrumental
+transients of large amplitude. On the glitch records of LDC-2b (Spritz), with
+every threshold moved to where the glitches raise at most 2 alerts per
+30 days, the circuit alerts the high-SNR coalescence 9 to 39 hours ahead at
+the seeds that respond; the logistic regression alerts it 7 to 12 hours
+ahead. A logistic regression on the cosine and sine of the same encoded
+angles reproduces that tolerance without the circuit
+([Instrumental glitches](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Instrumental-glitches)).
 
-**Corrections.** Release 1.2.0 credited an alert anywhere in the four-day
-label span of a coalescence and quoted leads of up to 71 hours; releases
-2.0.0 to 2.0.1 credited from an onset defined against the instrument
-noise alone, which the record's noise, the Galactic foreground included,
-exceeds by a factor of about 20 at the frequencies of the inspiral. The
-numbers above follow the rule stated after the table, adopted on
-12 October 2026; the benchmark page records the
-[corrections](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Telemetry-replay-and-alert-latency).
+Releases up to 2.0.1 credited alerts by other onset rules and replayed a
+mission paced by the wall clock; see
+[Corrections to earlier releases](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Corrections-to-earlier-releases).
 
 Every figure and animation, with captions, is on the
 [Results](https://PaulGoG.github.io/MilliHertzQML.jl/dev/results/) page of
@@ -131,6 +167,15 @@ MilliHertzQML.jl/
 The full tree is at the end of this page.
 
 ## Installation
+
+This README describes `main`. Its manual is built at
+[PaulGoG.github.io/MilliHertzQML.jl/dev](https://PaulGoG.github.io/MilliHertzQML.jl/dev/),
+and the links of this page point there. The manual of the latest release,
+2.0.1, is at [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/).
+It predates the separation of the layers and carries dated corrections.
+The numbers of `main` differ from it, as the section
+[Corrections to earlier releases](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Corrections-to-earlier-releases)
+of the benchmark page explains.
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
 of packages added by URL, and is not registered in the General registry.
@@ -231,7 +276,7 @@ draws the GIF of a training history or of a replay.
 |---|---|
 | Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
-| Features and training | Whitened band powers per window, whitening by a model or Welch PSD, optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
+| Features and training | Whitened band powers per window, whitening by a model or a Welch power spectral density (PSD), optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
 | LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz |
 | Classical controls | Logistic regression, one-hidden-layer network and a logistic regression on the first harmonics of the encoded angles, through the same stages as the circuit (`[model] kind`) |
 | Telemetry coupling | Replay and live modes, causal whitening from delivered data, alerts credited from the signal onset with a persistence criterion; delivery holes, outages, retransmission and the holes the producer declares (generation gaps, full recorder) handled; the A and E channels read from one two-column mission or from the TDI record |
@@ -248,7 +293,7 @@ draws the GIF of a training history or of a replay.
   1.40.
 - **Two channels at most.** A alone, or A and E; the T channel carries no
   feature: its band powers did not separate the glitches of LDC-2b from
-  the signal where the glitches have their power.
+  noise where the glitches have their power.
 - **Scattered permanent loss.** A window whose conditioning stretch
   contains a delivery hole is not scored: the selected configuration
   tolerates about 0.2 % of lost batches, the streaming one 0.43 % with 81 %
@@ -267,7 +312,7 @@ draws the GIF of a training history or of a replay.
   neighbouring source.
 - **The circuit is not what detects.** A logistic regression on the same
   features matches or beats it on clean data; its feature map, not its
-  entanglement, is what tolerates loud transients.
+  entanglement, is what tolerates transients of large amplitude.
 
 ## Full file tree
 

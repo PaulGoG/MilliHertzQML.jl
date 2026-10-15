@@ -7,7 +7,8 @@ configuration and provenance, signal processing, features, the estimator
 interface, evaluation and the streamed replay; the gravitational-wave
 layer, [MilliHertzBase.jl](https://github.com/PaulGoG/MilliHertzBase.jl)
 ([manual](https://PaulGoG.github.io/MilliHertzBase.jl/dev/)), holds the
-noise model, waveforms, detector response, LDC products, the generation,
+noise model, waveforms, detector response, LISA Data Challenge (LDC)
+products, the generation,
 pre-processing, labelling and payload-export stages, and the coupling to
 the DeepSpaceTelemetry producer. `MilliHertzQML` re-exports the public
 names of both, so `using MilliHertzQML` gives the whole interface; the two

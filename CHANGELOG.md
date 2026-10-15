@@ -123,6 +123,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
+- The README and the manual are written for a reader new to the project:
+  the README opens with what the package does, on which data, its
+  principal results and its principal limit; every row of the summary
+  tables is defined beneath them (label spans, signal onset and credited
+  span, false alarm, alert time, conditioning lag, part of the record
+  scored, preliminary alert and confirmation); acronyms are expanded at
+  first use and configuration names decoded; the dated corrections of
+  earlier releases are gathered in a section of their own at the end of
+  the benchmark page, with a pointer where they stood; the glitch results
+  of LDC-2b have a heading of their own.
 - The streamed-year results of the manual come from the blind-year
   mission run again on DeepSpaceTelemetry.jl 2.6.2's logical (tick) clock
   from the same scenario and seed, reproducible to the byte, in place of
@@ -263,6 +273,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
   3 GB Sangria training product.
 
 ### Fixed
+- The manual described the features of the selected configuration as six
+  sub-mHz band powers; its six bands span 0.3 to 40 mHz (edges 0.3, 0.6, 1,
+  2, 4, 10 and 40 mHz), two of them below 1 mHz. Other statements that
+  disagreed between pages are aligned with their source: the onset
+  threshold of the LDC-2b records (3, not 5), the lead of the circuit at a
+  matched rate of glitch alerts (9 to 39 hours at the seeds that respond),
+  the parameter count of the circuit (64), the validation-block episode
+  counts, the delayed coalescence under the mean channel combination
+  (event 4), and the descriptions of the payload columns, the handling of
+  records with gaps and the DeepSpaceTelemetry extension in use.
 - The replay snapshot names the producer's run directory by
   `provenance_path`, as every other input path (it recorded the absolute
   path).

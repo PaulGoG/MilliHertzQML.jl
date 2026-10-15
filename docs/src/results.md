@@ -14,18 +14,29 @@ are fitted on the training year and applied unchanged to the blind year.
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
+Events 1 and 2 of the six coalescences merge 29.5 hours apart and share
+one label span, so the completed blind year counts five label spans. A
+false alarm is an episode, a run of alarmed windows outside the spans in
+which alerts are credited, counted per 30 days; in the streamed year it
+must last at least three windows. The streamed-year alerts are preliminary
+alerts of three consecutive alarmed windows, timed at the ground station.
+The [Sangria Benchmark](benchmark.md) page defines every row under the
+same table.
+
 Alerts are credited to a coalescence only from its signal onset, the first
-window in which its signal, conditioned as the record is, reaches a norm
-of 3 against the record's own noise; the figures of release 1.2.0 credited
-the whole four-day label span, those of 2.0.0 to 2.0.1 an onset against
-the instrument noise alone (see the
-[corrections](benchmark.md#Telemetry-replay-and-alert-latency)).
+window in which its signal reaches a norm of 3. The norm is that, over one
+1000-sample window, of the signal-only truth stream high-passed and
+whitened as the record is: the optimal single-window signal-to-noise ratio
+against the record's own noise. Releases up to 2.0.1 credited alerts by
+other onset rules and replayed a mission paced by the wall clock; see
+[Corrections to earlier releases](benchmark.md#Corrections-to-earlier-releases).
 
 ## The completed blind year
 
 ![Classifier output of the selected model over the Sangria blind year](assets/benchmark_mission_trace.png)
 
-*The selected model over the blind year, whitened by its full-record PSD,
+*The selected model over the blind year, whitened by its full-record power
+spectral density (PSD),
 with the five labelled spans shaded. All five labelled events clear the
 threshold, at 1.57 false-alarm episodes per 30 days where the fit on the
 training year predicted 1.38. The bulk of the noise score rises between
@@ -53,7 +64,7 @@ re-initialisation](benchmark.md#The-spread-under-re-initialisation).
 ![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
 
 *Every configuration of the grid at four seeds. The configurations with
-four or six sub-mHz bands recover all five events in every run, the
+four or six bands from 0.3 mHz upwards recover all five events in every run, the
 two-band ones in two of eight; apart from the 2000-sample windows, near 26
 false alarms per 30 days at every seed, the rates do not differ beyond
 the scatter between seeds, and the validation episodes, the selection

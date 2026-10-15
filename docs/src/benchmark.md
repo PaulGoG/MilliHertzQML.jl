@@ -1,8 +1,9 @@
 # Sangria benchmark
 
 This page reports the results of the classifier on the LISA Data Challenge
-2a "Sangria" data set: one year of simulated LISA telemetry for training
-and a second, blind year for evaluation. The blind year is scored twice:
+(LDC) 2a "Sangria" data set: one year of simulated LISA telemetry for
+training and a second, blind year for evaluation, whose source catalogue
+was withheld until evaluation. The blind year is scored twice:
 as a completed record, and streamed through a simulated telemetry mission
 in which every window is scored once the data around it has reached the
 ground.
@@ -16,19 +17,56 @@ ground.
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
+The rows of the table read as follows.
+
+- **Label spans.** The blind year holds six coalescences. Events 1 and 2
+  merge 29.5 hours apart and share one label span, so the rows of the
+  completed blind year count five label spans.
+- **Signal onset and credited span.** The signal onset of a coalescence is
+  the first window in which its signal reaches a norm of 3. The norm is
+  taken over one 1000-sample window of the signal-only truth stream,
+  high-passed and whitened as the record is: it is the optimal
+  single-window signal-to-noise ratio (SNR) against the record's own noise,
+  called below the window SNR against the record's noise. The credited
+  span runs from the signal onset to the end of the label span.
+- **False alarm.** An episode, not a window. On the completed record, a
+  run of alarmed windows outside every label span, per 30 days of the
+  record. In the streamed year, a run of at least three consecutive
+  alarmed windows outside every credited span, per 30 days of scored data.
+- **Alert time.** The arrival at the ground station of the batch that
+  completes the alert, minus the merger time. It includes the conditioning
+  lag and the downlink delay. It excludes the one-hour ground-processing
+  budget.
+- **Conditioning lag.** The stretch of data after a window that must be
+  delivered before the window can be scored. Each window is whitened in a
+  stretch of twenty window lengths on each side in the selected
+  configuration, and of two in the streaming one.
+- **Record scored.** Measured on a 30-day mission whose link loses 0.43 %
+  of the batches permanently (nominal Bernoulli loss 0.5 %), relative to
+  the lossless mission.
+- **Preliminary alert and confirmation.** The streamed-year alerts are
+  preliminary alerts, raised by three consecutive alarmed windows. A
+  confirmation needs eleven (see the confirmation under
+  [Telemetry replay and alert latency](#Telemetry-replay-and-alert-latency)).
+  The streaming configuration confirms three to five of the six
+  coalescences before their merger at its four seeds; the selected
+  configuration confirms none before the merger.
+
 The selected configuration, eight qubits, four re-uploading layers and six
-sub-mHz band powers, was chosen on the training year by a rule fixed before
+band powers between 0.3 and 40 mHz (band edges 0.3, 0.6, 1, 2, 4, 10 and
+40 mHz), was chosen on the training year by a rule fixed before
 the blind year was scored. On the completed blind year it detects all five
 labelled events at 1.57 false-alarm episodes per 30 mission days (19
 episodes over 364 days), from a decision threshold fitted on held-out data
 of the training year and applied without adjustment; the fit predicted
 1.38, so the operating point transfers. Trained at four seeds, the configurations with
-four or six sub-mHz bands recover all five events in every run, the
+four or six bands from 0.3 mHz upwards recover all five events in every run, the
 two-band ones in two of eight; apart from 2000-sample windows, their
 false-alarm rates do not differ beyond the scatter between seeds, which
 for the selected configuration spans 1.57 to 8.74 per 30 days.
 
-The completed record is whitened by its full-record PSD, the median Welch
+The completed record is whitened by its full-record power spectral density
+(PSD), the median Welch
 estimate of the entire blind year: a label-free statistic, admissible for a
 completed record but available only after the whole record has been
 received. The streamed results are therefore quoted under causal
@@ -42,18 +80,17 @@ model retrained on smoothed features, `q8_b6_s001`, is the streaming
 configuration: at each of four initialisation seeds it alerts five or six
 of the six coalescences before their merger in the causal stream, and it
 keeps scoring on a link that loses data. An alert is credited to a
-coalescence only from its signal onset, the first window in which its
-signal, conditioned as the record is, reaches a norm of 3 against the
-record's own noise; release 1.2.0 credited the whole four-day label span
-and releases 2.0.0 to 2.0.1 an onset against the instrument noise alone,
-and the corrections are given under [Telemetry replay and alert
-latency](#Telemetry-replay-and-alert-latency). Every run on this
+coalescence only inside its credited span, from its signal onset on.
+Releases up to 2.0.1 credited alerts by other onset rules and replayed a
+mission paced by the wall clock; see [Corrections to earlier
+releases](#Corrections-to-earlier-releases). Every run on this
 page encodes its features on the half period ``[0, \pi]`` of the ``R_z``
 gate (see the encoding paragraph of the protocol).
 
 ## Data and labels
 
-LDC2a Sangria provides two one-year records of TDI ``X``, ``Y``, ``Z`` at
+LDC2a Sangria provides two one-year records of the time-delay-interferometry
+(TDI) variables ``X``, ``Y``, ``Z`` at
 0.2 Hz: a training product with its source catalogue and truth streams, and
 a blind product whose MBHB catalogue is released separately. Both are read
 natively (`read_tdi`, `read_catalog`) and reduced to the noise-orthogonal
@@ -123,8 +160,9 @@ records that come with a separate blind product, as this one does.
 training year by a rule fixed before any blind score existed: the
 false-alarm episode count at the fitted threshold on the validation block,
 with every event of the block recovered as a constraint; counts within
-one Poisson standard deviation of each other are ties, broken by the
-validation ROC area and then by the smaller circuit. The blind year is
+one Poisson standard deviation of each other are ties, broken by the area
+under the receiver operating characteristic (ROC area, AUC) of the
+validation block and then by the smaller circuit. The blind year is
 then scored once per model and every model is reported, whatever its
 blind rank.
 
@@ -166,15 +204,24 @@ window with several bands clamped simultaneously is a pattern of which the
 training year contains few examples. The scores still peak 12 to 30 hours
 before the merger (0.91 to 0.95 for every event), where the band powers
 lie at 0.4 to 0.8 of the bound: the classifier remains a detector of
-intermediate sub-mHz excess, with a merger response that is now mostly,
-but not entirely, above the threshold.
+intermediate band-power excess, with a merger response that is now mostly,
+but not entirely, above the threshold. On the full period the selected
+configuration delivers 2.47 false alarms per 30 days on the blind year at
+a ROC area of 0.793 and a threshold of 0.826, against 1.57 at 0.807 and
+0.737 on the half period; the two-band four-qubit baseline recovers three
+of the five label spans, against five at 2.64 per 30 days on the half
+period.
 
 ## Results
 
 Ten runs were trained on the same training year with the same protocol
 and evaluated once on the blind year, with the threshold carried over
 unchanged. The validation column is the selection statistic; the blind
-columns were computed after the selection was recorded.
+columns were computed after the selection was recorded. Configuration
+names give the qubits (`q8`: eight), the band powers (`b6`: six) or layers
+(`l6`), `_s001` the 0.01-dex smoothing of the Welch estimate, `_ae` the A
+and E network; a run name adds `_pi` for the encoding on ``[0, \pi]`` and
+`_s<seed>` for a further initialisation seed.
 
 | Run | Qubits × layers, features | Epochs | Threshold | Validation episodes | Blind events | **Blind FA / 30 d** | Blind AUC |
 |---|---|---|---|---|---|---|---|
@@ -189,18 +236,13 @@ columns were computed after the selection was recorded.
 | `q8_b6_pi_s3041` | 8 × 4, 6 bands, seed 3041 | 29 | 0.764 | 7 | **5 / 5** | 3.30 | 0.8129 |
 | `q8_b6_l6_pi` | 8 × 6, 6 bands | 50 | 0.716 | 9 | **5 / 5** | 4.78 | 0.8268 |
 
-Every run but one recovers all five label spans; under the full-period
-encoding the two-band four-qubit baseline recovered three of them, and it
-now recovers five at 2.64 per 30 days. Four runs meet the three-per-30-days
+Every run but one recovers all five label spans. Four runs meet the three-per-30-days
 target on the blind year: `q8_b6_pi`, its seed 1009, `sangria_pi`, and
 `q4_l6_pi`, which misses an event. The selection rule chose `q8_b6_pi`
 with four validation episodes against seven for the second-ranked run, a
 difference of three, outside the tie band of two; it is also the best
 operating point on the blind year, an agreement that is observed here and
 not guaranteed by the rule.
-The same configuration under the full period delivered 2.47 at a ROC
-area of 0.793; the retrained one delivers 1.57 at 0.807, with a threshold
-that moved from 0.826 to 0.737.
 
 ![Classifier output over the blind year](assets/benchmark_mission_trace.png)
 
@@ -272,7 +314,7 @@ there. The ROC area is a rank statistic over the whole distribution and is
 insensitive to where the tail ends, which is why it favours the runs with
 the worst operating points.
 
-Six sub-mHz bands have two effects: they reduce the annual excursion of
+Six bands, two of them below 1 mHz, have two effects: they reduce the annual excursion of
 the noise tail and they raise the event peaks above it, so that the
 threshold can lie in the stable region. The mechanism is that a contrast
 between two band powers that are modulated together is invariant under
@@ -342,7 +384,7 @@ held-out block, 28 runs in all:
 ![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
 
 Three results follow. **The partition of the spectrum decides the
-recall:** the configurations with four or six sub-mHz bands recover all
+recall:** the configurations with four or six bands from 0.3 mHz upwards recover all
 five events in all 20 of their runs, the two-band configurations in 2 of
 their 8 runs, 33 of 40 events. **The false-alarm rate differs between
 configurations only through the 2000-sample windows:** over all seven the
@@ -370,7 +412,7 @@ year of its inference.
 
 ## Against the published method
 
-Everything above uses whitened sub-mHz band powers, which the paper this
+Everything above uses whitened band powers between 0.3 and 40 mHz, which the paper this
 pipeline follows does not: Isfan et al. [IsfanEtAl2025](@cite) take the spectral entropy and the
 mean, standard deviation and maximum of the raw window periodogram, with
 no filtering and no whitening, on a four-qubit register. That
@@ -395,10 +437,10 @@ Under the paper's features the highest-SNR event peaks at 0.559 against a
 fitted threshold of 0.557: the raw periodogram moments saturate most
 strongly where the signal is strongest, and without whitening the feature
 scaler clamps them. Under band features the same event peaks at 0.930
-against a threshold of 0.737. (Under the full-period encoding the parity
-run missed the lowest-SNR event instead, the event the paper also misses;
-the encoding moved the marginal case from the low-SNR end to the high-SNR
-end.)
+against a threshold of 0.737. (On the full period ``[0, 2\pi]`` the parity
+run misses the lowest-SNR event instead, the event the paper also misses:
+the encoding decides whether the marginal case lies at the low-SNR or at
+the high-SNR end.)
 
 The reproduction adds the quantity the paper does not report. The paper
 publishes no false-alarm rate, so "five of six" has no operating point
@@ -419,7 +461,7 @@ chance level.
 | Held-out AUC | 0.561 | 0.702 |
 
 The improvement therefore does not lie in the quantum classifier: the
-register and the ansatz perform the same function as before. **The
+register and the ansatz perform the same function in both runs. **The
 operating point results from the conditioning of the data.** Whitening
 the record and partitioning the milliHertz decade into six bands reduces
 the false-alarm rate by a factor of twenty and raises the highest-SNR
@@ -446,7 +488,7 @@ Inspection of its artifacts establishes the following:
 
 - **The model.** `Flatten → Dense(128, relu) → Dense(128, relu) →
   Dropout(0.2) → Dense(1, sigmoid)` over a 10 × 10 input — ten timesteps
-  of ten features — has **29,569 parameters**, against a few dozen for the
+  of ten features — has **29,569 parameters**, against 64 for the
   variational circuit; the quantum model does not achieve the better
   detection result.
 - **The inputs.** Ten features: the raw projections X, Y, Z, A, E and the
@@ -547,10 +589,8 @@ pass, 1 % packet loss with retransmission, no permanent gaps, run by
 DeepSpaceTelemetry.jl 2.6.2 on its logical (tick) clock, so that the
 mission is reproducible to the byte from its scenario and seed. Under
 causal whitening the consumer scored 62,834 windows and alarmed 647 of
-them; under the full-record PSD it alarmed 572. The retrained model alarms about
-three times as many windows as the full-period one did, in longer runs:
-the same inspiral excess that raises the merger bins keeps the score above
-the threshold for hours around each coalescence.
+them; under the full-record PSD it alarmed 572. The alarms come in runs
+lasting hours around each coalescence, raised by the inspiral excess.
 
 ![Replay of the blind year under causal whitening, with alert latencies](assets/benchmark_telemetry_alerts_causal.png)
 
@@ -575,7 +615,7 @@ between 35 and 7 hours before it.
 |---|---|---|---|---|---|---|
 | Window SNR against the instrument PSD, 74 h before the merger | 2.0 | event 1 | 1.5 | 1.5 | 0.3 | 1.4 |
 | Window SNR against the instrument PSD, 50 h before the merger | 2.8 | event 1 | 2.3 | 2.5 | 0.6 | 2.1 |
-| Signal onset of releases 2.0.0 to 2.0.1, first window at SNR 5 against the instrument PSD [h before the merger] | 34.8 | 29.1 | 27.8 | 32.2 | 7.4 | 27.4 |
+| First window at SNR 5 against the instrument PSD [h before the merger] | 34.8 | 29.1 | 27.8 | 32.2 | 7.4 | 27.4 |
 | Signal onset, first window at a norm of 3 against the record's noise [h before the merger] | 37.1 | 29.1 | 38.1 | 35.7 | 9.8 | 33.2 |
 
 Event 2 merges 29.5 hours after event 1, whose signal dominates the truth
@@ -585,79 +625,9 @@ event 1. An alert is credited from the onset to the end of the label span
 `signal_start_index`), and alarm runs earlier in the label span count as
 false alarms.
 
-**Correction to release 1.2.0.** Release 1.2.0 credited the whole label
-span and thereby counted alarm runs 60 to 95 hours before a merger as
-early detections: the alerts of the selected model 25.6 and 16.1 hours
-before the mergers of events 1 and 4, and the lead of 71 hours on event 1
-of the smoothed model in the section below. Those runs lie where the
-window SNR of the source is about 2, and those of the smoothed model recur
-at the same mission times at every initialisation seed, because every seed
-sees the same noise. The text of 1.2.0 judged the early alerts of the
-selected model consistent with chance but those of the smoothed model
-significant against its false-alarm rate. The second judgement was wrong
-on two counts: that rate is not uniform over the year, since the smoothed
-model's score baseline approaches the threshold between days 200 and 300,
-where events 4 and 5 fall; and a comparison of rates cannot show that a
-particular alarm was raised by the signal, which the window SNR can. The
-tables and figures on this page credit from the signal onset.
-
-**Correction, 12 October 2026.** Releases 2.0.0 to 2.0.1 defined the
-signal onset as the first window in which the raw truth stream reaches a
-matched-filter SNR of 5 against the analytic instrument PSD of the LDC
-noise model, without the Galactic foreground. The noise the detector
-faces is the record's own: every feature is whitened by the measured PSD
-of the record, which exceeds the instrument model by a factor of 18 to 35
-at 1 to 5 mHz on the Sangria blind year. Against that noise the signal
-reaches a window norm of 3 to 5 at the onsets of those releases, and the
-first alerts of the loud coalescences fall where it reaches about 4. The onset
-is now the first window in which the truth stream, high-passed and
-whitened as the record is, reaches a norm of 3 (`[ldc] psd_model =
-"record"`, `label_snr_threshold = 3`); on this year the onsets move from
-7 to 35 hours to 10 to 38 hours before the merger, the table above. Every
-alert table of this page was re-credited under the new rule from its
-stored window table. The alerts credited to the coalescences are those of
-releases 2.0.0 to 2.0.1 to the tenth of an hour, except event 3, whose
-earlier alert now lies inside the span: the A runs of the streaming
-configuration alert it 27.8 to 28.7 hours ahead (24.3 to 24.8 before),
-both replays of the selected configuration 0.3 hours ahead (0.1 and 0.6
-hours after the merger before). The false-alarm rates are lower by up to
-0.3 per 30 days where the longer spans absorb alarms the earlier onset
-left outside (the selected run of the streaming configuration from 0.49
-to 0.33 per 30 days). The calibration counts of the persistence rule below
-are those of the training year's onsets under the new rule; the
-persistence it selects is unchanged. The 30-day missions of the lossy-link
-study are unchanged. This paragraph as first published stated a window
-SNR of about 1 at the former onsets, read from the ratio of the peak SNRs
-alone, and named only event 3 of the streaming configuration; the
-measurement places the former onsets at a norm of 3 to 5 (amended 15
-October 2026).
-
-**Rerun on the tick clock, 15 October 2026.** The year mission of releases
-1.2.0 to 2.0.1 was run by DeepSpaceTelemetry.jl 1.2.0-DEV paced against
-the wall clock at a speed-up of 7200, so that the instants at which its
-batches arrived depended on the load of the host and cannot be
-reproduced. It was run again with DeepSpaceTelemetry.jl 2.6.2 on the
-producer's logical clock, from the same scenario and seed, and every
-streamed-year table and figure of this page is now that of the new
-mission. It delivers the same 63,043 batches, at instants that differ
-from those of the first mission by a median of 4 minutes (99 % within
-1.5 hours). Under the full-record PSD, and for the selected configuration
-under causal whitening, every window scores as before and only the alert
-times move with the arrivals, by up to 1.8 hours: the selected
-configuration alerts event 3 1.6 hours before its merger (0.3 before) and
-the five others 1.9 to 40 hours after it (1.9 to 42). The trailing
-estimate of the streaming configuration sees the record in a different
-order of arrival, so 2 to 6 of its 63,014 decisions per seed change, and
-with them one false-alarm episode at two seeds: 0.41, 0.99, 1.40 and 1.23
-per 30 days at the four seeds (0.33, 0.99, 1.32 and 1.23), the same
-coalescences alerted before their merger, each within 0.9 hours of its
-former alert time. The A and E network was rerun as a two-column mission
-(below): 0.90, 4.44, 1.40 and 1.48 per 30 days (0.99, 4.69, 1.32 and
-1.40), alert times within 1.3 hours. The classical controls of the
-section on them were replayed on the same missions: alert times within
-1.7 hours, false-alarm rates within three episodes of the year per seed;
-the logistic regression on A and E counts two or three more at every
-seed, 0.58 to 0.66 per 30 days (0.41 to 0.49).
+Releases up to 2.0.1 credited alerts by other onset rules and replayed a
+mission paced by the wall clock; see [Corrections to earlier
+releases](#Corrections-to-earlier-releases).
 
 **Persistence.** An isolated alarmed window cannot be distinguished from
 the false-alarm population, so an alert is raised by the arrival that
@@ -668,17 +638,16 @@ the calibration block, credited from the signal onsets of the training
 year and pooled over the trained seeds, below one false alert per 30 days
 — the rate below which the LIGO–Virgo–KAGRA public alerts count as
 significant (Chaudhary et al. 2024) [ChaudharyEtAl2024](@cite), taken as
-the standard because the Definition Study [ColpiEtAl2024](@cite) sets none
-for its low-latency alert pipelines — with a waiting time within half of
-the Definition Study's one-hour processing budget. On the calibration
-block of the selected model (validation and test, 109 days) two
-consecutive windows leave 1.10 false alerts per 30 days and three 0.55
-(1.38 and 0.83 under the onsets of releases 2.0.0 to 2.0.1): the
-persistence is three. Release 1.2.0 also required every calibration
-event to keep an alert with a window of margin, which fixed two; with four
-calibration events that criterion rests on a single short alarm run, and
-it is no longer applied. At three, the shortest alarmed calibration event,
-of three windows, keeps its alert.
+the standard because the LISA Definition Study Report
+[ColpiEtAl2024](@cite) sets none for its low-latency alert pipelines —
+with a waiting time within half of the Definition Study Report's one-hour
+processing budget. On the calibration block of the selected model
+(validation and test, 109 days) two consecutive windows leave 1.10 false
+alerts per 30 days and three 0.55: the persistence is three. A further
+criterion, that every calibration event keep an alert with a window of
+margin, would fix two; with four calibration events it rests on a single
+short alarm run, and it is not applied. At three, the shortest alarmed
+calibration event, of three windows, keeps its alert.
 
 **Confirmation.** Windows of 1000 samples every 100 put each sample in ten
 consecutive windows, so a transient shorter than a step can alarm ten
@@ -694,21 +663,33 @@ second tier confirms it: `alert_confirmation_persistence = 11`, the
 arrival that completes eleven consecutive alarmed windows touching the
 credited span, which needs alarms on windows sharing no sample. The value
 follows from the window geometry and is not fitted; the calibration block,
-which holds no glitches, cannot set it. On the year mission no
-confirmation falls outside a credited span, for any configuration, seed or
-whitening. The streaming configuration confirms three to five of the six
-coalescences before their merger, the A and E network five or six: event
-1 about 5.3 hours before it (alerted 23 to 29 hours before), event 2 8 to
-11, event 3 2 to 4 (24.5 at one seed), event 4 12 to 21 (after it at one
-seed of A), event 5 2 to 3 hours before it at three seeds of the A and E
-network and after it otherwise, event 6 10 to 13 hours. The selected configuration
-confirms five coalescences 3 to 40 hours after their merger and not
-event 3. On the LDC-2b year with glitches, without coalescences, the
-confirmation removes most of the glitch alerts of the streaming
-configuration that the angle encoding lets through: 19, 14, 0 and 0
-preliminary alerts at the four seeds of A against 5, 1, 0 and 0
-confirmations, and 18, 12, 0 and 14 against 7, 6, 0 and 0 for the A and E
-network (see [Instrumental glitches](#Classical-controls-on-the-same-features)).
+which holds no glitches, cannot set it.
+
+On the year mission no confirmation falls outside a credited span, for any
+configuration, seed or whitening. The streaming configuration confirms
+three to five of the six coalescences before their merger, the A and E
+network five or six. The selected configuration confirms five
+coalescences 3 to 40 hours after their merger and not event 3. Over the
+seeds of the streaming configuration and of the A and E network:
+
+| Event | Confirmation before the merger [h] |
+|---|---|
+| 1 | about 5.3 (alerted 23 to 29 hours before it) |
+| 2 | 8 to 11 |
+| 3 | 2 to 4 (24.5 at one seed) |
+| 4 | 12 to 21 (after the merger at one seed of A) |
+| 5 | 2 to 3 at three seeds of the A and E network; after the merger otherwise |
+| 6 | 10 to 13 |
+
+On the LDC-2b year with glitches, without coalescences, the confirmation
+removes most of the glitch alerts of the streaming configuration that the
+angle encoding lets through (see [Instrumental
+glitches](#Instrumental-glitches)); at seeds 9999, 1009, 2027 and 3041:
+
+| Mode | Preliminary alerts | Confirmations |
+|---|---|---|
+| A | 19, 14, 0, 0 | 5, 1, 0, 0 |
+| A and E | 18, 12, 0, 14 | 7, 6, 0, 0 |
 
 Both replays at that persistence, credited from the signal onset; alert
 time minus merger time [h]:
@@ -731,15 +712,10 @@ coalescence is alerted on its own, five of them after their merger, 1.9 to
 40 hours later, and event 3 1.6 hours before it. A window becomes
 available for scoring only once the 1.16 days of data after it have been
 delivered, so even a window at the signal onset, 29 to 38 hours before the
-merger, is scored at the earliest around the merger. The two alerts before the merger that release 1.2.0 reported, on
-events 1 and 4, rest on windows that end 67 and 63 hours before the
-merger, where the window SNR of the source is about 2; credited from the
-onset, the same replay also alerts event 2 on its own, 16 hours after its
-merger, where 1.2.0 found only the alarms of event 1 in its span. The
-full-record PSD alerts the same coalescences, event 3 1.2 hours later and
-the others at the same times, at 0.66 false-alarm episodes per 30 days; under label-span crediting it had
-alerted events 4 and 5 64 and 51 hours before their mergers, on runs of
-two windows where the window SNR of the source is below 2.
+merger for five of the six coalescences, is scored at the earliest around
+the merger. The full-record PSD alerts the same coalescences, event 3 1.2
+hours later and the others at the same times, at 0.66 false-alarm
+episodes per 30 days.
 
 ![Replay of the blind year under the full-record PSD](assets/benchmark_telemetry_alerts.png)
 
@@ -766,10 +742,10 @@ shorter kernel can be used only by a model trained on smoothed features.
 
 The year-long mission delivered every batch, so the handling of delivery
 holes was not exercised. Seventeen 30-day missions on DeepSpaceTelemetry.jl
-2.0.0 (the two generation-gap missions on 2.1.1; see the correction below)
-measure the effect of a link that does lose data. They share the
-same payload window — days 65 to 95 of the blind year, which contains
-coalescences 1 and 2 — and the same pass schedule; each mission differs
+2.0.0 (the two generation-gap missions on 2.1.1) measure the effect of a
+link that does lose data. They share the same payload window — days 65
+to 95 of the blind year, which contains coalescences 1 and 2 — and the
+same pass schedule; each mission differs
 from a lossless reference in one property of the channel or of the
 spacecraft and was replayed once by the selected model under the causal
 whitening of `configs/experiments/q8_b6.toml` (persistence 3,
@@ -835,8 +811,7 @@ the number of batches.
 
 **Retransmission removes the effect.** A 3 % channel with one retry leaves
 six permanent holes, and the replay scores half the windows and detects
-neither coalescence (the one alert that release 1.2.0 counted preceded the
-signal onset); with three retries it leaves none, and the replay
+neither coalescence; with three retries it leaves none, and the replay
 reproduces the reference to within one window.
 
 **A link outage increases the latency and removes no window.** The
@@ -865,20 +840,8 @@ is two window lengths on each side, alerts both. A two-day recorder that overflo
 during a 72 h outage discards 260 batches of production and removes 668
 windows, and both events are still detected.
 
-**Correction, 30 September 2026.** The two generation-gap missions first
-published with releases 1.2.0 and 2.0.0 were recorded with
-DeepSpaceTelemetry.jl 2.0.0, which in external-payload mode resumed the
-payload where it had stopped after a scheduled gap while stamping the
-following batches with the epoch of the gap's end: every later sample was
-replayed 1.99 h (15 min) after its content time, and merger 1 reached the
-replay outside its credited span. The two-hour gap had, moreover, been
-placed 4.9 h before merger 1 instead of astride it. Both missions were
-regenerated with DeepSpaceTelemetry.jl 2.1.1, which addresses the payload
-by content time, and the rows above replace the published ones (15 min:
-6.9 false alarms per 30 days; 2 h: one coalescence of two, the other said
-to have fallen in the gap). The replay now refuses runs of the affected
-producer versions. The other fifteen missions contain no scheduled gap
-and are unaffected.
+The two generation-gap missions were regenerated on 30 September 2026;
+see [Corrections to earlier releases](#Corrections-to-earlier-releases).
 
 **Admitting a partially delivered stretch scores every window and brings
 the alerts forward.** With the stretch admitted at 75 or 50 % delivered
@@ -886,8 +849,7 @@ the replay scores 5,028 and 5,030 windows (more than the reference,
 because edge windows now qualify) at 4.1 and 2.1 false alarms per 30
 days, and alerts both coalescences, event 1 6.7 and 23.2 h before its
 merger, after its signal onset, on windows conditioned on a partial
-stretch. The alarms 53 and 76 h before merger 1 that release 1.2.0
-counted as detections precede the signal onset and are false alarms.
+stretch.
 
 The operating requirement is on **scattered permanent** loss, and it is
 strict: about a fifth of a per cent for scoring most of the record, and
@@ -900,8 +862,9 @@ PSD smoothed by 0.01 dex in log-frequency keeps it within half a window;
 the line structure of the estimator and the exact TDI notch, not the
 shape of the spectrum, determine the kernel. A smoothed whitening PSD is
 therefore a precondition for operation on a link that loses any data,
-rather than a refinement of this result; the retrained model is reported in
-the section Smoothed whitening below.
+rather than a refinement of this result; the model trained on the
+smoothed whitening is reported in the section [Smoothed
+whitening](#Smoothed-whitening).
 
 ## Smoothed whitening
 
@@ -961,8 +924,7 @@ the conditioning lag falls from 1.16 days to 2.8 hours.
 **Persistence.** By the rule of the telemetry section, the calibration
 blocks of the four seeds, credited from the signal onset and pooled, count
 1.17 false alerts per 30 days at two consecutive windows and 0.76 at
-three (1.38 and 0.96 under the onsets of releases 2.0.0 to 2.0.1): the
-persistence is three. Seed by seed the rule would give three, two, four
+three: the persistence is three. Seed by seed the rule would give three, two, four
 and two (seeds 9999, 1009, 2027 and 3041). At three, two of
 the twelve alarmed calibration events, each alarmed for two windows (seeds
 1009 and 3041), are not alerted, and each seed leaves one of its four
@@ -989,7 +951,7 @@ arrival at the ground station of the batch that completes the alert:
 Under causal whitening every seed alerts events 1 to 4 and 6 on their own
 and before their merger, 11 to 29 hours ahead at the ground station and
 8 to 21 hours after the signal onset. Event 5, the weakest coalescence,
-whose window SNR reaches 3 only 9.8 hours before its merger, is alerted
+whose norm reaches 3 only 9.8 hours before its merger, is alerted
 2.1 hours before it at three seeds and not at all at seed 9999. The
 false-alarm rate spans 0.41 to 1.40 episodes per 30 days; the credited
 spans cover 7.7 days of the year, in which about 0.1 to 0.36 chance
@@ -1009,7 +971,7 @@ modulation.
 replayed with the four smoothed runs at persistence three and credited
 from the signal onset; seed 9999 against the selected model:
 
-| Mission | Permanent loss | Windows scored, selected | Windows scored, smoothed | Coalescences alerted, selected | Coalescences alerted, smoothed |
+| Mission, nominal loss | Permanent loss, realised | Windows scored, selected | Windows scored, smoothed | Coalescences alerted, selected | Coalescences alerted, smoothed |
 |---|---|---|---|---|---|
 | Lossless reference | 0 | 4,945 | 5,125 | 2, after the mergers | 2, before the mergers |
 | Bernoulli 0.1 % | 0.04 % | 4,285 (0.87) | 5,024 (0.98) | 2 | 2 |
@@ -1074,7 +1036,7 @@ that of `q8_b6_s001_ae` between 3.30 and 8.58 against 2.97 to 6.76.
 
 **Signal onsets.** The labelling stage writes, beside the onset of A, the
 onset of the network: the first window at which the root of the summed
-squared window SNRs of A and E reaches the threshold of 3
+squared norms of A and E reaches the threshold of 3
 (`signal_start_index_ae`). On the six blind coalescences it precedes the
 onset of A by 0.1, 0.0, 10.4, 0.5, 11.8 and 15.7 hours; for event 5, the
 weakest in A (peak window SNR 86), the network SNR peaks at 227 and the
@@ -1298,12 +1260,14 @@ others far above: for `q8_b6`, 1.57 to 8.74 episodes per 30 days against
 scatter, and the clear advantage of the logistic regression is that of the
 smoothed features.
 
-**Instrumental glitches.** The LDC-2b (Spritz) records carry what Sangria
+### Instrumental glitches
+
+The LDC-2b (Spritz) records carry what Sangria
 lacks: glitches fitted to LISA Pathfinder, gaps of several hours marked as
 `NaN`, second-generation TDI on Keplerian orbits. Three records are
 released: a year of 36 verification binaries with Poisson glitches
 (`vgb`; no coalescence), and two months of 31 days each holding one
-coalescence, loud (`mbhb1`, three short glitches) and quiet (`mbhb2`, a
+coalescence, of high SNR (`mbhb1`, three short glitches) and of low SNR (`mbhb2`, a
 long glitch at the merger). The configurations
 `configs/experiments/q8_b6_s001_spritz.toml` and `q8_b6_s001_ae_spritz.toml`
 run them through the stages of this package: the pre-processing conditions
@@ -1313,7 +1277,7 @@ catalogue `sky/cat` and credits alerts from the onset of the signal
 against the record's own noise (`[ldc] psd_model = "record"`: the truth
 stream conditioned as the record is, high-passed and whitened by the
 record's PSD, the first window in which the whitened signal reaches a
-norm of 5); the inference scores the products with the runs trained on
+norm of 3); the inference scores the products with the runs trained on
 Sangria, circuit and controls, at the thresholds those runs fitted,
 without retraining. An alert is a run of three alarmed windows consecutive
 in the record; on `vgb` every alert is false. Seeds 9999, 1009, 2027 and
@@ -1330,24 +1294,24 @@ in the record; on `vgb` every alert is false. Seeds 9999, 1009, 2027 and
 | AE | network | 3.65, 3.65, 3.84, 3.75 | 67.8, 67.8, 82.4, 82.4 | 1 at every seed | 1.7 at every seed | 1 at every seed |
 | AE | harmonic | 3.28, 3.56, 3.56, 3.47 | 67.8, 67.8, 67.8, 63.3 | 1 at every seed | 1.1, 1.6, 1.6, 1.1 | 1 at every seed |
 
-The loud coalescence exceeds the onset threshold throughout its four-day
+The high-SNR coalescence exceeds the onset threshold throughout its four-day
 label span, so every alert inside the span is credited to it; the signal
-onset of the quiet one lies 4.9 hours before its merger on A and 7.2 on the
+onset of the low-SNR one lies 4.9 hours before its merger on A and 7.2 on the
 A and E network. Every false alert of the year lies on a glitch, and without the
 glitches there is none; the glitch power is red and resembles an early
-inspiral to band-power features. The monotone controls give the loudest
-windows the highest score: they alert the loud coalescence 63 to 82 hours
-ahead and the quiet one at every seed, and they alert on 2.4 to 3.8
+inspiral to band-power features. The monotone controls give the windows
+of largest band power the highest score: they alert the high-SNR coalescence 63 to 82 hours
+ahead and the low-SNR one at every seed, and they alert on 2.4 to 3.8
 glitches per 30 days. The circuit's response is bounded and periodic in every feature,
 so a window far outside its training range does not receive the top
 score: it alerts on 0 to 1.8 glitches per 30 days — the order of its
-false-alarm rate on Sangria — while alerting the loud coalescence 16 to 39
-hours ahead at three seeds and the quiet one at the network's three; one
+false-alarm rate on Sangria — while alerting the high-SNR coalescence 16 to 39
+hours ahead at three seeds and the low-SNR one at the network's three; one
 seed in four is silent on every Spritz record. The comparison that places
 the models at the same rate of glitch alerts, the threshold of every run
 moved to where `vgb` raises at most a given number per 30 days (the
-controls by their logit, since their probabilities saturate on loud
-windows), reads:
+controls by their logit, since their probabilities saturate on
+windows of large band power), reads:
 
 | Glitch false alerts per 30 d | Mode | Circuit | Harmonic (17) | Logistic regression (9) | Network of six (61) |
 |---|---|---|---|---|---|
@@ -1360,24 +1324,26 @@ windows), reads:
 
 (alert of `mbhb1` before its merger in hours; "none": no threshold brings
 the run to that rate; "–": not alerted at that threshold). At a matched
-rate of glitch alerts the circuit alerts the loud coalescence 20 to 39
-hours ahead at the seeds that respond, where the logistic regression gives
-7 to 12 hours or cannot be brought to the rate at all; and the harmonic
+rate of at most 2 glitch alerts per 30 days the circuit alerts the high-SNR
+coalescence 9 to 39 hours ahead at the seeds that respond, where the
+logistic regression gives 7 to 12 hours and the network of six at most
+15.5 hours; at lower rates the logistic regression on A cannot be brought
+to the rate at all. The harmonic
 control, with the circuit's feature map and no circuit, does as well or
 better at two per 30 days and keeps an alert of 7 to 8 hours at every seed
 down to 0.5 per 30 days, where the circuit alerts at one or two seeds. The
-tolerance of loud out-of-range transients is therefore a property of the
+tolerance of transients of large amplitude beyond the scaler's range is therefore a property of the
 angle encoding, measured here on one simulated year of glitches and two
 coalescences, with scalers and thresholds fitted on Sangria noise whose
 upper-band features lie above those of Spritz.
 
 The detection results of this page are those of the conditioning and of
 the eight features — the record high-pass, the whitening by a measured
-PSD, the sub-mHz band powers — for which the variational circuit is one
+PSD, the whitened band powers between 0.3 and 40 mHz — for which the variational circuit is one
 classifier among others, neither the smallest nor the most stable under
 re-initialisation. What speaks for it is its feature map: bounded and
-periodic in every feature, it does not hand the top score to the loudest
-transient, and at a matched false-alarm rate on clean data it is level
+periodic in every feature, it does not hand the top score to the transient
+of largest amplitude, and at a matched false-alarm rate on clean data it is level
 with its controls. What cannot be said is that the entangling circuit adds
 detection performance over a classical model with the same encoding, or an
 economy of parameters: nine classical ones suffice on these inputs, and
@@ -1436,6 +1402,125 @@ confirmed before every merger.
   upper-band features lie below the Sangria ones; the comparison at a
   matched rate of glitch alerts moves the thresholds after the fact and is
   not a selection.
+
+## Corrections to earlier releases
+
+Values of the earlier release or mission are given in parentheses.
+
+**Correction to release 1.2.0.** Release 1.2.0 credited the whole label
+span and thereby counted alarm runs 60 to 95 hours before a merger as
+early detections: the alerts of the selected model 25.6 and 16.1 hours
+before the mergers of events 1 and 4, and the lead of 71 hours on event 1
+of the smoothed model (section [Smoothed whitening](#Smoothed-whitening)).
+Those runs lie where the window SNR of the source against the instrument
+PSD is about 2, and those of the smoothed model recur at the same mission
+times at every initialisation seed, because every seed sees the same
+noise. The text of 1.2.0 judged the early alerts of the selected model
+consistent with chance but those of the smoothed model significant against
+its false-alarm rate. The second judgement was wrong on two counts: that
+rate is not uniform over the year, since the smoothed model's score
+baseline approaches the threshold between days 200 and 300, where events 4
+and 5 fall; and a comparison of rates cannot show that a particular alarm
+was raised by the signal, which the window SNR can. The tables and figures
+on this page credit from the signal onset.
+
+The two alerts of the selected model on events 1 and 4 rest on windows
+that end 67 and 63 hours before the merger, where the window SNR of the
+source against the instrument PSD is about 2. Credited from the onset, the
+same causal replay alerts event 2 on its own, 16 hours after its merger,
+where 1.2.0 found only the alarms of event 1 in its span. Under the
+full-record PSD, label-span crediting had alerted events 4 and 5 64 and 51
+hours before their mergers, on runs of two windows where the window SNR of
+the source against the instrument PSD is below 2. On the lossy link, the
+one alert that release 1.2.0 counted with 3 % loss and one retransmission
+preceded the signal onset. The alarms 53 and 76 h before merger 1, which
+release 1.2.0 counted as detections in the missions that admit the
+stretch at 75 or 50 % delivered, precede the signal onset and are false
+alarms.
+
+**Correction, 30 September 2026.** The two generation-gap missions first
+published with releases 1.2.0 and 2.0.0 were recorded with
+DeepSpaceTelemetry.jl 2.0.0, which in external-payload mode resumed the
+payload where it had stopped after a scheduled gap while stamping the
+following batches with the epoch of the gap's end: every later sample was
+replayed 1.99 h after its content time in the mission with the two-hour
+gap, and 15 min after it in the mission with the fifteen-minute gap, and
+merger 1 reached the replay outside its credited span. The two-hour gap
+had, moreover, been placed 4.9 h before merger 1 instead of astride it.
+Both missions were regenerated with DeepSpaceTelemetry.jl 2.1.1, which
+addresses the payload by content time, and the rows of the table of
+[Effect of a lossy link](#Effect-of-a-lossy-link) replace the published
+ones (15 min: 6.9 false alarms per 30 days; 2 h: one coalescence of two,
+the other said to have fallen in the gap). The replay now refuses runs of
+the affected producer versions. The other fifteen missions contain no
+scheduled gap and are unaffected.
+
+**Correction, 12 October 2026.** Releases 2.0.0 to 2.0.1 defined the
+signal onset as the first window in which the raw truth stream reaches a
+matched-filter SNR of 5 against the analytic instrument PSD of the LDC
+noise model, without the Galactic foreground. The noise the detector
+faces is the record's own: every feature is whitened by the measured PSD
+of the record, which exceeds the instrument model by a factor of 18 to 35
+at 1 to 5 mHz on the Sangria blind year. Against that noise the signal
+reaches a norm of 3 to 5 at the onsets of those releases, and the first
+alerts of the high-SNR coalescences fall where it reaches about 4. The onset
+is now the first window in which the truth stream, high-passed and
+whitened as the record is, reaches a norm of 3 (`[ldc] psd_model =
+"record"`, `label_snr_threshold = 3`); on this year the onsets move from
+7 to 35 hours to 10 to 38 hours before the merger (the onset table of
+[Telemetry replay and alert latency](#Telemetry-replay-and-alert-latency)).
+Every alert table of this page was re-credited under the new rule from its
+stored window table. The alerts credited to the coalescences are those of
+releases 2.0.0 to 2.0.1 to the tenth of an hour, except event 3, whose
+earlier alert now lies inside the span: the A runs of the streaming
+configuration alert it 27.8 to 28.7 hours ahead (previously 24.3 to 24.8
+hours before the merger), both replays of the selected configuration 0.3
+hours ahead (previously 0.1 and 0.6 hours after the merger). The
+false-alarm rates are lower by up to 0.3 per 30 days where the longer
+spans absorb alarms the earlier onset left outside: the selected run of
+the streaming configuration moves from 0.49 to 0.33 per 30 days (these are
+the values of the wall-clock mission; see the rerun on the tick clock
+below). The calibration counts of the persistence rule of the telemetry
+section are those of the training year's onsets under the new rule
+(previously 1.38 and 0.83 false alerts per 30 days at two and three
+consecutive windows for the selected model, 1.38 and 0.96 for the pooled
+seeds of the streaming configuration); the persistence it selects is
+unchanged. The 30-day missions of the lossy-link study are unchanged.
+Amended 15 October 2026: the former onsets lie at a norm of 3 to 5, not 1,
+and event 3 of the selected configuration is also re-credited.
+
+**Rerun on the tick clock, 15 October 2026.** The year mission of releases
+1.2.0 to 2.0.1 was run by DeepSpaceTelemetry.jl 1.2.0-DEV paced against
+the wall clock at a speed-up of 7200, that is 7200 mission seconds per
+wall-clock second, so that the instants at which its batches arrived
+depended on the load of the host and cannot be reproduced. It was run
+again with DeepSpaceTelemetry.jl 2.6.2 on the producer's logical clock,
+from the same scenario and seed. On the logical clock the producer
+advances mission time by its own events, independent of the host, so a
+run is reproducible from its scenario and seed. Every streamed-year table
+and figure of this page is now that of the new mission. It delivers the
+same 63,043 batches, at instants that differ from those of the first
+mission by a median of 4 minutes, with 99 % within 1.5 hours. Under the
+full-record PSD, and for the selected configuration under causal
+whitening, every window scores as previously and only the alert times
+move with the arrivals, by up to 1.8 hours: the selected configuration
+alerts event 3 1.6 hours before its merger (previously 0.3 hours before
+the merger) and the five others 1.9 to 40 hours after it (previously 1.9
+to 42). The trailing estimate of the streaming configuration sees the
+record in a different order of arrival, so 2 to 6 of its 63,014 decisions
+per seed change, and with them one false-alarm episode at two seeds: 0.41,
+0.99, 1.40 and 1.23 per 30 days at the four seeds (previously 0.33, 0.99,
+1.32 and 1.23), the same coalescences alerted before their merger, each
+within 0.9 hours of its former alert time. The A and E network was rerun
+as a two-column mission (section [The A and E
+network](#The-A-and-E-network)): 0.90, 4.44, 1.40 and 1.48 per 30 days
+(previously 0.99, 4.69, 1.32 and 1.40), alert times within 1.3 hours. The
+classical controls (section [Classical controls on the same
+features](#Classical-controls-on-the-same-features)) were replayed on the
+same missions: alert times within 1.7 hours, false-alarm rates within
+three episodes of the year per seed; the logistic regression on A and E
+counts two or three more at every seed, 0.58 to 0.66 per 30 days
+(previously 0.41 to 0.49).
 
 ## Reproducing
 
@@ -1531,7 +1616,7 @@ Training runs to early stopping in 16 to 50 epochs; an epoch of the
 eight-qubit model takes about three seconds on 16 threads, and inference
 over the blind year about a minute. The runs of this page were trained
 under the Zygote tape, at two to four minutes per epoch; retrained with
-the adjoint gradient, which is now the default, the two configurations
+the adjoint gradient, the default, the two configurations
 reproduce them at every seed (see [Training](architecture.md#Training)). The other configurations are in `configs/experiments/` and
 `configs/sangria.toml`; every run on this page was trained with the
 committed `phase_span = 1.0`. The batch gradient is chunked at a fixed
