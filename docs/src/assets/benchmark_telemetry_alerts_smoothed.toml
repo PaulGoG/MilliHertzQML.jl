@@ -1,28 +1,124 @@
-written_at = "2026-09-29T10:45:52.825"
+written_at = "2026-10-15T04:34:55.532"
+
+[replay]
+run_state = "complete"
+producer_version = "2.6.2"
+events_csv = "data/inputs/sangria_blind_points_events.csv"
+alert_confirmation_persistence = 11
+psd_mode = "trailing"
+alert_persistence = 3
+alert_crediting = "signal"
+mission = "sangria_year_tick"
+n_windows = 63014
+
+[[layers]]
+version = "0.1.0-DEV"
+name = "StreamingInference"
+tree_hash = "8e6cd41f11e9372535dd2086f53f0d75623d8ec1"
+url = "https://github.com/PaulGoG/StreamingInference.jl.git"
+revision = "efd441ac3612a33785110d816e4d5c36f1b9f551"
+[[layers]]
+version = "0.1.0-DEV"
+name = "MilliHertzBase"
+tree_hash = "6ba1fa2530d2b8cb17713eaa316e3d3fd3c11b29"
+url = "https://github.com/PaulGoG/MilliHertzBase.jl.git"
+revision = "5ec913712fcdd7f008ec8fe42340b96b96a154cf"
+[[layers]]
+path = "."
+version = "3.0.0-DEV"
+git_commit = "v2.0.1-43-gde97da8"
+name = "MilliHertzQML"
+git_dirty = false
 
 [environment]
-manifest_sha256 = "163f10ba186f974e1eba0379a184f8305f5d243034b20d0cd38dd2a35180a657"
+manifest_sha256 = "9e3e9518a1df97189d600139bd31c439b9bffeb039a56f190bfadebff5bd3d49"
 active_project = "test/Project.toml"
 
 [figure]
 files = ["telemetry_alerts.pdf", "telemetry_alerts.png"]
-run_id = "telemetry_year_s001_pi"
+run_id = "telemetry_year_tick_s001_pi"
 size_pt = [900, 950]
 px_per_unit = 4
 
 [hardware]
-total_memory_gib = 30.76
-cpu_model = "Intel(R) Core(TM) Ultra 7 155H"
-blas_threads = 6
 distributed_workers = 1
-machine_id = "10f031174590"
-kernel = "Linux"
-versioninfo = """Julia Version 1.13.0\nCommit d1c37793dd2 (2026-09-09 19:00 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
-julia_threads = 12
+cpu_model = "Intel(R) Core(TM) Ultra 7 155H"
 cpu_threads_logical = 22
-julia_version = "1.13.0"
+julia_version = "1.13.1"
+machine_id = "10f031174590"
+blas_threads = 6
+kernel = "Linux"
+versioninfo = """Julia Version 1.13.1\nCommit 96ca370cf0e (2026-09-25 19:34 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_PKG_USE_CLI_GIT = true\n  JULIA_NUM_THREADS = 12\n"""
+julia_threads = 12
+total_memory_gib = 30.76
 
 [git]
-git_commit = "v1.2.0-4-gebc0187"
+git_commit = "v2.0.1-43-gde97da8"
 git_dirty = false
-package_version = "1.2.0"
+streaminference_version = "0.1.0-DEV"
+package_version = "3.0.0-DEV"
+
+[producer]
+external_data_sha256 = "f65dd2bc8c3341b971c39612ef501b8583b60016ed478b4925dbd550cbb6c5e8"
+batch_size = 10
+identity_source = "manifest"
+start_sim_time = "2035-01-01T00:00:00"
+sample_rate = 0.2
+payload_columns = ["Amplitude"]
+config_sha256 = "24628c89126fbc225e2feb8923fa1b5cc2654cb73f46129cb8d427639d80480f"
+points_per_batch = 100
+package_version = "2.6.2"
+repo_rev = "4352f565558d485c8d6cdd624e9ec6f40936aa24"
+payload_origin = "2035-01-01T00:00:00"
+rng_seed = 2026
+git_commit = "4352f565558d485c8d6cdd624e9ec6f40936aa24"
+written_at = "2026-10-15T02:21:33.440"
+git_dirty = false
+mode = "tick"
+external_data_rows = 6307200
+mission_days = 365.0
+run_id = "sangria_year_tick"
+segment_duration_sec = 50.0
+schema = "deepspacetelemetry-run/1"
+repo_url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"
+git_tree_sha1 = "389a42fa6cd2804ffcfbc4f5bf2ee9c0ce0d174e"
+
+    [producer.products."events_tx.csv"]
+    bytes = 5337943
+    sha256 = "52328401b28a1f781ac7bc0e41c61c9c567559c6a3d118417fc1e0006ef900a3"
+
+    [producer.products."mission_profile.csv"]
+    bytes = 11804761
+    sha256 = "9583f9c5d01558f89639ac59c48e276875475d60beec809f8dda514f3c216a19"
+
+    [producer.products."alert_latency_markers.csv"]
+    bytes = 295727
+    sha256 = "93e04c4cf26519cff10f143b1d3422aca67f61cd6d0b01ee0310bfb3e178f407"
+
+    [producer.products."label_spans.csv"]
+    bytes = 28126
+    sha256 = "259c4ea34e345717bc948cf3e5b0a0d301e4947e906c58fd5f76b522eb49a542"
+
+    [producer.products."masks/gaps.csv"]
+    bytes = 2620
+    sha256 = "99c0e05aeadc349b1095e4b66ec3eb84c6d97ae90eaac700785bbc45c9d1ad26"
+
+    [producer.products."events_rx.csv"]
+    bytes = 3259842
+    sha256 = "a8ed15f212126b161e6dc35453d44a2e43391e11118de6a162cff00ce9cd7e5f"
+
+    [producer.products."markers.csv"]
+    bytes = 247
+    sha256 = "e662fa1d769edc57e5eac4e0b16aeca7b823627f13282a582d8e315c51fcb411"
+
+    [producer.products."holes.csv"]
+    bytes = 3269
+    sha256 = "98f6ead233ee1c9f86ab40347792430f6bb8a60b4889f72735720b573f68c891"
+
+    [producer.products."delivery_delay.csv"]
+    bytes = 5563642
+    sha256 = "61323a00e0900545e0574a557d8b3c6441cda46599d61a3898547fd658d07d95"
+
+    [producer.products."alert_latency.csv"]
+    bytes = 39975
+    sha256 = "9a67727782ef087b27bef1f87c47b06ccd8eead31e63e2be86d58022968ddafe"
