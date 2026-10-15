@@ -69,12 +69,14 @@ re-initialisation](benchmark.md#The-spread-under-re-initialisation).
 ![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
 
 *Every configuration of the grid at four seeds. The configurations with
-four or six sub-mHz bands recover all five events in every run, the
+four or six bands from 0.3 mHz upwards recover all five events in every run, the
 two-band ones in two of eight; apart from the 2000-sample windows, near 26
 false alarms per 30 days at every seed, the rates do not differ beyond
 the scatter between seeds, and the validation episodes, the selection
 statistic, cannot rank the configurations.* See [the grid over four
 seeds](benchmark.md#The-grid-over-four-seeds).
+
+*Correction, 15 October 2026: this page first described the band powers as sub-mHz; the bands span 0.3 to 40 mHz (see the [benchmark page](benchmark.md)).*
 
 ## The streamed year
 

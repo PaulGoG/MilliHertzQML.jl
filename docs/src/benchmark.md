@@ -31,16 +31,24 @@ ground.
     latency](#Telemetry-replay-and-alert-latency).
 
 The selected configuration, eight qubits, four re-uploading layers and six
-sub-mHz band powers, was chosen on the training year by a rule fixed before
+band powers between 0.3 and 40 mHz, was chosen on the training year by a rule fixed before
 the blind year was scored. On the completed blind year it detects all five
 labelled events at 1.57 false-alarm episodes per 30 mission days (19
 episodes over 364 days), from a decision threshold fitted on held-out data
 of the training year and applied without adjustment; the fit predicted
 1.38, so the operating point transfers. Trained at four seeds, the configurations with
-four or six sub-mHz bands recover all five events in every run, the
+four or six bands from 0.3 mHz upwards recover all five events in every run, the
 two-band ones in two of eight; apart from 2000-sample windows, their
 false-alarm rates do not differ beyond the scatter between seeds, which
 for the selected configuration spans 1.57 to 8.74 per 30 days.
+
+*Correction, 15 October 2026.* This manual first described the features
+of the selected configuration as six sub-mHz band powers. Its six bands
+span 0.3 to 40 mHz (edges 0.3, 0.6, 1, 2, 4, 10 and 40 mHz), two of them
+below 1 mHz, and the four bands of `q6_b4` span 0.3 to 40 mHz as well
+(edges 0.3, 1, 3, 10 and 40 mHz); the configuration files state the
+edges (`band_edges_hz`). The results are unaffected; the wording of this
+page is corrected.
 
 The completed record is whitened by its full-record PSD, the median Welch
 estimate of the entire blind year: a label-free statistic, admissible for a
@@ -181,7 +189,7 @@ window with several bands clamped simultaneously is a pattern of which the
 training year contains few examples. The scores still peak 12 to 30 hours
 before the merger (0.91 to 0.95 for every event), where the band powers
 lie at 0.4 to 0.8 of the bound: the classifier remains a detector of
-intermediate sub-mHz excess, with a merger response that is now mostly,
+intermediate band-power excess, with a merger response that is now mostly,
 but not entirely, above the threshold.
 
 ## Results
@@ -287,7 +295,7 @@ there. The ROC area is a rank statistic over the whole distribution and is
 insensitive to where the tail ends, which is why it favours the runs with
 the worst operating points.
 
-Six sub-mHz bands have two effects: they reduce the annual excursion of
+Six bands, two of them below 1 mHz, have two effects: they reduce the annual excursion of
 the noise tail and they raise the event peaks above it, so that the
 threshold can lie in the stable region. The mechanism is that a contrast
 between two band powers that are modulated together is invariant under
@@ -357,7 +365,7 @@ held-out block, 28 runs in all:
 ![The configurations of the grid at four initialisation seeds: validation false-alarm episodes and blind false-alarm rate of every run](assets/benchmark_grid_seeds.png)
 
 Three results follow. **The partition of the spectrum decides the
-recall:** the configurations with four or six sub-mHz bands recover all
+recall:** the configurations with four or six bands from 0.3 mHz upwards recover all
 five events in all 20 of their runs, the two-band configurations in 2 of
 their 8 runs, 33 of 40 events. **The false-alarm rate differs between
 configurations only through the 2000-sample windows:** over all seven the
@@ -385,7 +393,7 @@ year of its inference.
 
 ## Against the published method
 
-Everything above uses whitened sub-mHz band powers, which the paper this
+Everything above uses whitened band powers between 0.3 and 40 mHz, which the paper this
 pipeline follows does not: Isfan et al. [IsfanEtAl2025](@cite) take the spectral entropy and the
 mean, standard deviation and maximum of the raw window periodogram, with
 no filtering and no whitening, on a four-qubit register. That

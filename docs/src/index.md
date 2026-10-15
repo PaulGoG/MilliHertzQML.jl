@@ -30,15 +30,17 @@ thresholds fitted on the training year and applied unchanged:
     latency](benchmark.md#Telemetry-replay-and-alert-latency).
 
 The selected configuration, eight qubits, four re-uploading layers and six
-sub-mHz band powers, was chosen on the training year by a rule fixed
-before the blind year was scored. Trained at four seeds, every
-configuration with four or six sub-mHz bands recovers all five events in
+band powers between 0.3 and 40 mHz, was chosen on the training year by a
+rule fixed before the blind year was scored. Trained at four seeds, every
+configuration with four or six bands from 0.3 mHz upwards recovers all five events in
 every run, and the false-alarm rates of the configurations do not differ
 beyond the scatter between seeds, which for the selected one spans 1.57
 to 8.74 per 30 days. The completed record
 is whitened by the full-record PSD of the blind year, available only after
 the whole record has been received; the streamed year is whitened
 causally, from data already delivered to the ground station.
+
+*Correction, 15 October 2026: this page first described the band powers as sub-mHz; the bands span 0.3 to 40 mHz (see the [benchmark page](benchmark.md)).*
 
 The streaming configuration is the selected one retrained on a Welch
 whitening spectrum smoothed in log-frequency, which shortens the stretch
