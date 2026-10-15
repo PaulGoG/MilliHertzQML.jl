@@ -58,8 +58,8 @@ replay usable.
 | Completed blind year: labelled events detected | 5 of 5 | 5 of 5 |
 | Completed blind year: false alarms per 30 days | **1.57** | 2.97 |
 | Streamed year: coalescences alerted before their merger | 1 of 6 | **5 of 6** (6 of 6 at three further seeds) |
-| Streamed year: alert time at the ground station, relative to the merger | 0.3 h before to 42 h after | **11 to 28 h before** |
-| Streamed year: false alarms per 30 days | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
+| Streamed year: alert time at the ground station, relative to the merger | 1.6 h before to 40 h after | **11 to 29 h before** |
+| Streamed year: false alarms per 30 days | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Stretch of data a window needs before it is scored | 1.16 days | **2.8 hours** |
 | Part of the record scored when 0.43 % of the batches are lost | 9 % | **81 %** |
 
@@ -73,8 +73,8 @@ the merger on this year; earlier alarms count as false alarms.
 *The blind year streamed through a simulated telemetry mission and
 whitened causally, from data already delivered to the ground. The
 streaming configuration alerts five of the six coalescences at the ground
-station 11 to 28 hours before their merger, 10 to 21 hours after the
-signal onset, at four false-alarm episodes in the year.*
+station 11 to 29 hours before their merger, 9 to 21 hours after the
+signal onset, at five false-alarm episodes in the year.*
 
 ![A year of telemetry replay: coverage, classifier score against the threshold with the signal spans, cumulative alarm episodes, and window availability](docs/src/assets/mission_replay.gif)
 
@@ -84,7 +84,7 @@ windows; the dotted line is the ground clock.*
 Two results qualify the table. On the same eight features and under the
 same protocol, a logistic regression with nine parameters does at least as
 well as the circuit with 64: it alerts the six coalescences before their
-mergers at every seed, at 0.58 to 0.74 false alarms per 30 days, and has
+mergers at every seed, at 0.58 to 0.82 false alarms per 30 days, and has
 the larger ROC area on the completed record. The detection results are
 therefore those of the conditioning and the features, for which the
 circuit is one classifier among others. What the circuit's feature map
@@ -244,8 +244,8 @@ draws the GIF of a training history or of a replay.
 - **Four initialisations per configuration.** They settle the recall of
   the band partitions, but not a ranking by false-alarm rate: the rate of
   the selected configuration spans 1.57 to 8.74 per 30 days over its
-  seeds, that of the streaming configuration in the streamed year 0.33 to
-  1.32.
+  seeds, that of the streaming configuration in the streamed year 0.41 to
+  1.40.
 - **Two channels at most.** A alone, or A and E; the T channel carries no
   feature: its band powers did not separate the glitches of LDC-2b from
   the signal where the glitches have their power.

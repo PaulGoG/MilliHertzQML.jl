@@ -17,8 +17,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   the window geometry and is not fitted. `scripts/infer_telemetry.jl`
   passes it to `alert_latency_table` (StreamingInference `d59c63a`),
   whose table gains the confirmation columns; the preliminary alert and
-  its columns are unchanged. The alert figure marks the confirmations
-  (StreamingInference `eb78e11`, pinned with MilliHertzBase `ebe8ebf`).
+  its columns are unchanged. The alert figure marks the confirmations,
+  its labels clear of them (StreamingInference `efd441a`, pinned with
+  MilliHertzBase `5ec9137`).
 - `scripts/label_ldc.jl --record-file`: the observed record whose
   whitening PSD conditions the truth stream under `[ldc] psd_model =
   "record"` (MilliHertzBase.jl), with the key `[ldc] record_file`; the
@@ -122,6 +123,21 @@ versioning follows [Semantic Versioning](https://semver.org/).
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
+- The streamed-year results of the manual come from the blind-year
+  mission run again on DeepSpaceTelemetry.jl 2.6.2's logical (tick) clock
+  from the same scenario and seed, reproducible to the byte, in place of
+  the mission of DeepSpaceTelemetry 1.2.0-DEV paced against the wall
+  clock: the same 63,043 batches at other instants of arrival (median 4
+  minutes apart). Scores under the full-record PSD and of the selected
+  configuration are unchanged, alert times move by up to 1.8 hours, and
+  2 to 6 of the 63,014 causal decisions of the streaming configuration per
+  seed change (false alarms 0.41, 0.99, 1.40, 1.23 per 30 days at the four
+  seeds, against 0.33, 0.99, 1.32, 1.23). The A and E network is replayed
+  on a two-column mission (columns A and E of one payload), whose arrival
+  feed, holes and delivery delays are those of the one-column mission byte
+  for byte; the doubled-rate study of a saturated link and the classical
+  controls were replayed on the same missions. The benchmark page dates
+  the change and lists the former values.
 - The script and test environments pin DeepSpaceTelemetry.jl 2.6.2
   (the tick clock, the gap table and the declared-hole feed, the run
   descriptor, the reference run adapter, multi-column payloads, and from
@@ -247,6 +263,12 @@ versioning follows [Semantic Versioning](https://semver.org/).
   3 GB Sangria training product.
 
 ### Fixed
+- The replay snapshot names the producer's run directory by
+  `provenance_path`, as every other input path (it recorded the absolute
+  path).
+- The manual described the exported payload, and the payload of every
+  mission, as one column `Amplitude`; in the mode AE the export writes the
+  columns `A` and `E` as one payload of two columns.
 - The manual's statements of the correction of 12 October 2026, amended
   on 15 October: the former onsets lie where the signal has a window norm
   of 3 to 5 against the record's noise (the paragraph said about 1, a

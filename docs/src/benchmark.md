@@ -10,9 +10,9 @@ ground.
 | | Selected configuration, `q8_b6` | Streaming configuration, `q8_b6_s001` |
 |---|---|---|
 | Completed blind year: label spans, false alarms per 30 d | 5 of 5, **1.57** | 5 of 5, 2.97 |
-| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 0.3 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
-| Alert time at the ground station | 0.3 h before to 42 h after the merger | **11 to 28 h before** |
-| Streamed year: false alarms per 30 d | 0.74 | **0.33** (0.99 to 1.32 at the further seeds) |
+| Streamed year, causal whitening: coalescences alerted before the merger | 1 of 6, 1.6 h ahead; the other five after it | **5 of 6** (6 of 6 at three further seeds) |
+| Alert time at the ground station | 1.6 h before to 40 h after the merger | **11 to 29 h before** |
+| Streamed year: false alarms per 30 d | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
 
@@ -543,9 +543,11 @@ would obtain with prior knowledge of the noise of the whole year.
 
 With both points settled, a full year of the blind record was replayed
 through a simulated mission: 63,043 batches of 500 s, a 12-hour daily
-pass, 1 % packet loss with retransmission, no permanent gaps. Under causal
-whitening the consumer scored 62,834 windows and alarmed 647 of them;
-under the full-record PSD it alarmed 572. The retrained model alarms about
+pass, 1 % packet loss with retransmission, no permanent gaps, run by
+DeepSpaceTelemetry.jl 2.6.2 on its logical (tick) clock, so that the
+mission is reproducible to the byte from its scenario and seed. Under
+causal whitening the consumer scored 62,834 windows and alarmed 647 of
+them; under the full-record PSD it alarmed 572. The retrained model alarms about
 three times as many windows as the full-period one did, in longer runs:
 the same inspiral excess that raises the merger bins keeps the score above
 the threshold for hours around each coalescence.
@@ -630,6 +632,33 @@ alone, and named only event 3 of the streaming configuration; the
 measurement places the former onsets at a norm of 3 to 5 (amended 15
 October 2026).
 
+**Rerun on the tick clock, 15 October 2026.** The year mission of releases
+1.2.0 to 2.0.1 was run by DeepSpaceTelemetry.jl 1.2.0-DEV paced against
+the wall clock at a speed-up of 7200, so that the instants at which its
+batches arrived depended on the load of the host and cannot be
+reproduced. It was run again with DeepSpaceTelemetry.jl 2.6.2 on the
+producer's logical clock, from the same scenario and seed, and every
+streamed-year table and figure of this page is now that of the new
+mission. It delivers the same 63,043 batches, at instants that differ
+from those of the first mission by a median of 4 minutes (99 % within
+1.5 hours). Under the full-record PSD, and for the selected configuration
+under causal whitening, every window scores as before and only the alert
+times move with the arrivals, by up to 1.8 hours: the selected
+configuration alerts event 3 1.6 hours before its merger (0.3 before) and
+the five others 1.9 to 40 hours after it (1.9 to 42). The trailing
+estimate of the streaming configuration sees the record in a different
+order of arrival, so 2 to 6 of its 63,014 decisions per seed change, and
+with them one false-alarm episode at two seeds: 0.41, 0.99, 1.40 and 1.23
+per 30 days at the four seeds (0.33, 0.99, 1.32 and 1.23), the same
+coalescences alerted before their merger, each within 0.9 hours of its
+former alert time. The A and E network was rerun as a two-column mission
+(below): 0.90, 4.44, 1.40 and 1.48 per 30 days (0.99, 4.69, 1.32 and
+1.40), alert times within 1.3 hours. The classical controls of the
+section on them were replayed on the same missions: alert times within
+1.7 hours, false-alarm rates within three episodes of the year per seed;
+the logistic regression on A and E counts two or three more at every
+seed, 0.58 to 0.66 per 30 days (0.41 to 0.49).
+
 **Persistence.** An isolated alarmed window cannot be distinguished from
 the false-alarm population, so an alert is raised by the arrival that
 completes `alert_persistence` consecutive alarmed windows; shorter runs
@@ -651,17 +680,47 @@ calibration events that criterion rests on a single short alarm run, and
 it is no longer applied. At three, the shortest alarmed calibration event,
 of three windows, keeps its alert.
 
+**Confirmation.** Windows of 1000 samples every 100 put each sample in ten
+consecutive windows, so a transient shorter than a step can alarm ten
+consecutive windows and raise an alert at any persistence up to ten; a
+persistence of three cannot tell such a transient from a signal. Raising
+the persistence beyond ten removes most alerts of instrumental glitches,
+but the alarms of a classifier of band powers on an early inspiral come in
+short runs as well, so it also removes the early alerts of the
+coalescences (on this year the alert of event 1 by the streaming
+configuration moves from 23 to 5 hours before the merger). The alert of
+the persistence rule is therefore kept as a preliminary alert, and a
+second tier confirms it: `alert_confirmation_persistence = 11`, the
+arrival that completes eleven consecutive alarmed windows touching the
+credited span, which needs alarms on windows sharing no sample. The value
+follows from the window geometry and is not fitted; the calibration block,
+which holds no glitches, cannot set it. On the year mission no
+confirmation falls outside a credited span, for any configuration, seed or
+whitening. The streaming configuration confirms three to five of the six
+coalescences before their merger, the A and E network five or six: event
+1 about 5.3 hours before it (alerted 23 to 29 hours before), event 2 8 to
+11, event 3 2 to 4 (24.5 at one seed), event 4 12 to 21 (after it at one
+seed of A), event 5 2 to 3 hours before it at three seeds of the A and E
+network and after it otherwise, event 6 10 to 13 hours. The selected configuration
+confirms five coalescences 3 to 40 hours after their merger and not
+event 3. On the LDC-2b year with glitches, without coalescences, the
+confirmation removes most of the glitch alerts of the streaming
+configuration that the angle encoding lets through: 19, 14, 0 and 0
+preliminary alerts at the four seeds of A against 5, 1, 0 and 0
+confirmations, and 18, 12, 0 and 14 against 7, 6, 0 and 0 for the A and E
+network (see [Instrumental glitches](#Classical-controls-on-the-same-features)).
+
 Both replays at that persistence, credited from the signal onset; alert
 time minus merger time [h]:
 
 | Event | Merger (mission time) | Signal onset | Causal PSD | Full-record PSD |
 |---|---|---|---|---|
 | 1 | 2035-03-19T16:27 | −37.1 | +1.9 | +2.1 |
-| 2 | 2035-03-20T21:59 | −29.1 | +17.0 | +17.0 |
-| 3 | 2035-08-12T15:40 | −38.1 | −0.3 | −0.3 |
-| 4 | 2035-09-17T07:48 | −35.7 | +7.5 | +7.5 |
-| 5 | 2035-09-21T21:39 | −9.8 | +41.7 | +41.7 |
-| 6 | 2035-11-10T00:11 | −33.2 | +15.1 | +15.1 |
+| 2 | 2035-03-20T21:59 | −29.1 | +15.9 | +15.9 |
+| 3 | 2035-08-12T15:40 | −38.1 | −1.6 | −0.4 |
+| 4 | 2035-09-17T07:48 | −35.7 | +6.0 | +6.0 |
+| 5 | 2035-09-21T21:39 | −9.8 | +40.2 | +40.2 |
+| 6 | 2035-11-10T00:11 | −33.2 | +13.7 | +13.7 |
 | False-alarm episodes (per 30 d) | | | **9 (0.74)** | 8 (0.66) |
 
 The alert time is the arrival at the ground station of the batch that
@@ -669,16 +728,16 @@ completes the alert, so it contains the conditioning lag and the downlink
 delay; the latencies exclude the one-hour processing budget, which
 `latency_total_h` of the table adds. Under causal whitening every
 coalescence is alerted on its own, five of them after their merger, 1.9 to
-42 hours later, and event 3 0.3 hours before it. A window becomes
+40 hours later, and event 3 1.6 hours before it. A window becomes
 available for scoring only once the 1.16 days of data after it have been
 delivered, so even a window at the signal onset, 29 to 38 hours before the
 merger, is scored at the earliest around the merger. The two alerts before the merger that release 1.2.0 reported, on
 events 1 and 4, rest on windows that end 67 and 63 hours before the
 merger, where the window SNR of the source is about 2; credited from the
-onset, the same replay also alerts event 2 on its own, 17 hours after its
+onset, the same replay also alerts event 2 on its own, 16 hours after its
 merger, where 1.2.0 found only the alarms of event 1 in its span. The
-full-record PSD alerts the same coalescences to within half an hour at
-0.66 false-alarm episodes per 30 days; under label-span crediting it had
+full-record PSD alerts the same coalescences, event 3 1.2 hours later and
+the others at the same times, at 0.66 false-alarm episodes per 30 days; under label-span crediting it had
 alerted events 4 and 5 64 and 51 hours before their mergers, on runs of
 two windows where the window SNR of the source is below 2.
 
@@ -917,12 +976,12 @@ arrival at the ground station of the batch that completes the alert:
 | Event | Signal onset | Seed 9999 | Seed 1009 | Seed 2027 | Seed 3041 |
 |---|---|---|---|---|---|
 | 1 | −37.1 | **−22.8** | −22.8 | −28.6 | −22.8 |
-| 2 | −29.1 | **−11.4** | −11.4 | −11.4 | −11.3 |
-| 3 | −38.1 | **−27.8** | −27.8 | −27.8 | −28.7 |
-| 4 | −35.7 | **−21.1** | −21.1 | −21.1 | −21.1 |
+| 2 | −29.1 | **−11.5** | −11.5 | −11.5 | −11.3 |
+| 3 | −38.1 | **−28.7** | −28.7 | −28.7 | −29.3 |
+| 4 | −35.7 | **−21.3** | −21.4 | −21.5 | −21.4 |
 | 5 | −9.8 | not alerted | −2.1 | −2.1 | −2.1 |
-| 6 | −33.2 | **−12.0** | −12.2 | −12.0 | −12.0 |
-| False-alarm episodes (per 30 d) | | **4 (0.33)** | 12 (0.99) | 16 (1.32) | 15 (1.23) |
+| 6 | −33.2 | **−12.0** | −12.1 | −12.0 | −12.0 |
+| False-alarm episodes (per 30 d) | | **5 (0.41)** | 12 (0.99) | 17 (1.40) | 15 (1.23) |
 | Full-record PSD: alerted before the merger; false alarms per 30 d | | 5, 0.41 | 5, 1.48 | 5, 2.39 | 6, 1.32 |
 
 ![Replay of the blind year under causal whitening by the streaming configuration, seed 9999](assets/benchmark_telemetry_alerts_smoothed.png)
@@ -932,8 +991,8 @@ and before their merger, 11 to 29 hours ahead at the ground station and
 8 to 21 hours after the signal onset. Event 5, the weakest coalescence,
 whose window SNR reaches 3 only 9.8 hours before its merger, is alerted
 2.1 hours before it at three seeds and not at all at seed 9999. The
-false-alarm rate spans 0.33 to 1.32 episodes per 30 days; the credited
-spans cover 7.7 days of the year, in which about 0.1 to 0.35 chance
+false-alarm rate spans 0.41 to 1.40 episodes per 30 days; the credited
+spans cover 7.7 days of the year, in which about 0.1 to 0.36 chance
 episodes are expected at these rates, and every alert follows the signal
 onset of its coalescence. The alert times agree between the seeds to
 within six hours where they alert; the false-alarm rate does not, and it is
@@ -1022,46 +1081,85 @@ weakest in A (peak window SNR 86), the network SNR peaks at 227 and the
 onset moves from 9.8 to 21.6 hours before the merger. Alerts of a model of
 this mode are credited from the onset of the network.
 
-**Year replay.** The lossless year-long mission, replayed with the four
+**Year replay.** The lossless year-long mission, run again with both
+channels as the two columns of its payload (below), replayed with the four
 runs of `q8_b6_s001_ae` under causal whitening (one trailing estimate per
 channel), at persistence three; alert time minus merger time [h] at the
 ground station:
 
 | Event | Onset of the network | Seed 9999 | Seed 1009 | Seed 2027 | Seed 3041 |
 |---|---|---|---|---|---|
-| 1 | −37.2 | −26.3 | −28.8 | −26.3 | −26.5 |
-| 2 | −29.1 | −11.4 | −11.4 | −11.4 | −11.4 |
-| 3 | −48.5 | −25.4 | −27.8 | −27.9 | −27.9 |
-| 4 | −36.2 | −21.1 | −21.1 | −21.1 | −21.1 |
+| 1 | −37.2 | −26.4 | −29.4 | −26.4 | −26.5 |
+| 2 | −29.1 | −11.5 | −11.5 | −11.5 | −11.5 |
+| 3 | −48.5 | −26.7 | −28.7 | −28.8 | −28.8 |
+| 4 | −36.2 | −21.4 | −21.4 | −21.4 | −21.4 |
 | 5 | −21.6 | −4.5 | −4.5 | −4.6 | −4.6 |
-| 6 | −48.9 | −13.3 | −13.4 | −12.5 | −12.5 |
-| False-alarm episodes (per 30 d) | | 12 (0.99) | 57 (4.69) | 16 (1.32) | 17 (1.40) |
+| 6 | −48.9 | −13.8 | −13.8 | −12.6 | −13.2 |
+| False-alarm episodes (per 30 d) | | 11 (0.90) | 54 (4.44) | 17 (1.40) | 18 (1.48) |
 
 Every seed alerts the six coalescences before their mergers; the A
 configuration misses event 5 at the reference seed. Event 5 is alerted 4.5
-to 4.6 hours ahead against 2.1, event 3 1.1 to 3.6 hours earlier, event 6
-0.5 to 1.3 hours earlier, event 1 3.5 to 6.0 hours earlier at three seeds
-and 2.3 hours later at one; events 2 and 4 are alerted at the same times.
-The false-alarm rate is 0.99 to 1.40 episodes per 30 days at three seeds,
-inside the range of the A configuration (0.33 to 1.32), and 4.69 at seed
-1009, whose rate on the completed record is also among the highest. Four
-seeds do not rank the two modes by false-alarm rate.
+to 4.6 hours ahead against 2.1, event 6 0.6 to 1.8 hours earlier, event 1
+3.6 to 6.6 hours earlier at three seeds and 2.2 hours later at one; events
+2 and 4 are alerted within 0.2 hours of the A configuration, and event 3
+at the same time or up to 2.0 hours later. The false-alarm rate is
+0.90 to 1.48 episodes per 30 days at three seeds, about the range of the A
+configuration (0.41 to 1.40), and 4.44 at seed 1009, whose rate on the
+completed record is also among the highest. Four seeds do not rank the
+two modes by false-alarm rate.
 
-**The link.** The mission carried one payload column, the A channel, as
-every mission of this page; DeepSpaceTelemetry 2.6 can carry both channels
-as columns of one payload (`[tdi] channels = "AE"` in the export), which
-makes the common delivery hold by construction. The replay of a model of
-this mode takes the delivery of that
-mission and serves A and E of every delivered batch from the TDI record,
-after checking batch by batch that the A column of the record is the
-payload the mission delivered (`scripts/infer_telemetry.jl --tdi-file`,
-`ScheduledRecordRun`): the delivery of a batch is common to its channels.
-For LISA this holds by construction. The combinations A, E and T are
-formed on the ground from the same telemetry, about 75 kbit/s for the
-whole constellation, science data and housekeeping included
-[ColpiEtAl2024](@cite); the volume on the link does not depend on the
-number of combinations an analysis reads, and a lost packet is lost to all
-of them.
+**The link.** The year mission of this section carries both channels as
+the two columns of one payload (`[tdi] channels = "AE"` in the export;
+`physics.external_data_columns = ["A", "E"]` of the producer): one batch,
+one transfer and one loss draw for both, so that the replay reads A and E
+of every delivered batch from the run itself. Run from the same scenario
+and seed as the one-column mission of the A configuration, it delivers
+the same batches at the same instants — the arrival feed, the declared
+holes and the delivery delays of the two runs are identical byte for
+byte — and the A configuration replayed on it scores every window as on
+the one-column mission. The delivery of a batch is common to its channels,
+as it is on LISA: the combinations A, E and T are formed on the ground
+from the same telemetry, about 75 kbit/s for the whole constellation,
+science data and housekeeping included [ColpiEtAl2024](@cite); the volume
+on the link does not depend on the number of combinations an analysis
+reads, and a lost packet is lost to all of them. The missions of the
+lossy-link study carried the A channel alone; their replays by this mode
+serve E from the TDI record, after checking batch by batch that the A
+column of the record is the payload the mission delivered
+(`scripts/infer_telemetry.jl --tdi-file`, `ScheduledRecordRun`).
+
+**A saturated link.** A mission whose production is doubled against the
+same link is therefore not the scenario of a second channel but of a link
+that cannot carry its production, and was run as such: the two-column
+mission at 150 kbit/s against the 230 kbit/s of the pass of 12 hours,
+132 batches per pass against 173 produced per day. Over the year 76.2 %
+of the batches reach the ground; the on-board recorder of 30 days is full
+on day 125, and from then on the data between about 02:00 and 07:55 of
+every day are never recorded, as before that the data between 19:00 and
+01:40 never leave the recorder; 75.4 % of the year is on the ground within
+24 hours of its measurement, against 99.96 % at the nominal rate. The
+merger of event 2 is in a batch that is never delivered, and the merger of
+event 4 with the 5.3 hours before it is never recorded. Replayed on this
+mission (`--link-volume-channels 2`), the four runs of either mode score
+47 % of the windows of the year:
+
+| | Nominal rate, A | Doubled rate, A | Nominal rate, A and E | Doubled rate, A and E |
+|---|---|---|---|---|
+| Coalescences alerted before the merger, by seed | 5, 6, 6, 6 | 5, 6, 5, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 |
+| False-alarm episodes per 30 d of scored record | 0.41 to 1.40 | 0.53 to 2.98 | 0.90 to 4.44 | 0.35 to 2.28 |
+| Alert before the merger [h], seed 1009, events 1 to 6 | 22.8, 11.5, 28.7, 21.4, 2.1, 12.1 | 22.7, 9.0, 24.2, 16.3, 2.2, 8.8 | 29.4, 11.5, 28.7, 21.4, 4.5, 13.8 | 26.2, 9.0, 24.2, 15.9, 5.3, 8.8 |
+| Coalescences confirmed before the merger, by seed | 3, 5, 5, 5 | 2, 3, 3, 2 | 5, 6, 6, 6 | 2, 5, 4, 2 |
+
+The alerts survive: the models of the A and E network alert the six
+coalescences at every seed, up to 9 hours later than on the nominal link,
+and those of A five or six. The confirmations do not: eleven consecutive
+windows need eleven consecutive scored windows, and the daily hole cuts
+every alarm run that reaches it, so two to five coalescences are confirmed
+before their merger where the nominal link confirms three to six; no
+confirmation falls outside a credited span. What the saturated link loses
+is the data, a quarter of the year and two of the six mergers among it,
+and with them the requirement that data reach the ground within 24
+hours.
 
 **Lossy link.** The seventeen 30-day missions of the lossy-link section,
 replayed with the four runs of `q8_b6_s001_ae`; their payload is the A
@@ -1113,8 +1211,9 @@ each was run at the four seeds. Ranges over the seeds:
 | Blind label spans | 5/5 | 5/5 | 5/5 | 5/5 |
 | Blind false-alarm episodes per 30 d | 2.97 to 6.76 | 3.30 to 3.46 | 3.30 to 4.78 | 3.30 to 6.76 |
 | Streamed year: coalescences alerted before the merger, by seed | 5, 6, 6, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 | 5, 6, 6, 6 |
-| Streamed year: false alarms per 30 d | 0.33 to 1.32 | 0.58 to 0.74 | 1.32 to 1.89 | 0.82 to 1.97 |
-| Streamed year: alert of event 2 before its merger [h] | 11.3 to 11.4 | 26.2 | 26.2 | 26.2 |
+| Streamed year: false alarms per 30 d | 0.41 to 1.40 | 0.58 to 0.82 | 1.32 to 1.89 | 0.82 to 1.89 |
+| Streamed year: alert of event 2 before its merger [h] | 11.3 to 11.5 | 26.2 | 26.2 | 26.2 |
+| Streamed year: coalescences confirmed before the merger, by seed | 3, 5, 5, 5 | 5, 5, 5, 5 | 5, 5, 5, 5 | 5, 5, 5, 5 |
 
 | A and E network, `q8_b6_s001_ae` | Circuit (64) | Logistic regression (9) | Network of six (61) | Harmonic (17) |
 |---|---|---|---|---|
@@ -1124,20 +1223,21 @@ each was run at the four seeds. Ranges over the seeds:
 | Blind label spans | 5/5 | 5/5 | 5/5 | 5/5 |
 | Blind false-alarm episodes per 30 d | 3.30 to 8.58 | 3.96 to 4.04 | 3.71 to 4.29 | 5.20 to 6.27 |
 | Streamed year: coalescences alerted before the merger, by seed | 6, 6, 6, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 |
-| Streamed year: false alarms per 30 d | 0.99 to 4.69 | 0.41 to 0.49 | 0.49 to 1.56 | 1.07 to 1.89 |
-| Streamed year: alert of event 2 before its merger [h] | 11.4 | 26.2 | 26.2 | 26.2 |
-| Streamed year: alert of event 5 before its merger [h] | 4.5 to 4.6 | 7.5 to 7.6 | 4.5 to 7.5 | 4.5 |
+| Streamed year: false alarms per 30 d | 0.90 to 4.44 | 0.58 to 0.66 | 0.58 to 1.56 | 1.07 to 1.65 |
+| Streamed year: alert of event 2 before its merger [h] | 11.5 | 26.2 | 26.2 | 26.2 |
+| Streamed year: alert of event 5 before its merger [h] | 4.5 to 4.6 | 7.5 to 7.7 | 4.5 to 7.5 | 4.5 |
+| Streamed year: coalescences confirmed before the merger, by seed | 5, 6, 6, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 | 6, 6, 6, 6 |
 
 On these features the circuit adds nothing to a linear classifier. With
 nine parameters the logistic regression has the larger ROC area at every
 seed, on the validation block and on the blind year, and a window recall
 of 0.21 to 0.22 against 0.09 to 0.17 at a comparable rate of false-alarm
 episodes. In the streamed year it alerts the six coalescences before
-their mergers at every seed and in both modes, at 0.58 to 0.74 and 0.41 to 0.49 false
-alarms per 30 days, where the circuit counts 0.33 to 1.32 and 0.99 to 4.69 and misses event 5
-at one seed; it alerts event 2 26.2 hours
-before its merger, the circuit 11.4 hours, and the other alert times agree
-within six hours. Its runs differ between the seeds in the third digit,
+their mergers at every seed and in both modes, at 0.58 to 0.82 and 0.58
+to 0.66 false alarms per 30 days, where the circuit counts 0.41 to 1.40
+and 0.90 to 4.44 and misses event 5 at one seed; it alerts event 2 26.2
+hours before its merger, the circuit 11.3 to 11.5 hours, and the other
+alert times agree within six hours. Its runs differ between the seeds in the third digit,
 since its loss is convex. The network of six behaves as the circuit does:
 the same alerts, and a false-alarm rate that scatters over the seeds. The
 harmonic control pays for the circuit's feature map as the circuit does —
@@ -1283,8 +1383,9 @@ detection performance over a classical model with the same encoding, or an
 economy of parameters: nine classical ones suffice on these inputs, and
 seventeen reproduce the glitch tolerance. The best streamed result on this
 page is that of the logistic regression on the features of the A and E
-network: six of six coalescences at every seed, alerted 7.5 to 27.8 hours
-before their mergers at 0.41 to 0.49 false alarms per 30 days.
+network: six of six coalescences at every seed, alerted 7.5 to 28.7 hours
+before their mergers at 0.58 to 0.66 false alarms per 30 days, and
+confirmed before every merger.
 
 ## Caveats
 
@@ -1327,7 +1428,7 @@ before their mergers at 0.41 to 0.49 false alarms per 30 days.
   onset bounds the earliest creditable alert rather than locating it.
 - **Four seeds of the streaming configuration.** They agree on the alerts
   of five coalescences and differ on event 5 and on the false-alarm rate,
-  0.33 to 1.32 per 30 days; seed by seed, the calibration rule would set
+  0.41 to 1.40 per 30 days; seed by seed, the calibration rule would set
   the persistence between two and four, and the configuration keeps the
   pooled value of three.
 - **The glitch results rest on one simulated year and two coalescences.**
@@ -1361,8 +1462,10 @@ julia scripts/train.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
 julia scripts/infer.jl configs/experiments/q8_b6.toml --run-id q8_b6_pi
 
 # Export the blind year as a telemetry payload, run a DeepSpaceTelemetry mission on
-# the scenario fragment it writes, and replay the mission: causal as configured,
-# full-record PSD with psd_mode = "sidecar" in [telemetry]
+# the scenario fragment it writes (the year of this page: the link of the telemetry
+# section, 365 days on the producer's tick clock, simulation.mode = "tick"), and
+# replay the mission: causal as configured, full-record PSD with psd_mode = "sidecar"
+# in [telemetry]
 julia scripts/export_telemetry_payload.jl configs/experiments/q8_b6.toml \
     --h5-file $LDC/LDC2_sangria_blind_v2.h5 \
     --catalog data/inputs/sangria_blind_points_events.csv --output-prefix sangria_blind
@@ -1382,8 +1485,9 @@ julia scripts/infer.jl configs/experiments/q8_b6_s001.toml --run-id q8_b6_s001_p
 julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001.toml --run-dir <DeepSpaceTelemetry run> \
     --model models/run_q8_b6_s001_pi/gw_model.jld2 \
     --events data/inputs/sangria_blind_points_events.csv --run-id telemetry_year_s001_pi
-# The A and E network: products of the mode (suffix _ae), onsets of the network, replay
-# with the channels served from the TDI record
+# The A and E network: products of the mode (suffix _ae), onsets of the network; the
+# export of the mode writes the two-column payload A, E, whose mission the replay reads
+# both channels from (a one-column mission takes --tdi-file and the TDI record instead)
 julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --h5-file $LDC/LDC2_sangria_training_v2.h5
 julia scripts/label_ldc.jl configs/experiments/q8_b6_s001_ae.toml --truth-csv $UNBLINDED \
     --record-file $LDC/LDC2_sangria_blind_v2.h5 --output-prefix sangria_ae_blind_points
@@ -1395,8 +1499,11 @@ julia scripts/preprocess_ldc.jl configs/experiments/q8_b6_s001_ae.toml \
     --output-prefix sangria_b6s001_blind
 julia scripts/train.jl configs/experiments/q8_b6_s001_ae.toml --run-id q8_b6_s001_ae_pi
 julia scripts/infer.jl configs/experiments/q8_b6_s001_ae.toml --run-id q8_b6_s001_ae_pi
-julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001_ae.toml --run-dir <DeepSpaceTelemetry run> \
-    --model models/run_q8_b6_s001_ae_pi/gw_model.jld2 --tdi-file $LDC/LDC2_sangria_blind_v2.h5 \
+julia scripts/export_telemetry_payload.jl configs/experiments/q8_b6_s001_ae.toml \
+    --h5-file $LDC/LDC2_sangria_blind_v2.h5 \
+    --catalog data/inputs/sangria_blind_points_events.csv --output-prefix sangria_blind
+julia scripts/infer_telemetry.jl configs/experiments/q8_b6_s001_ae.toml --run-dir <two-column run> \
+    --model models/run_q8_b6_s001_ae_pi/gw_model.jld2 \
     --events data/inputs/sangria_ae_blind_points_events.csv --run-id telemetry_year_s001_ae_pi
 
 # The classical controls: the same products, [model] kind in the configuration
