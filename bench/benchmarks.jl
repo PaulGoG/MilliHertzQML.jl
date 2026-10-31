@@ -107,10 +107,18 @@ function run_benchmarks()
     )
 
     println("\n5. Features of one window of 1,000 samples (six bands)")
-    window = randn(rng, 1000)
-    edges = [3e-4, 6e-4, 1e-3, 2e-3, 4e-3, 1e-2, 4e-2]
-    t_features =
-        @belapsed extract_features($window, 0.2; feature_set = :bands, band_edges = $edges)
+    # The bands and the sampling rate of the selected configuration
+    settings = preprocessing_settings(
+        load_config(joinpath(@__DIR__, "..", "configs", "experiments", "q8_b6.toml")),
+    )
+    features = FeatureMap(;
+        feature_set = settings.feature_set,
+        low_band = settings.low_band_hz,
+        high_band = settings.high_band_hz,
+        band_edges = settings.band_edges_hz,
+    )
+    window = randn(rng, settings.window_size)
+    t_features = @belapsed extract_features($features, $window, $(settings.sample_rate))
     @printf("   %8.1f µs\n", 1e6 * t_features)
 
     println(

@@ -1,17 +1,13 @@
 name = "MilliHertzQML"
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
-version = "3.0.0"
+version = "3.1.0"
 authors = ["Paul-Adrian Gogîță <gogitapaul@yahoo.ro>"]
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
-Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
@@ -30,26 +26,22 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 MilliHertzQMLCairoMakieExt = "CairoMakie"
 
 [sources]
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "a2a41357ac469e8e9cf6fd31fa7c812e6d3375a1"}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "86b91d2732cd808d996bf1e1b1f0f7e1ae8fba8b"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "1e473a44479893f3420f196f9c367884e6daa1b2"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"}
 
 [compat]
 CairoMakie = "0.15"
 CSV = "0.10, 1.1"
 DataFrames = "1"
 Dates = "1"
-Distributed = "1"
-DrWatson = "2.19"
-Functors = "0.5"
 JLD2 = "0.6"
 julia = "1.13"
-LinearAlgebra = "1"
-MilliHertzBase = "0.1"
+MilliHertzBase = "0.2"
 Optimisers = "0.4"
 PrecompileTools = "1"
 Random = "1"
 Statistics = "1"
-StreamingInference = "0.1"
+StreamingInference = "0.2"
 TimerOutputs = "1.2"
 TOML = "1"
 Yao = "0.9"

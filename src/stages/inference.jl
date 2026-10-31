@@ -1,153 +1,28 @@
 # src/stages/inference.jl — inference stage: scoring of a feature table
-# with a trained classifier and its validation-fitted threshold, optional
-# restriction to one block of the training table, per-window results, and
-# window- and event-level metrics when labels are available. The script
-# scripts/infer.jl adds only the diagnostic figures.
+# with a trained classifier and the threshold its training or calibration
+# stage fitted, optional restriction to one block of the run's split,
+# per-window results, and window- and event-level metrics when labels are
+# available. The script scripts/infer.jl adds only the diagnostic figures.
 
 """
-    inference_geometry(features_path, config) -> NamedTuple
+    check_channels(model_dir, features_path) -> String
 
-Window `step_size` [samples], `sample_rate` [Hz], and `first_window` (the
-record window index of the table's first row) of a feature table: from
-its sidecar TOML when present ([`feature_geometry`](@ref)), otherwise
-from the `[inference]` section with a warning (`first_window = 1`).
+The channel set of the run in `model_dir` ([`run_channels`](@ref)),
+checked against that of the feature table at `features_path`
+([`recorded_channels`](@ref)); a run snapshot or a table that records no
+channel set is one of the mode `"A"`, the only mode before the modes were
+recorded. Throws an `ArgumentError` when the two differ.
 """
-function inference_geometry(features_path::AbstractString, config::AbstractDict)
-    sidecar = replace(features_path, r"\.csv$" => ".toml")
-    if isfile(sidecar)
-        g = feature_geometry(features_path, config)
-        return (
-            step_size = g.step_size,
-            sample_rate = g.sample_rate,
-            first_window = g.first_window,
-        )
-    end
-    @warn "no feature sidecar at $sidecar; window geometry taken from [inference]."
-    inf = inference_settings(config)
-    return (step_size = inf.step_size, sample_rate = inf.sample_rate, first_window = 1)
-end
-
-"""
-    gapped_product(features_path) -> Bool
-
-Whether a feature table is the product of a record with gaps: its sidecar
-lists the stretches between them, and its rows are not consecutive windows
-of the record ([`window_indices`](@ref)).
-"""
-function gapped_product(features_path::AbstractString)
-    sidecar = replace(features_path, r"\.csv$" => ".toml")
-    isfile(sidecar) || return false
-    return haskey(get(TOML.parsefile(sidecar), "features", Dict{String,Any}()), "stretches")
-end
-
-"""
-    run_channels(model_dir) -> String
-
-Channel mode of the features a run was trained on, from its `config.toml`
-snapshot; `"A"` for a run trained before the modes existed.
-"""
-function run_channels(model_dir::AbstractString)
-    path = joinpath(model_dir, "config.toml")
-    isfile(path) || return "A"
-    features = get(TOML.parsefile(path), "features", Dict{String,Any}())
-    return String(get(features, "channels", "A"))
-end
-
-"""
-    THRESHOLD_FIT_KEYS
-
-Rates of the fitting block recorded in `threshold.toml` under `fit_<key>`;
-files written before the fitting block became configurable hold them
-under `validation_<key>`.
-"""
-const THRESHOLD_FIT_KEYS = (
-    "windows",
-    "positive_windows",
-    "recall",
-    "precision",
-    "fpr",
-    "false_alarms_per_30d",
-    "false_alarm_episodes",
-    "observation_days",
-)
-
-"""
-    migrate_threshold_info!(info) -> info
-
-Rename the `validation_*` rate keys of a `threshold.toml` written before
-the fitting block became configurable to their current `fit_*` names,
-wherever the new name is absent, so that an artifact of either vintage
-reads alike; the renamed keys are logged.
-"""
-function migrate_threshold_info!(info::AbstractDict)
-    renamed = String[]
-    for k in THRESHOLD_FIT_KEYS
-        old, new = "validation_$k", "fit_$k"
-        if haskey(info, old) && !haskey(info, new)
-            info[new] = info[old]
-            delete!(info, old)
-            push!(renamed, old)
-        end
-    end
-    isempty(renamed) ||
-        @info "threshold.toml predates the configurable fitting block; validation_* keys read as fit_*" renamed
-    return info
-end
-
-"""
-    load_threshold(model_dir) -> (threshold::Float32, info::Dict)
-
-Decision threshold persisted in `threshold.toml` of a training run
-directory; the file is required. Older files are read through
-[`migrate_threshold_info!`](@ref).
-"""
-function load_threshold(model_dir::AbstractString)
-    path = joinpath(model_dir, "threshold.toml")
-    isfile(path) || throw(
+function check_channels(model_dir::AbstractString, features_path::AbstractString)
+    trained_on = run_channels(model_dir; default = "A")
+    scored_on = recorded_channels(features_path; default = "A")
+    trained_on == scored_on || throw(
         ArgumentError(
-            "no decision threshold at $path; the threshold is fitted on the validation " *
-            "block by the training stage.",
+            "the model of $model_dir was trained on features of the channels " *
+            "$trained_on; the table $features_path holds those of $scored_on.",
         ),
     )
-    info = migrate_threshold_info!(TOML.parsefile(path)["threshold"])
-    haskey(info, "value") ||
-        throw(ArgumentError("threshold.toml at $path carries no `value` key."))
-    return Float32(info["value"]), info
-end
-
-"""
-    block_rows(model_dir, block, n_windows) -> UnitRange{Int}
-
-Row range of `block` of the table a run was fitted on, from the
-`split.toml` of the run in `model_dir` (`validation` and `test` of a
-training run, `calibration` and `evaluation` of a calibration run); the
-table must hold the `n_windows` of the split.
-"""
-function block_rows(model_dir::AbstractString, block::AbstractString, n_windows::Integer)
-    path = joinpath(model_dir, "split.toml")
-    isfile(path) || throw(
-        ArgumentError(
-            "block = $block requires the split.toml of the training run in $model_dir.",
-        ),
-    )
-    split = TOML.parsefile(path)["split"]
-    blocks = sort([k for (k, v) in split if v isa AbstractVector && length(v) == 2])
-    block in blocks || throw(
-        ArgumentError(
-            "block = $(repr(block)) is not a block of the split in $model_dir; " *
-            "its blocks are " *
-            join(blocks, ", ") *
-            ".",
-        ),
-    )
-    split["n_windows"] == n_windows || throw(
-        DimensionMismatch(
-            "block = $block applies to the training table of $(split["n_windows"]) " *
-            "windows; the given features hold $n_windows.",
-        ),
-    )
-    lo, hi = split[block]
-    return Int(lo):Int(hi)
+    return trained_on
 end
 
 """
@@ -165,11 +40,13 @@ split the run persisted in `split.toml`: `"validation"` or `"test"` of a
 training run, `"calibration"` or `"evaluation"` of a calibration run
 ([`calibrate_classifier`](@ref)).
 
-The features may be the product of a record with gaps
+The window geometry is that of the table's sidecar
+([`feature_geometry`](@ref)), or of `[inference]` with a warning for a
+table without one. The features may be the product of a record with gaps
 ([`preprocess_record`](@ref)): the mission time of a row is then that of
-its record window, and events and false-alarm episodes end at a gap
-([`event_metrics`](@ref) with the window indices of the sidecar). The
-post-hoc threshold sweep still takes the rows as consecutive.
+its record window, and events and false-alarm episodes end at a gap, in
+the metrics and in the threshold sweep alike ([`event_metrics`](@ref) and
+[`threshold_sweep`](@ref) with the window indices of the sidecar).
 
 Artifacts in `<results>/run_<run_id>`: `inference_probabilities.csv`
 (`Window`, `Probability`, `Detection`, and with labels `Label`, `SNR`),
@@ -181,12 +58,13 @@ characteristic of the evaluated rows ([`threshold_sweep`](@ref)); the
 persisted threshold is applied unchanged, the sweep is a post-hoc
 diagnostic.
 
-Returns `(run_id, results_dir, plot_dir, probabilities, decisions, labels,
-snrs, threshold, threshold_info, metrics, roc, auc, sweep, days,
-geometry)`: `threshold_info` is the dictionary of the run's
-`threshold.toml`; `labels`, `snrs`, `metrics`, `roc = (fpr, tpr)`, `auc`,
-and `sweep` are `nothing` in blind mode; `days` is the mission time [days]
-of every evaluated window; `geometry` holds `step_size` and `sample_rate`.
+Returns `(run_id, results_dir, plot_dir, classifier, probabilities,
+decisions, labels, snrs, threshold, threshold_info, metrics, roc, auc,
+sweep, days, geometry)`: `classifier` is the loaded model;
+`threshold_info` is the dictionary of the run's `threshold.toml`;
+`labels`, `snrs`, `metrics`, `roc = (fpr, tpr)`, `auc`, and `sweep` are
+`nothing` in blind mode; `days` is the mission time [days] of every
+evaluated window; `geometry` is that of [`feature_geometry`](@ref).
 """
 function evaluate_classifier(
     config::AbstractDict;
@@ -221,7 +99,7 @@ function evaluate_classifier(
             isempty(run_id) ?
             "standalone_" * parameter_digest(Dict("model" => abspath(model_path)))[1:6] :
             String(run_id)
-        geometry = inference_geometry(features_path, config)
+        geometry = feature_geometry(features_path, config; fallback = "inference")
         # The record window of every row, where the record has gaps
         record_windows =
             gapped_product(features_path) ? window_indices(features_path) : nothing
@@ -232,22 +110,10 @@ function evaluate_classifier(
         mkpath(results_dir)
 
         # Model, scaler, and the threshold fitted at training time.
-        classifier, _, scaler = load_model(model_path)
-        scaler === nothing && throw(
-            ArgumentError(
-                "the model artifact $model_path carries no feature scaler; retrain it " *
-                "with the current pipeline.",
-            ),
-        )
+        classifier, _, stored_scaler = load_model(model_path)
+        scaler = require_scaler(stored_scaler, model_path)
         threshold, threshold_info = load_threshold(model_dir)
-        trained_on = run_channels(model_dir)
-        scored_on = recorded_channels(features_path; default = "A")
-        trained_on == scored_on || throw(
-            ArgumentError(
-                "the model of $model_dir was trained on features of the channels " *
-                "$trained_on; the table $features_path holds those of $scored_on.",
-            ),
-        )
+        check_channels(model_dir, features_path)
         @info "model loaded" model_path = model_path threshold = threshold criterion =
             get(threshold_info, "criterion", "unknown") fitted_at =
             get(threshold_info, "fitted_at", "unknown")
@@ -329,23 +195,16 @@ function evaluate_classifier(
         if has_labels
             fpr, tpr, _ = roc_curve(y_true, probabilities)
             roc = (fpr = fpr, tpr = tpr)
-            auc = roc_auc(fpr, tpr)
-            m = event_metrics(
-                decisions,
-                y_true;
-                step_size = geometry.step_size,
-                sample_rate = geometry.sample_rate,
-                windows = record_windows === nothing ? nothing : record_windows[windows],
+            # The record windows of the rows, where the record has gaps
+            scored_windows = record_windows === nothing ? nothing : record_windows[windows]
+            m, auc, metrics = block_metrics(
+                probabilities,
+                y_true,
+                threshold,
+                geometry;
+                windows = scored_windows,
             )
-            metrics = merge(
-                metrics_dict(m),
-                Dict{String,Any}(
-                    "auc" => auc,
-                    "n_windows" => n_windows,
-                    "threshold" => Float64(threshold),
-                    "block" => block_name,
-                ),
-            )
+            metrics["block"] = block_name
             write_toml(
                 joinpath(results_dir, "metrics.toml"),
                 Dict{String,Any}("metrics" => metrics),
@@ -355,6 +214,7 @@ function evaluate_classifier(
                 probabilities;
                 step_size = geometry.step_size,
                 sample_rate = geometry.sample_rate,
+                windows = scored_windows,
             )
             write_csv(joinpath(results_dir, "threshold_sweep.csv"), sweep)
             @info "window-level metrics" auc = auc precision = m.precision recall = m.recall f1 =
@@ -369,6 +229,7 @@ function evaluate_classifier(
             run_id = output_id,
             results_dir = results_dir,
             plot_dir = plot_dir,
+            classifier = classifier,
             probabilities = probabilities,
             decisions = decisions,
             labels = y_true,

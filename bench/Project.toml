@@ -1,12 +1,21 @@
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
 
 [sources]
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "a2a41357ac469e8e9cf6fd31fa7c812e6d3375a1"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "1e473a44479893f3420f196f9c367884e6daa1b2"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "86b91d2732cd808d996bf1e1b1f0f7e1ae8fba8b"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"}
+
+[compat]
+BenchmarkTools = "1"
+LinearAlgebra = "1"
+Optimisers = "0.4"
+Printf = "1"
+Random = "1"

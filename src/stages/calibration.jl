@@ -106,23 +106,11 @@ function calibrate_classifier(
         has_labels &&
             !isfile(labels_path) &&
             throw(ArgumentError("label file not found: $labels_path"))
-        trained_on = run_channels(parent_dir)
-        scored_on = recorded_channels(features_path; default = "A")
-        trained_on == scored_on || throw(
-            ArgumentError(
-                "the model of $parent_dir was trained on features of the channels " *
-                "$trained_on; the table $features_path holds those of $scored_on.",
-            ),
-        )
+        trained_on = check_channels(parent_dir, features_path)
 
         # The parent: parameters, scaler and threshold of the training run
-        classifier, parent_metadata, parent_scaler = load_model(model_path)
-        parent_scaler === nothing && throw(
-            ArgumentError(
-                "the model artifact $model_path carries no feature scaler; retrain it " *
-                "with the current pipeline.",
-            ),
-        )
+        classifier, parent_metadata, stored_scaler = load_model(model_path)
+        parent_scaler = require_scaler(stored_scaler, model_path)
         # The parent's threshold as the training stage stored it (double precision)
         _, parent_info = load_threshold(parent_dir)
         parent_threshold = Float64(parent_info["value"])
@@ -188,21 +176,8 @@ function calibrate_classifier(
                 isfile(path) || throw(ArgumentError("reference product not found: $path"))
             end
             X_ref, y_ref, _ = load_data(reference_path, reference_labels)
-            split_path = joinpath(parent_dir, "split.toml")
-            isfile(split_path) || throw(
-                ArgumentError(
-                    "scaler = \"match\" needs the split.toml of the training run in " *
-                    "$parent_dir.",
-                ),
-            )
-            split = TOML.parsefile(split_path)["split"]
-            split["n_windows"] == size(X_ref, 1) || throw(
-                DimensionMismatch(
-                    "the split of $parent_dir covers $(split["n_windows"]) windows; the " *
-                    "reference table $reference_path holds $(size(X_ref, 1)).",
-                ),
-            )
-            train_rows = Int(split["train"][1]):Int(split["train"][2])
+            # The training block of the parent, on the table it was split from
+            train_rows = block_rows(parent_dir, "train", size(X_ref, 1))
             ref_noise = [i for i in train_rows if y_ref[i] == 0]
             isempty(ref_noise) && throw(
                 ArgumentError(
@@ -252,15 +227,7 @@ function calibrate_classifier(
             joinpath(run_dir, "threshold.toml"),
             Dict{String,Any}("threshold" => info),
         )
-        n_episodes = info["fit_false_alarm_episodes"]
-        n_episodes < trn.min_fit_episodes && @warn "the fitted false-alarm rate rests " *
-              "on $n_episodes false-alarm episodes, below min_fit_episodes = " *
-              "$(trn.min_fit_episodes); its relative Poisson error is " *
-              (
-                  n_episodes == 0 ? "unbounded" :
-                  "about $(round(Int, 100 / sqrt(n_episodes))) %"
-              ) *
-              " and the operating point may not transfer to another record." block = "calibration"
+        warn_fit_episodes(info, trn.min_fit_episodes, "calibration")
         @info "threshold" value = threshold parent = parent_threshold criterion =
             info["criterion"] episodes = info["fit_false_alarm_episodes"]
 

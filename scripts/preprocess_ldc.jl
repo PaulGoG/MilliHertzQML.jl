@@ -60,4 +60,4 @@ function main()
     return nothing
 end
 
-with_pipeline_root(main, config_root(config_argument()))
+with_pipeline_root(main, config_root(config_argument(DEFAULT_CONFIG)))

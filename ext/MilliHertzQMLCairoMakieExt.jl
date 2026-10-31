@@ -173,25 +173,6 @@ function animate_training_history(
     end
 end
 
-"""
-    log_decimal_ticks(lo, hi) -> (values, labels)
-
-Decade and 3× intermediate ticks of the closed interval `[lo, hi]`,
-labelled as plain decimals. A logarithmic axis of a few decades reads as
-decimals rather than as powers, and never as a fractional exponent.
-"""
-function log_decimal_ticks(lo::Real, hi::Real)
-    values = Float64[]
-    for d in floor(Int, log10(lo)):ceil(Int, log10(hi)), m in (1.0, 3.0)
-        v = m * 10.0^d
-        lo <= v <= hi && push!(values, v)
-    end
-    labels = map(values) do v
-        v >= 1 ? string(round(Int, v)) : rstrip(rstrip(string(round(v; digits = 4)), '0'), '.')
-    end
-    return (values, labels)
-end
-
 function figure_loss_survival(
     p_loss::AbstractVector{<:Real},
     scored_fraction::AbstractVector{<:Real},
@@ -216,7 +197,7 @@ function figure_loss_survival(
     grid = exp10.(range(log10(0.6 * min(lo, knee)), log10(1.6 * hi); length = 200))
     return with_theme(figure_theme(; size = figure_size(1, 1))) do
         figure = Figure()
-        ticks = log_decimal_ticks(first(grid), last(grid))
+        ticks = dense_log_ticks(first(grid), last(grid))
         ax_survival = Axis(
             figure[1, 1];
             ylabel = "Windows scored, of lossless",

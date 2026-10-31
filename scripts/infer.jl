@@ -29,7 +29,7 @@ function parse_commandline()
         help = "Path to the label CSV; an empty string (or a missing file) selects blind inference"
         default = nothing
         "--block"
-        help = "Rows to evaluate when the features are the training table: all, validation, or test"
+        help = "Rows to evaluate: all, or a block of the run's split.toml (validation, test of a training run; calibration, evaluation of a calibration run)"
         default = nothing
     end
     return parse_args(s)
@@ -42,7 +42,7 @@ Diagnostic figures of an inference result in `plot_dir`, each as PDF and
 PNG with a provenance sidecar: the mission trace of the classifier output
 with the threshold (`mission_trace`) and the score distribution
 (`probability_distribution`); with labels also the ROC curve
-(`roc_curve`), the event-level operating characteristic with the applied
+(`roc_curve`, the legend naming the model, `model_label`), the event-level operating characteristic with the applied
 threshold (`threshold_sweep`), and the detection sensitivity versus
 matched-filter SNR (`detection_sensitivity_snr`).
 """
@@ -72,7 +72,12 @@ function plot_diagnostics(result::NamedTuple, plot_dir::AbstractString)
     )
     if result.labels !== nothing
         save_figure(
-            figure_roc(result.roc.fpr, result.roc.tpr, result.auc; label = "VQC"),
+            figure_roc(
+                result.roc.fpr,
+                result.roc.tpr,
+                result.auc;
+                label = model_label(result.classifier),
+            ),
             joinpath(plot_dir, "roc_curve");
             run_id = run_id,
         )
@@ -120,4 +125,4 @@ function main()
     return nothing
 end
 
-with_pipeline_root(main, config_root(config_argument()))
+with_pipeline_root(main, config_root(config_argument(DEFAULT_CONFIG)))

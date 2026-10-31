@@ -2,13 +2,13 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata below."
 type: software
 title: "MilliHertzQML.jl"
-abstract: "Variational quantum classifier with data re-uploading for the detection of massive black hole binary coalescences in milliHertz gravitational-wave telemetry, implemented in Julia."
+abstract: "Variational quantum classifier with data re-uploading for the detection of massive black hole binary coalescences in millihertz gravitational-wave telemetry, implemented in Julia."
 authors:
   - family-names: "Gogîță"
     given-names: "Paul-Adrian"
     email: "gogitapaul@yahoo.ro"
-version: 3.0.0
-date-released: 2026-10-15
+version: 3.1.0
+date-released: 2026-10-31
 license: MIT
 repository-code: "https://github.com/PaulGoG/MilliHertzQML.jl"
 keywords:

@@ -72,8 +72,6 @@ from 1.16 days to 2.8 hours and makes the causal replay usable.
 | Conditioning lag (data after a window needed before it can be scored) | 1.16 days | **2.8 hours** |
 | Part of the record scored when 0.43 % of the batches are lost | 9 % | **81 %** |
 
-The rows of the table read as follows.
-
 - **Label spans.** The blind year holds six coalescences. Events 1 and 2
   merge 29.5 hours apart and share one label span, so the rows of the
   completed blind year count five label spans.
@@ -126,9 +124,9 @@ well as the circuit with 64: it alerts the six coalescences before their
 mergers at every seed, at 0.58 to 0.82 false alarms per 30 days, and has
 the larger area under the receiver operating characteristic (ROC) on the
 completed record. The detection results are therefore those of the
-conditioning and the features, for which the circuit is one classifier
-among others. What the circuit's feature map adds is a tolerance of instrumental
-transients of large amplitude. On the glitch records of LDC-2b (Spritz), with
+conditioning and the features, on which the circuit is one classifier
+among others. Its feature map tolerates instrumental transients of large
+amplitude. On the glitch records of LDC-2b (Spritz), with
 every threshold moved to where the glitches raise at most 2 alerts per
 30 days, the circuit alerts the high-SNR coalescence 9 to 39 hours ahead at
 the seeds that respond; the logistic regression alerts it 7 to 12 hours
@@ -168,27 +166,24 @@ The full tree is at the end of this page.
 
 ## Installation
 
-This README describes release 3.0.0. Its manual is at
+This README describes release 3.1.0. Its manual is at
 [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); the
 manual of `main` is at
 [`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/), and the links
-of this page point there. Earlier releases credited alerts by other
-onset rules; the section
-[Corrections to earlier releases](https://PaulGoG.github.io/MilliHertzQML.jl/dev/benchmark/#Corrections-to-earlier-releases)
-of the benchmark page lists the dated differences, and the
-[changelog](CHANGELOG.md) opens with what a user of 2.0.1 must change.
+of this page point there. The [changelog](CHANGELOG.md) opens with what
+a user of 2.0.1 must change.
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
 of packages added by URL, and is not registered in the General registry.
-Release 3.0.0 builds on StreamingInference.jl 0.1.0 and MilliHertzBase.jl
-0.1.0, pinned by URL and commit in every environment, so a downstream
+Release 3.1.0 builds on StreamingInference.jl 0.2.0 and MilliHertzBase.jl
+0.2.0, pinned by URL and commit in every environment, so a downstream
 environment adds this package alone, at the release tag or following
 `main`. Continuous integration runs the suite on Julia 1.13 and on the
 current release.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.0.0")  # the release
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.1.0")  # the release
 Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl")                  # main
 ```
 
@@ -204,12 +199,13 @@ Every environment (the root, `scripts/`, `test/`, `bench/`, `docs/`)
 carries an `activate.jl` that activates and instantiates it, and every
 entry point includes its own first, so the commands below run as written.
 The auxiliary environments consume the package by path; `Manifest.toml`
-files are not tracked. The script and test environments also pin
+files are not tracked. The test environment also pins
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v2.6.2`, the telemetry producer whose missions the streaming path
-replays, and the script environment
+`v3.1.0`, the telemetry producer whose missions the streaming path
+replays, and the script environment its reader package alone (`subdir =
+"reader"`: the run adapter without the figure stack) and
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
-`v2.0.4`, the constellation response of the simulator; both are
+`v2.1.1`, the constellation response of the simulator; both are
 unregistered packages of mine, pinned at the commits of those tags. If
 your git configuration rewrites GitHub URLs to SSH, set
 `JULIA_PKG_USE_CLI_GIT=true` so that Pkg clones through the git command
@@ -248,6 +244,7 @@ diagram, on the simulated record of `configs/default.toml`:
 ```bash
 julia activate.jl                                   # instantiate the root environment
 julia scripts/generate_data.jl configs/default.toml --run-id sim01   # simulated record and labels into data/inputs/
+julia scripts/label_ldc.jl configs/sangria.toml --h5-file <product>.h5      # an LDC product: labels, events, signal onsets
 julia scripts/preprocess_ldc.jl configs/default.toml \
     --h5-file data/inputs/simulated_telemetry_complex.h5 \
     --label-file data/inputs/simulated_telemetry_complex_labels.csv \
@@ -263,6 +260,7 @@ julia scripts/export_telemetry_payload.jl configs/default.toml \
     --output-prefix telemetry_sim                   # payload and scenario of a DeepSpaceTelemetry mission
 julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTelemetry run> \
     --model models/run_<RUN_ID>/gw_model.jld2       # replay the mission: scored windows, alert table, figure
+julia scripts/animate.jl configs/default.toml --run-id <RUN_ID>             # GIFs of the run's training history and replay
 julia test/runtests.jl                              # static QA, unit tests, pipeline smoke test
 julia bench/benchmarks.jl                           # performance measurements
 julia docs/make.jl                                  # manual, written to docs/build/
@@ -286,7 +284,7 @@ page describes.
 
 | Component | State |
 |---|---|
-| Core library and pipeline | Every stage a typed library function behind a thin script; one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
+| Core library and pipeline | Every stage a typed library function behind a thin script (simulation, labelling, pre-processing, training, inference, calibration, payload export, telemetry replay); one TOML file per run, validated on load; git and hardware provenance in every snapshot; overwrite-safe writes; memory guard |
 | Telemetry simulator | Robson–Cornish–Liu noise at physical amplitude, IMRPhenomA injections; optionally the A and E channels of the constellation; no spins or higher modes |
 | Features and training | Whitened band powers per window, whitening by a model or a Welch power spectral density (PSD), optionally smoothed; chronological blocks, adjoint gradients over the threads (an epoch of the eight-qubit model in about three seconds), threshold fitted by a false-alarm criterion |
 | LDC products | Native reader of the LDC-2a and LDC-2b layouts, analytic TDI noise PSD, truth-stream labels and signal onsets against the analytic or the record's own noise, records with gaps conditioned stretch by stretch; validated on Sangria, run on Spritz and on Yorsh (a composite record summed from component streams) |
@@ -323,9 +321,10 @@ page describes.
   of 3 against the record's own noise, sought past the preceding
   coalescence; an alert after it may still have been raised by a
   neighbouring source.
-- **The circuit is not what detects.** A logistic regression on the same
-  features matches or beats it on clean data; its feature map, not its
-  entanglement, is what tolerates transients of large amplitude.
+- **The detection does not rest on the circuit.** A logistic regression on
+  the same features matches or beats it on clean data; the tolerance of
+  transients of large amplitude comes from its feature map, and a logistic
+  regression on the cosine and sine of the encoded angles reproduces it.
 
 ## Full file tree
 
@@ -347,13 +346,17 @@ MilliHertzQML.jl/
 │   ├── persistence.jl      # JLD2 model save and load: parameters, hyperparameters, feature scaler
 │   ├── visualization.jl    # Figure interface of the classifier and its studies
 │   ├── vqc_scorer.jl       # The classifier (circuit or control) as a window scorer; the detector of a training run
-│   └── stages/             # train_classifier (chronological blocks, calibration-block threshold), evaluate_classifier, calibrate_classifier (a new record's scaler and threshold)
+│   └── stages/
+│       ├── training.jl     # train_classifier: chronological blocks, threshold on the threshold-fitting block
+│       ├── inference.jl    # evaluate_classifier on a feature table or a block of the run's split
+│       ├── calibration.jl  # calibrate_classifier: a new record's scaler and threshold
+│       └── telemetry.jl    # replay_classifier: a DeepSpaceTelemetry run replayed or followed, scored windows, alert table
 ├── ext/
 │   └── MilliHertzQMLCairoMakieExt.jl        # Training history and the classifier studies
 ├── scripts/
-│   ├── Project.toml        # Script environment (package by path, the two producers by git)
+│   ├── Project.toml        # Script environment (package by path; producer reader and response by git)
 │   ├── activate.jl         # Activates and instantiates this environment
-│   ├── common.jl           # Activation of the script environment
+│   ├── common.jl           # Activation of the script environment, the default configuration, the score axis of the classifier figures
 │   ├── generate_data.jl    # generate_telemetry and the trace figure
 │   ├── label_ldc.jl        # label_truth_stream
 │   ├── preprocess_ldc.jl   # preprocess_record
@@ -361,7 +364,7 @@ MilliHertzQML.jl/
 │   ├── infer.jl            # evaluate_classifier and the diagnostic figures
 │   ├── calibrate.jl        # calibrate_classifier on a new record
 │   ├── export_telemetry_payload.jl  # Payload CSV and scenario fragment for a DeepSpaceTelemetry mission
-│   ├── infer_telemetry.jl  # Replay or follow a DeepSpaceTelemetry run: scored windows, alert table, figure
+│   ├── infer_telemetry.jl  # replay_classifier and the alert figure
 │   └── animate.jl          # GIF of a training history or of a telemetry replay, with a provenance sidecar
 ├── test/
 │   ├── Project.toml        # Test environment (package by path, the layers and the producer by git)
@@ -410,7 +413,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {3.0.0},
+  version = {3.1.0},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }

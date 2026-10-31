@@ -1,14 +1,15 @@
-# src/persistence.jl
+# src/persistence.jl — model artifacts: the classifier, its feature
+# scaler and metadata in one JLD2 file.
 
 """
     save_model(path, model; metadata = Dict{String, Any}(), scaler = nothing)
 
 Persist a classifier of either kind to a JLD2 file. A
-`VariationalQuantumClassifier` is stored as its parameter vector plus
-hyperparameters (`n_qubits`, `n_layers`), the feature `scaler` fitted on
-the training partition (bounds and phase-encoding span; `nothing` when
-absent), and an arbitrary `metadata` dictionary (run identifier, seed,
-configuration snapshot).
+`VariationalQuantumClassifier` is stored as `kind = "circuit"`, its
+parameter vector plus hyperparameters (`n_qubits`, `n_layers`), the
+feature `scaler` fitted on the training partition (bounds and
+phase-encoding span; `nothing` when absent), and an arbitrary `metadata`
+dictionary (run identifier, seed, configuration snapshot).
 
 The circuit itself is not serialised; `load_model` rebuilds it from the
 hyperparameters, keeping artifacts loadable across package versions.
@@ -21,6 +22,7 @@ function save_model(
 )
     jldsave(
         path;
+        kind = "circuit",
         n_qubits = model.n_qubits,
         n_layers = model.n_layers,
         params = model.params,
@@ -67,19 +69,18 @@ end
 """
     load_model(path) -> (model, metadata, scaler)
 
-Load a classifier of either kind persisted by [`save_model`](@ref). An
-artifact without a `kind` key, or with `kind = "circuit"`, holds a
-`VariationalQuantumClassifier`: the circuit is rebuilt from the stored
-hyperparameters and the stored parameter vector dispatched into the ansatz
-layers. `kind = "control"` holds a [`ClassicalControl`](@ref); any other
-kind is refused with an `ArgumentError`. An artifact of a control written
-before the first-harmonic model existed has no `harmonic` key and loads as
-the model it was: `harmonic = false`. Returns the feature scaler as
-well (`nothing` for artifacts saved without one). An artifact written
-before the phase-encoding span was persisted is restored with the full
-period ``2\\pi`` its scaler was trained with, and a warning names it: such
-a model prepares the same state at both clamp ends and cannot separate a
-saturated feature from the noise floor.
+Load a classifier of either kind persisted by [`save_model`](@ref).
+`kind = "circuit"` holds a `VariationalQuantumClassifier`: the circuit is
+rebuilt from the stored hyperparameters and the stored parameter vector
+dispatched into the ansatz layers; the circuit artifacts of releases up to
+3.0.0 carry no `kind` key and load as circuits. `kind = "control"` holds
+a [`ClassicalControl`](@ref); the control artifacts of the classical-control
+study written before the first-harmonic model carry no `harmonic` key and
+load as the model they are, `harmonic = false`. Any other kind is refused
+with an `ArgumentError`. Returns the feature scaler as well (`nothing` for
+artifacts saved without one, see [`require_scaler`](@ref)); a scaler
+without its phase-encoding span (artifacts before release 1.1.0) is
+refused with an `ArgumentError`.
 """
 function load_model(path::AbstractString)
     d = JLD2.load(path)
@@ -105,17 +106,30 @@ function load_model(path::AbstractString)
         )
     end
     lower = get(d, "scaler_lower", nothing)
-    scaler = nothing
-    if lower !== nothing
-        span = get(d, "scaler_phase_span", nothing)
-        if span === nothing
-            @warn "the model artifact predates the persisted phase-encoding span; its " *
-                  "scaler is restored with the full period 2π it was trained with, " *
-                  "under which the encoding folds saturated features back onto the " *
-                  "noise floor. Retrain to encode on [0, π]." path
-            span = Float32(2π)
-        end
-        scaler = FeatureScaler(lower, d["scaler_upper"]; phase_span = span)
-    end
-    return model, d["metadata"], scaler
+    lower === nothing && return model, d["metadata"], nothing
+    span = get(d, "scaler_phase_span", nothing)
+    span === nothing && throw(
+        ArgumentError(
+            "the model artifact $path records no phase-encoding span of its scaler, " *
+            "as artifacts before release 1.1.0 did; retrain it.",
+        ),
+    )
+    return model, d["metadata"], FeatureScaler(lower, d["scaler_upper"]; phase_span = span)
+end
+
+"""
+    require_scaler(scaler, path) -> FeatureScaler
+
+The feature scaler `scaler` of the model artifact at `path`, as
+[`load_model`](@ref) returns it; an `ArgumentError` for an artifact saved
+without one, whose features the stages cannot encode.
+"""
+function require_scaler(scaler::Union{Nothing,FeatureScaler}, path::AbstractString)
+    scaler === nothing && throw(
+        ArgumentError(
+            "the model artifact $path carries no feature scaler; retrain it with the " *
+            "current pipeline.",
+        ),
+    )
+    return scaler
 end

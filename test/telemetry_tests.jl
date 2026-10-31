@@ -30,20 +30,24 @@
     run = MemoryTelemetryRun(geometry, payload, events)
     model = VariationalQuantumClassifier(4, 2; rng = rng)
     scaler = FeatureScaler([0.0, 0.0, 0.0, -1.0], [3.0, 3.0, 1.0, 1.0])
+    features = FeatureMap(; BANDS...)
     detector = StreamingDetector(
         model,
         scaler,
         0.5;
+        features = features,
         sample_rate = fs,
         window_size = 1000,
         step_size = 100,
         psd = lisa_noise_psd,
         context_windows = 2,
     )
+    @test detector.scorer.features === features
     @test_throws ArgumentError StreamingDetector(
         model,
         scaler,
         0.5;
+        features = features,
         sample_rate = fs,
         window_size = 1000,
         step_size = 2000,
@@ -96,7 +100,9 @@
                         "highpass_order" => 8,
                         "low_band_hz" => [1e-3, 5e-3],
                         "high_band_hz" => [5e-3, 1e-1],
+                        "band_edges_hz" => [1e-3, 5e-3, 1e-1],
                         "feature_set" => "whitened",
+                        "channels" => "A",
                     ),
                 ),
             )
@@ -114,6 +120,7 @@
         d = detector_from_run(model_path; context_windows = 3)
         @test d.threshold == 0.42f0 && d.window_size == 1000 && d.context_windows == 3
         @test d.psd !== nothing && d.scorer.features.feature_set == :whitened
+        @test d.scorer.features.low_band == (1e-3, 5e-3) && d.highpass_order == 8
         @test isapprox(d.psd(1e-3), lisa_noise_psd(1e-3))
         # A whitening sidecar other than the training run's is honoured —
         # here one that whitens not at all, so the override is unambiguous —
@@ -132,6 +139,7 @@
                         "highpass_cutoff_hz" => 5e-4,
                         "highpass_order" => 8,
                         "feature_set" => "whitened",
+                        "channels" => "A",
                     ),
                 ),
             )
@@ -147,5 +155,15 @@
             psd_sidecar = joinpath(dir, "absent.toml"),
         )
         @test_throws ArgumentError detector_from_run(joinpath(dir, "absent.jld2"))
+        # The conditioning is read without defaults: a sidecar without a key
+        # of it is refused
+        incomplete = TOML.parsefile(joinpath(dir, "feat_features.toml"))
+        delete!(incomplete["features"], "highpass_order")
+        open(io -> TOML.print(io, incomplete), joinpath(dir, "feat_features.toml"), "w")
+        @test_throws ArgumentError detector_from_run(model_path)
+        delete!(incomplete["features"], "band_edges_hz")
+        incomplete["features"]["highpass_order"] = 8
+        open(io -> TOML.print(io, incomplete), joinpath(dir, "feat_features.toml"), "w")
+        @test_throws ArgumentError detector_from_run(model_path)
     end
 end

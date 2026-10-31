@@ -398,3 +398,23 @@ function build_classifier(mdl::NamedTuple, scaler::FeatureScaler)
         ),
     )
 end
+
+"""
+    model_label(model::AbstractClassifier) -> String
+
+Legend name of a classifier, as the manual names the models: `"Circuit"`
+for a [`VariationalQuantumClassifier`](@ref), and for a
+[`ClassicalControl`](@ref) `"Logistic regression"`, `"Network of m
+units"` (`m` hidden units) or `"Harmonic control"`.
+
+# Example
+
+```julia
+figure_roc(fpr, tpr, auc; label = model_label(classifier))
+```
+"""
+model_label(::VariationalQuantumClassifier) = "Circuit"
+function model_label(model::ClassicalControl)
+    model.harmonic && return "Harmonic control"
+    return model.hidden == 0 ? "Logistic regression" : "Network of $(model.hidden) units"
+end

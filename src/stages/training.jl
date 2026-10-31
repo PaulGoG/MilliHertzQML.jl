@@ -1,7 +1,7 @@
 # src/stages/training.jl — training stage: chronological block split,
 # class-weighted training with early stopping on the validation block, a
-# decision threshold fitted on the calibration block, and a single scoring
-# of the test block. The script scripts/train.jl adds only the terminal
+# decision threshold fitted on the threshold-fitting block, and a single
+# scoring of the test block. The script scripts/train.jl adds only the terminal
 # dashboard, the file logger, and the training-history figure.
 
 """
@@ -60,101 +60,6 @@ function score_rows!(probabilities, workspace, X, next_row, hi)
 end
 
 """
-    metrics_dict(m) -> Dict{String, Any}
-
-The fields of an [`event_metrics`](@ref) named tuple keyed by name, as
-persisted in the `metrics.toml` snapshots.
-"""
-metrics_dict(m::NamedTuple) = Dict{String,Any}(String(k) => v for (k, v) in pairs(m))
-
-"""
-    fixed(x, digits, width) -> String
-
-`x` in fixed-point notation with `digits` decimals, right-aligned in
-`width` characters; non-finite values print as such.
-"""
-function fixed(x::Real, digits::Integer, width::Integer)
-    s = string(isfinite(x) ? round(Float64(x); digits = digits) : Float64(x))
-    if isfinite(x) && !occursin('e', s)
-        head, tail = split(s, '.')
-        s = head * "." * rpad(tail, digits, '0')
-    end
-    return lpad(s, width)
-end
-
-"""
-    print_block_summary(io, rows)
-
-Console table of the window- and event-level detection statistics of the
-evaluated blocks; `rows` holds `(name, metrics, auc)` triples with
-`metrics` from [`event_metrics`](@ref).
-"""
-function print_block_summary(io::IO, rows)
-    println(io)
-    println(
-        io,
-        "  Block        AUC      Prec.   Recall  F1      Bal.acc  Events  Detected  FA/30 d",
-    )
-    for (name, m, auc) in rows
-        println(
-            io,
-            "  ",
-            rpad(name, 11),
-            "  ",
-            fixed(auc, 3, 6),
-            "  ",
-            fixed(m.precision, 3, 6),
-            "  ",
-            fixed(m.recall, 3, 6),
-            "  ",
-            fixed(m.f1, 3, 6),
-            "  ",
-            fixed(m.balanced_accuracy, 3, 6),
-            "  ",
-            lpad(m.n_events, 6),
-            "  ",
-            lpad(m.n_detected, 8),
-            "  ",
-            fixed(m.false_alarms_per_30d, 2, 7),
-        )
-    end
-    return nothing
-end
-
-"""
-    block_metrics(probabilities, labels, threshold, geometry) -> (metrics, auc, dict)
-
-Event-level metrics of a scored block at the decision `threshold`, its ROC
-area, and the merged dictionary persisted in `metrics.toml`
-(`n_windows`, `threshold`, `auc` added to the [`event_metrics`](@ref)
-fields).
-"""
-function block_metrics(
-    probabilities::AbstractVector{<:Real},
-    labels::AbstractVector{<:Integer},
-    threshold::Real,
-    geometry::NamedTuple,
-)
-    m = event_metrics(
-        Int.(probabilities .>= threshold),
-        labels;
-        step_size = geometry.step_size,
-        sample_rate = geometry.sample_rate,
-    )
-    fpr, tpr, _ = roc_curve(labels, probabilities)
-    auc = roc_auc(fpr, tpr)
-    d = merge(
-        metrics_dict(m),
-        Dict{String,Any}(
-            "auc" => auc,
-            "n_windows" => length(labels),
-            "threshold" => Float64(threshold),
-        ),
-    )
-    return m, auc, d
-end
-
-"""
     epoch_validation(model, X, y; positive_weight, threaded = Threads.nthreads() > 1)
         -> (loss, accuracy)
 
@@ -180,6 +85,25 @@ function epoch_validation(
         correct += (p[i] > 0.5f0) == (y[i] == 1)
     end
     return loss / Float32(n), Float32(correct / n)
+end
+
+"""
+    warn_fit_episodes(info, min_episodes, block)
+
+Warn when the false-alarm rate a threshold was fitted to rests on fewer
+than `min_episodes` false-alarm episodes, the `fit_false_alarm_episodes`
+of the threshold `info` ([`select_threshold`](@ref)), with the relative
+Poisson error of the rate; `block` names the fitting block in the record.
+"""
+function warn_fit_episodes(info::AbstractDict, min_episodes::Integer, block::AbstractString)
+    n_episodes = info["fit_false_alarm_episodes"]
+    n_episodes < min_episodes || return nothing
+    error_text =
+        n_episodes == 0 ? "unbounded" : "about $(round(Int, 100 / sqrt(n_episodes))) %"
+    @warn "the fitted false-alarm rate rests on $n_episodes false-alarm episodes, below " *
+          "min_fit_episodes = $min_episodes; its relative Poisson error is $error_text " *
+          "and the operating point may not transfer to another record." block
+    return nothing
 end
 
 """
@@ -210,16 +134,17 @@ Training stage driven by the `[model]`, `[training]`, `[paths]`, and
    stopping on the validation loss with the `patience` of the
    configuration; the best epoch is kept in
    `gw_model_best.jld2` and copied to `gw_model.jld2`;
-6. decision threshold fitted on the calibration block selected by
+6. decision threshold fitted on the threshold-fitting block selected by
    `threshold_block` ([`threshold_rows`](@ref), [`select_threshold`](@ref)),
    persisted in `threshold.toml`, with the event-level operating
    characteristic of that block ([`threshold_sweep`](@ref)) in
    `threshold_sweep.csv`;
 7. the test block scored once; window- and event-level metrics of both
-   blocks in `metrics.toml` and printed as a table. Under the default
-   `threshold_block = "held_out"` the test block is part of the
-   calibration set and its metrics are not an independent check of the
-   operating point; a separate observation record is.
+   blocks in `metrics.toml` and printed as a table
+   ([`print_block_summary`](@ref)). Under `threshold_block = "held_out"`
+   the test block is part of the threshold-fitting set and its metrics are
+   not an independent check of the operating point; a separate
+   observation record is.
 
 `on_epoch`, when given, is called after every epoch as
 `on_epoch(epoch, max_epochs, learning_rate, history, elapsed_seconds)`.
@@ -490,7 +415,7 @@ function train_classifier(
         # redrawn — or animated — from the run instead of from a retraining.
         write_csv(joinpath(run_dir, "history.csv"), history)
 
-        # Decision threshold fitted on the calibration block.
+        # Decision threshold fitted on the threshold-fitting block.
         fit_rows = threshold_rows(blocks, trn.threshold_block)
         block_label =
             trn.threshold_block == "validation" ? "validation block" :
@@ -534,28 +459,16 @@ function train_classifier(
         @info "threshold" value = threshold criterion = info["criterion"] block =
             trn.threshold_block episodes = info["fit_false_alarm_episodes"] validation_auc =
             auc_val
-        n_episodes = info["fit_false_alarm_episodes"]
-        n_episodes < trn.min_fit_episodes && @warn "the fitted false-alarm rate rests " *
-              "on $n_episodes false-alarm episodes, below min_fit_episodes = " *
-              "$(trn.min_fit_episodes); its relative Poisson error is " *
-              (
-                  n_episodes == 0 ? "unbounded" :
-                  "about $(round(Int, 100 / sqrt(n_episodes))) %"
-              ) *
-              " and the operating point may not transfer to another record." block =
-            trn.threshold_block
+        warn_fit_episodes(info, trn.min_fit_episodes, trn.threshold_block)
 
-        # The test block, scored once; part of the calibration set under
+        # The test block, scored once; part of the threshold-fitting set under
         # `threshold_block = "held_out"`, independent of it otherwise.
         probs_test = predict_all(model, X_test; threaded = threaded)
         m_test, auc_test, metrics_test =
             block_metrics(probs_test, y_test, threshold, geometry)
         metrics = Dict{String,Any}("validation" => metrics_val, "test" => metrics_test)
         write_toml(joinpath(run_dir, "metrics.toml"), metrics)
-        print_block_summary(
-            stdout,
-            (("validation", m_val, auc_val), ("test", m_test, auc_test)),
-        )
+        print_block_summary((("validation", m_val, auc_val), ("test", m_test, auc_test)))
         @info "test block" auc = auc_test precision = m_test.precision recall =
             m_test.recall event_recall = m_test.event_recall false_alarms_per_30d =
             m_test.false_alarms_per_30d

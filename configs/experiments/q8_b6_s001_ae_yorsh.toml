@@ -1,17 +1,9 @@
-# LDC-1b (Yorsh) record under the streaming configuration `q8_b6_s001_ae` on
-# the A and E channels: the record is the sum of the component streams the product
-# ships (instrument noise, confusion noise, eight stellar-origin binaries,
-# three extreme-mass-ratio inspirals; two years at 5 s, second-generation
-# TDI, no gaps, no glitches, no massive black hole binary), so every alarm
-# is false. The stages: pre-processing of the composite record, inference
-# with the model trained on Sangria (`--model`) at its own operating point,
-# and the calibration of that model on the record's own noise
-# (`scripts/calibrate.jl`, [calibration]) followed by inference on the
-# evaluation block. No truth stream of a coalescence exists, so the
-# labelling stage does not apply. Keys absent here take the defaults
-# documented in configs/default.toml (the settings functions under src/);
-# the HDF5 product is passed on the command line. Paths are resolved
-# relative to the project root.
+# LDC-1b (Yorsh) record under `q8_b6_s001_ae`, with `[preprocessing] tdi_components` in
+# place of `tdi_group`, `[inference] labels = ""` and `[calibration]`, without `[ldc]`.
+# Keys absent here take the defaults of the settings functions; configs/default.toml is
+# the simulator configuration.
+# Paths are resolved relative to the project root.
+
 [tdi]
 channels = "AE"   # TDI channel mode of every product; one of: "A" | "AE" (features of the A and E network, stems ending in _ae) | "AET" (labelling only)
 
@@ -22,7 +14,7 @@ plots = "data/outputs/plots"        # per-run figures
 results = "data/outputs/results"    # per-run inference tables and snapshots
 
 [preprocessing]
-tdi_components = [   # HDF5 objects (t, X, Y, Z each) summed into the record; [] reads tdi_group
+tdi_components = [   # HDF5 objects (t, X, Y, Z each) summed into the record, for LDC products distributed as component streams; [] reads tdi_group
     "instnoise/tdi", "confnoise/tdi",
     "noisefree/tdi/sobhb/sobhb1", "noisefree/tdi/sobhb/sobhb2", "noisefree/tdi/sobhb/sobhb3",
     "noisefree/tdi/sobhb/sobhb5", "noisefree/tdi/sobhb/sobhb6", "noisefree/tdi/sobhb/sobhb8",
@@ -46,7 +38,7 @@ output_prefix = "yorsh_b6s001"   # prefix of the output feature/label CSVs
 channel_combination = "max"   # how the features of several channels are combined; one of: "max" (of every feature the value farthest towards a signal) | "mean" (features of the channel-averaged periodogram); no effect in the mode "A"
 
 [model]
-n_qubits = 8    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_qubits = 8    # register size of the circuit and feature dimension of every kind; >= 2, <= 24
 n_layers = 4    # data re-uploading layers; >= 1
 
 [training]
@@ -60,13 +52,13 @@ patience = 12              # early-stopping patience [epochs]; >= 1
 train_fraction = 0.7       # chronological training block; in (0, 1)
 validation_fraction = 0.15 # chronological validation block (early stopping, threshold); in (0, 1); the rest is the test block
 class_weight = "balanced"  # positive-class loss weight; one of: "balanced" (negative/positive count ratio) | "none"
-threshold_criterion = "far"  # criterion fitting the threshold on the calibration block; one of: "far" | "fpr" | "youden"
-threshold_block = "held_out"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
+threshold_criterion = "far"  # criterion of the threshold fit on the threshold-fitting block; one of: "far" | "fpr" | "youden"
+threshold_block = "held_out"  # threshold-fitting block; one of: "validation" | "held_out" (validation and test pooled)
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
 phase_span = 1.0           # phase-encoding interval [0, phase_span π] of the feature scaler; in (0, 2]
-min_fit_episodes = 5       # false-alarm episodes on the calibration block below which the training stage warns; >= 0
+min_fit_episodes = 5       # false-alarm episodes on the threshold-fitting block below which the training stage warns; >= 0
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
@@ -103,7 +95,7 @@ tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch
 context_windows = 2             # window lengths of delivered context on each side used for whitening; >= 0
 psd_sidecar = "data/inputs/yorsh_b6s001_ae_features.toml"   # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
-producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
+producer_compat = "2.6"         # oldest DeepSpaceTelemetry producer version accepted (semver string); 2.6.0 is the floor
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
 alert_persistence = 3           # consecutive alarmed windows that raise an alert; >= 1
 alert_confirmation_persistence = 11   # consecutive alarmed windows that confirm an alert; 0 (none) or > alert_persistence and > window_size ÷ step_size

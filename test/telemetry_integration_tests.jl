@@ -2,7 +2,9 @@
 # DeepSpaceTelemetry mission on the producer's tick clock ingests an
 # exported payload at 0.2 Hz into a temporary run root, and the detector of
 # a classifier replays the run directory through StreamingInference's
-# extension. Included by runtests.jl.
+# extension, directly and through the replay stage. The reader itself is
+# tested in StreamingInference.jl and MilliHertzBase.jl. Included by
+# runtests.jl.
 
 @testset "Telemetry coupling (DeepSpaceTelemetry run)" begin
     TelemetryCore = DeepSpaceTelemetry.TelemetryCore
@@ -14,18 +16,17 @@
     burst = 9001:10000
     payload[burst] .+= 3e-19 .* sin.(2π * 5e-3 .* (0:999) ./ fs)
     epoch = Dates.DateTime(2035, 1, 1, 6)
-    previous_root = TelemetryCore.DATA_ROOT[]
     # A scenario run on the tick clock: the same span, deterministic, seconds
     function tick_mission(dir, scenario, run_id)
         path = joinpath(dir, "$run_id.toml")
         open(io -> TOML.print(io, scenario), path, "w")
         cfg = TelemetryCore.tick_configuration(TelemetryCore.load_config(path))
-        TelemetryCore.DATA_ROOT[] = joinpath(dir, "producer")
-        try
-            return Supervisor.run_mission(cfg; run_id = run_id, orig_stdout = devnull)
-        finally
-            TelemetryCore.DATA_ROOT[] = previous_root
-        end
+        return Supervisor.run_mission(
+            cfg;
+            run_id = run_id,
+            orig_stdout = devnull,
+            data_root = joinpath(dir, "producer"),
+        )
     end
     mktempdir() do dir
         payload_path = joinpath(dir, "payload.csv")
@@ -61,42 +62,15 @@
             ),
             "post_processing" => Dict{String,Any}(
                 "generate_mask_timeline" => false,
-                "expand_to_pointwise_masks" => false,
                 "alert_latency" => false,
                 "delivery_delay" => false,
                 "hdf5_export" => false,
             ),
         )
         run_dir = tick_mission(dir, scenario, "coupling_test")
-        @test isfile(joinpath(run_dir, "RUN_COMPLETE"))
-        @test isfile(joinpath(run_dir, "config_snapshot.toml"))
-        # The producer's identity of its code (2.6.1): the tree hash and the
-        # dirty flag key it, the commit is recorded for a copy installed by
-        # commit, as these environments pin it
-        descriptor = run_descriptor(open_telemetry_run(run_dir))
-        @test descriptor["mode"] == "tick"
-        @test occursin(r"^[0-9a-f]{40}$", descriptor["git_tree_sha1"])
-        @test descriptor["git_dirty"] == false
-        @test occursin(r"^[0-9a-f]{40}$", descriptor["git_commit"])
-
-        run = open_telemetry_run(run_dir; producer_compat = "1.0")
+        run = open_telemetry_run(run_dir)
         geometry = run_geometry(run)
-        @test geometry.sample_rate == fs && geometry.points_per_batch == 100
-        @test geometry.start_sim_time == epoch
-        @test run_state(run) == :complete
-        @test VersionNumber(geometry.package_version) >= v"1.0"
-        batches = list_batches(run)
-        @test !isempty(batches) && issorted([b.index for b in batches])
-        delivered = filter(b -> b.state == :ground, batches)
-        @test !isempty(delivered)
-        first_batch = delivered[1]
-        @test read_batch(run, first_batch.name) == Float32.(payload[first_batch.rows])
         events = arrival_events(run)
-        @test !isempty(events) && issorted([e.sim_time for e in events])
-        @test all(e -> e.event in (:ingested, :retry, :lost, :pruned, :other), events)
-        @test count(e -> e.event == :ingested, events) == length(delivered)
-        @test_throws ArgumentError open_telemetry_run(run_dir; producer_compat = "99.0")
-        @test_throws ArgumentError open_telemetry_run(joinpath(dir, "absent"))
 
         model = VariationalQuantumClassifier(4, 2; rng = rng)
         scaler = FeatureScaler([0.0, 0.0, 0.0, -1.0], [3.0, 3.0, 1.0, 1.0])
@@ -104,6 +78,7 @@
             model,
             scaler,
             0.5;
+            features = FeatureMap(; BANDS...),
             sample_rate = fs,
             window_size = 1000,
             step_size = 100,
@@ -145,35 +120,100 @@
         @test nrow(latency) == 1 && latency.merger_time_s[1] == 9500 / fs
         @test latency.t_merger[1] == epoch + Dates.Second(9500 * 5)
 
-        # A scheduled generation gap: every delivered batch holds the payload
-        # rows of its content epoch, and the gap's rows are never delivered.
-        gapped = deepcopy(scenario)
-        gapped["disruption"] = Dict{String,Any}(
-            "events" => [
-                Dict{String,Any}(
-                    "type" => "antenna_repointing",
-                    "label" => "repointing",
-                    "start_day" => 0.1,
-                    "duration_hours" => 1.0,
+        # The replay stage on the same run: the detector of a training run
+        # directory, the tables and the snapshot it writes
+        features_path = joinpath(dir, "train_features.csv")
+        CSV.write(
+            features_path,
+            DataFrame(rand(rng, Float32, 4, 4), feature_names(:whitened)),
+        )
+        open(joinpath(dir, "train_features.toml"), "w") do io
+            TOML.print(
+                io,
+                Dict(
+                    "features" => merge(
+                        Dict{String,Any}(
+                            "window_size" => 1000,
+                            "step_size" => 100,
+                            "sample_rate" => fs,
+                            "psd" => "model",
+                            "observation_years" => 1.0,
+                            "feature_set" => "whitened",
+                            "channels" => "A",
+                        ),
+                        SIDECAR_CONDITIONING,
+                    ),
                 ),
-            ],
+            )
+        end
+        model_dir = joinpath(dir, "models", "run_trained")
+        mkpath(model_dir)
+        model_path =
+            save_model(joinpath(model_dir, "gw_model.jld2"), model; scaler = scaler)
+        open(joinpath(model_dir, "threshold.toml"), "w") do io
+            TOML.print(io, Dict("threshold" => Dict("value" => 0.5)))
+        end
+        open(joinpath(model_dir, "config.toml"), "w") do io
+            TOML.print(io, Dict("training" => Dict("train_features" => features_path)))
+        end
+        events_path = joinpath(dir, "events.csv")
+        CSV.write(events_path, events_table)
+        config = Dict{String,Any}(
+            "paths" => Dict{String,Any}(
+                "inputs" => dir,
+                "models" => joinpath(dir, "models"),
+                "plots" => joinpath(dir, "plots"),
+                "results" => joinpath(dir, "results"),
+            ),
+            "telemetry" => Dict{String,Any}("context_windows" => 2),
         )
-        gap_dir = tick_mission(dir, gapped, "coupling_gap")
-        gap_run = open_telemetry_run(gap_dir)
-        # Batches past the payload end carry the producer's zero padding.
-        gap_delivered =
-            filter(b -> b.state == :ground && last(b.rows) <= n_rows, list_batches(gap_run))
-        @test !isempty(gap_delivered)
-        @test all(
-            b -> read_batch(gap_run, b.name) == Float32.(payload[b.rows]),
-            gap_delivered,
+        replay = replay_classifier(
+            config;
+            model = model_path,
+            run_id = "stage",
+            run_dir = run_dir,
+            events = events_path,
         )
-        gap_rows =
-            time_row(geometry, epoch+Dates.Minute(144)):(time_row(
-                geometry,
-                epoch+Dates.Minute(204),
-            )-1)
-        @test all(b -> isempty(intersect(b.rows, gap_rows)), gap_delivered)
-        @test any(b -> first(b.rows) > last(gap_rows), gap_delivered)
+        stage_detector = detector_from_run(model_path; context_windows = 2)
+        @test replay.windows.score == replay_run(
+            run,
+            stage_detector;
+            min_coverage = 1.0,
+            tdi_gap_dilation_sec = 100.0,
+        ).score
+        @test isequal(
+            replay.latencies,
+            alert_latency_table(
+                replay.windows,
+                events_table,
+                geometry;
+                processing_latency_hours = 1.0,
+                persistence = 3,
+                crediting = :signal,
+                confirmation_persistence = 0,
+            ),
+        )
+        @test replay.spans ==
+              [(row_time(geometry, first(burst)), row_time(geometry, last(burst)))]
+        results_dir = joinpath(dir, "results", "run_stage")
+        @test replay.results_dir == results_dir
+        for file in ("telemetry_windows.csv", "alert_latency.csv", "config_telemetry.toml")
+            @test isfile(joinpath(results_dir, file))
+        end
+        snapshot = TOML.parsefile(joinpath(results_dir, "config_telemetry.toml"))
+        @test snapshot["telemetry"]["n_windows"] == nrow(replay.windows)
+        @test snapshot["telemetry"]["n_alarms"] == count(==(1), replay.windows.decision)
+        @test snapshot["telemetry"]["channels"] == "A" &&
+              snapshot["telemetry"]["mode"] == "replay"
+        @test snapshot["producer"] == run_descriptor(run)
+        # The outputs stay outside the run directory
+        @test_throws ArgumentError replay_classifier(
+            Dict{String,Any}(
+                "paths" => Dict{String,Any}("results" => joinpath(run_dir, "results")),
+            );
+            model = model_path,
+            run_id = "inside",
+            run_dir = run_dir,
+        )
     end
 end

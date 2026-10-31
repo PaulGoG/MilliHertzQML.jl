@@ -5,6 +5,10 @@
 *.ji
 Manifest*.toml
 
+# Coverage reports (julia-processcoverage, LocalCoverage)
+lcov.info
+coverage/
+
 # Generated documentation
 docs/build/
 docs/site/

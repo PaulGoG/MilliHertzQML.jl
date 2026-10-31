@@ -4,7 +4,7 @@
 
 include(joinpath(@__DIR__, "common.jl"))
 
-using ArgParse, Logging, LoggingExtras, Printf
+using ArgParse, Printf
 using UnicodePlots: lineplot, lineplot!
 using CairoMakie: CairoMakie
 
@@ -118,20 +118,6 @@ function update_dashboard(
     return nothing
 end
 
-"""
-    plot_training_history(history, stem, run_id)
-
-Training and validation loss, and validation accuracy, per epoch, exported
-at `stem` as PDF and PNG with a provenance sidecar.
-"""
-function plot_training_history(
-    history::NamedTuple,
-    stem::AbstractString,
-    run_id::AbstractString,
-)
-    return save_figure(figure_training_history(history), stem; run_id = run_id)
-end
-
 function main()
     args = parse_commandline()
     config = load_config(args["config"])
@@ -149,22 +135,19 @@ function main()
     mkpath(plot_dir)
 
     # Every log record is teed to <run_dir>/training.log for the duration
-    # of the stage; the stream is closed once the stage returns.
-    log_stream = open(joinpath(run_dir, "training.log"), "w")
-    console_logger = global_logger()
-    global_logger(TeeLogger(console_logger, FileLogger(log_stream; always_flush = true)))
+    # of the stage
     on_epoch =
         (epoch, max_epochs, lr, history, elapsed) ->
             update_dashboard(run_id, test_mode, epoch, max_epochs, lr, history, elapsed)
-    result = try
+    result = with_file_log(joinpath(run_dir, "training.log")) do
         train_classifier(config; run_id = run_id, test_mode = test_mode, on_epoch = on_epoch)
-    finally
-        global_logger(console_logger)
-        flush(log_stream)
-        close(log_stream)
     end
 
-    plot_training_history(result.history, joinpath(plot_dir, "training_metrics"), run_id)
+    save_figure(
+        figure_training_history(result.history),
+        joinpath(plot_dir, "training_metrics");
+        run_id = run_id,
+    )
     info = result.threshold_info
     validation = result.metrics["validation"]
     save_figure(
@@ -187,4 +170,4 @@ function main()
     return nothing
 end
 
-with_pipeline_root(main, config_root(config_argument()))
+with_pipeline_root(main, config_root(config_argument(DEFAULT_CONFIG)))

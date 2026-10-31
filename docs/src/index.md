@@ -45,10 +45,10 @@ delivered before the window can be scored, from 1.16 days to 2.8 hours. At each 
 initialisation seeds it alerts five or six of the six coalescences before
 their merger, at 0.41 to 1.40 false alarms per 30 days. An alert counts
 for a coalescence only from its signal onset, the first window in which
-the signal reaches a norm of 3. The norm is that, over one 1000-sample
-window, of the signal-only truth stream high-passed and whitened as the
-record is: the optimal single-window signal-to-noise ratio against the
-record's own noise. Releases up to 2.0.1 credited alerts by other onset
+the signal reaches a norm of 3. The norm is taken over one 1000-sample
+window of the signal-only truth stream, high-passed and whitened as the
+record is; it is the optimal single-window signal-to-noise ratio against
+the record's own noise. Releases up to 2.0.1 credited alerts by other onset
 rules and replayed a mission paced by the wall clock; see
 [Corrections to earlier releases](benchmark.md#Corrections-to-earlier-releases).
 The [Sangria Benchmark](benchmark.md) page gives the protocol, every run,
@@ -64,11 +64,11 @@ parameters does at least as well as the circuit with 64: it alerts the six
 coalescences at every seed, at 0.58 to 0.82 false alarms per 30 days on A
 and 0.58 to 0.66 on A and E, and has the larger area under the receiver
 operating characteristic (ROC) on the completed record. The detection
-results of this package are those of its conditioning and features, for
-which the variational circuit is one classifier among others; what its
-feature map adds, measured on the glitch records of LDC-2b, is a
-tolerance of instrumental transients of large amplitude that a logistic
-regression on the cosine and sine of the same angles reproduces
+results of this package are those of its conditioning and features, on
+which the variational circuit is one classifier among others; its
+feature map, measured on the glitch records of LDC-2b, tolerates
+instrumental transients of large amplitude, and a logistic regression on
+the cosine and sine of the same angles reproduces that tolerance
 ([Classical controls on the same features](benchmark.md#Classical-controls-on-the-same-features)).
 
 ![Classifier output over the Sangria blind year](assets/benchmark_mission_trace.png)
@@ -84,7 +84,7 @@ load.
 **Batch path**, on a completed record:
 
 1. `scripts/generate_data.jl` (`generate_telemetry`) simulates continuous
-   milliHertz telemetry at physical strain amplitude: Robson–Cornish–Liu
+   millihertz telemetry at physical strain amplitude: Robson–Cornish–Liu
    noise [RobsonCornishLiu2019](@cite), resolvable galactic binaries and
    extreme-mass-ratio inspirals (EMRIs), and IMRPhenomA MBHB injections
    [AjithEtAl2008](@cite) at a prescribed matched-filter signal-to-noise
@@ -101,7 +101,7 @@ load.
 3. `scripts/train.jl` (`train_classifier`) splits the windows
    chronologically into training, validation and test blocks, trains the
    VQC with Adam and early stopping on the validation block, fits the
-   decision threshold on the calibration block, and scores the test block
+   decision threshold on the threshold-fitting block, and scores the test block
    once.
 4. `scripts/infer.jl` (`evaluate_classifier`) applies the persisted
    threshold to a feature table and reports window- and event-level
@@ -112,9 +112,10 @@ load.
    the page [New data sets](newdata.md) gives the procedure.
 
 **Streaming path**, on a telemetry mission:
-`scripts/export_telemetry_payload.jl` writes a product as the payload of
-the DeepSpaceTelemetry.jl producer, and `scripts/infer_telemetry.jl`
-replays or follows the producer's run directory, scoring every window
+`scripts/export_telemetry_payload.jl` (`export_telemetry_payload`) writes
+a product as the payload of the DeepSpaceTelemetry.jl producer, and
+`scripts/infer_telemetry.jl` (`replay_classifier`) replays or follows the
+producer's run directory, scoring every window
 once the stretch of data around it has reached the ground and timing the
 alerts against the coalescences.
 

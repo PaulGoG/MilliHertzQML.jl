@@ -6,7 +6,149 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-10-31
+
+### Breaking
+- The telemetry replay follows StreamingInference 0.2.0 onto
+  DeepSpaceTelemetryReader 3.1, the reader package of DeepSpaceTelemetry:
+  `scripts/infer_telemetry.jl` loads the reader alone (the run adapter
+  without the figure stack and the HDF5 export of the producer), and
+  `[telemetry] producer_compat` is `"2.6"` in every configuration, the
+  oldest producer the adapter opens; the runs of DeepSpaceTelemetry 2.6.2
+  replayed in the manual open unchanged. A run of an earlier producer is
+  refused: the seventeen gap-study missions behind the gap tables of the
+  manual, recorded with DeepSpaceTelemetry 2.0.0 and 2.1.1, cannot be
+  replayed under this release, and their reproduction needs release
+  3.0.0. No number of the manual changes.
+- `StreamingDetector(model, scaler, threshold; features, conditioning...)`
+  takes the feature map as the keyword `features` (a `FeatureMap`) in
+  place of the keywords `low_band`, `high_band`, `band_edges`,
+  `feature_set` and `combination` with their millihertz defaults, as
+  StreamingInference 0.2.0 requires the bands of every feature map.
+- `detector_from_run` reads the conditioning of the training sidecar
+  without defaults: `sample_rate`, `window_size`, `step_size`,
+  `highpass_cutoff_hz`, `highpass_order` and the three band keys are
+  required (`FeatureMap(features_path)` of StreamingInference, whose
+  default channel combination applies), as the pre-processor writes them.
+- The stage helpers are StreamingInference's and are re-exported from it:
+  `gapped_product`, `run_channels(model_dir; default)`, `load_threshold`,
+  `block_rows`, `metrics_dict`, `block_metrics`, `fixed`,
+  `print_block_summary(rows; io)` (it was `print_block_summary(io, rows)`)
+  and `config_argument(default; args)`; `inference_geometry` is gone
+  (`feature_geometry(path, config; fallback = "inference")`), as are
+  `migrate_threshold_info!` and `THRESHOLD_FIT_KEYS` of this package.
+- The fifteen names MilliHertzBase 0.2.0 makes public instead of exported
+  are no longer exported here; the thirteen of them this package
+  re-exported (`phenoma_amplitude`, `phenoma_phase`, `phenoma_group_delay`,
+  `phenoma_start_frequency`, `inverse_segment`, `channel_catalog`,
+  `draw_extrinsic`, `channel_count`, `source_frame`, `project_spectrum`,
+  `project_series`, `catalog_events`, `samples_per_batch`) are reached as
+  `MilliHertzQML.MilliHertzBase.<name>`.
+- `predict` and `accuracy`, used by no stage, are removed.
+- A model artifact whose scaler records no phase-encoding span (releases
+  before 1.1.0) is refused; it loaded with the span 2π. No stored
+  artifact lacks the span.
+- `scripts/animate.jl` requires `alert_crediting` in the
+  `config_telemetry.toml` of a replay; replays before 2.0.0 were read as
+  crediting the label span. Every stored replay records it.
+
+### Added
+- `replay_classifier(config; model, run_id, run_dir, events, tdi_file,
+  tdi_group, tdi_first_row, live, link_volume_channels, on_window)`
+  (`src/stages/telemetry.jl`): the streamed replay as a library stage,
+  writing `telemetry_windows.csv`, `alert_latency.csv` and
+  `config_telemetry.toml` and returning the windows, the latency table,
+  the credited spans and the snapshot. `scripts/infer_telemetry.jl` keeps
+  the command line and the alert figure; its products are unchanged.
+- `model_label(::AbstractClassifier)`, the legend name of a classifier
+  (`"Circuit"`, `"Logistic regression"`, `"Network of m units"`,
+  `"Harmonic control"`); the ROC figure of `scripts/infer.jl` names the
+  model, where it named every classifier "VQC". `evaluate_classifier`
+  returns the loaded `classifier`.
+- Every exported name of the two layers is exported here, among them
+  `batch_records`, `CHANNEL_COMBINATIONS`, `DeclaredHole`,
+  `declared_holes`, `finite_stretches`, `GAP_CAUSES`, `hole_cause`,
+  `HOLE_CAUSES`, `process_hole!`, `recorded_channels`, `record_final`,
+  `window_overlap`, `sidecar_path` and `with_file_log`, which were
+  missing; a test compares the exports with those of the layers against
+  the list of their public, unexported names.
+- `[generation]` of `configs/default.toml` lists the five keys of
+  MilliHertzBase 0.2.0 (`gb_frequency_range_hz`, `emri_frequency_range_hz`,
+  `emri_drift_range_hz_per_s`, `coalescence_fraction_range`,
+  `mbhb_duration_max_fraction`) at their defaults.
+
+### Changed
+- Pins: StreamingInference 0.2.0 and MilliHertzBase 0.2.0 in every
+  environment; DeepSpaceTelemetry 3.1.0 in the test environment and its
+  reader in the script environment; CurvatureDistinguishability 2.1.1 in
+  the script environment. The test, script and benchmark environments carry
+  `[compat]` entries, and the coupling test runs the producer under a run
+  root of its own (`run_mission(...; data_root)`).
+- The inference stage reads the window geometry through
+  `feature_geometry(...; fallback = "inference")`, and on a product with
+  gaps its threshold sweep ends events and false-alarm episodes at the
+  gaps, as its metrics do: `threshold_sweep.csv` of an inference on a
+  record with gaps (the Spritz records) changes; every other product is
+  unchanged.
+- The stages share their checks: `require_scaler` (an artifact without a
+  scaler), `check_channels` (the channel set of the run and of the
+  table), `warn_fit_episodes` (a threshold fitted on few false-alarm
+  episodes); the calibration stage reads the parent's training block
+  through `block_rows`.
+- Circuit artifacts record `kind = "circuit"`; artifacts without the key,
+  those of releases up to 3.0.0, load as circuits, and control artifacts
+  without `harmonic`, those of the classical-control study, as the models
+  they are.
+- Without `--tdi-group`, the replay of a model of several channels reads
+  the record from the component groups of `[preprocessing]`
+  (`tdi_components`, else `tdi_group`; MilliHertzBase `record_groups`),
+  where it read `tdi_group` alone.
+- `scripts/animate.jl` shades the credited spans through
+  `credited_span_times` of StreamingInference, as the alert figure does,
+  and `scripts/train.jl` tees its log through `with_file_log`. The scripts
+  take the configuration from the first `.toml` argument wherever it
+  stands among the options (`config_argument`), where an option first
+  made a script run under the root of `configs/default.toml`.
+- The figure of the loss survival marks its logarithmic axis at 1, 2 and
+  5 of every decade (`dense_log_ticks`) in place of 1 and 3.
+- The script environment loads CSV, Dates and TOML itself (the scripts
+  read through `MilliHertzQML.CSV` and `MilliHertzQML.TOML` before) and no
+  longer lists Logging and LoggingExtras; the benchmark environment lists
+  LinearAlgebra and Printf, and the feature benchmark takes its bands and
+  sampling rate from `configs/experiments/q8_b6.toml`.
+- Configurations: a header of one sentence naming the experiment and its
+  difference from its base, and that absent keys take the defaults of the
+  settings functions (the headers said those of `configs/default.toml`,
+  which `load_config` does not merge); the comments of `block`,
+  `n_qubits` and the threshold keys as in `configs/default.toml`, the
+  training block that fits the threshold named the threshold-fitting
+  block; `configs/sangria.toml` replays at `alert_persistence = 3`, the
+  rule of 2.0.0 that every other replaying configuration follows.
+- The suite tests the classifier and its coupling to the layers: the
+  tests of feature extraction, data loading, the threshold-file migration
+  and the producer's reader moved to the layers, and the coupling test
+  runs `replay_classifier` on the producer's mission. JuliaFormatter is
+  pinned to major 2 in the formatting check; coverage reports are
+  ignored by git.
+- Docstrings and the manual: the default `threshold_block` of the
+  training docstring; the signatures of `label_truth_stream` and
+  `export_telemetry_payload`; the options of the scripts; the extension
+  that reads the producer (StreamingInference's) and the reader package;
+  the integrality rule of the payload batches; the re-exported names;
+  wording, "millihertz" in prose.
+
+### Removed
+- The dependencies Distributed, DrWatson, Functors and LinearAlgebra,
+  which `src/` did not use.
+
 ## [3.0.0] — 2026-10-15
+
+*Correction, 31 October 2026: the DeepSpaceTelemetry extension of this
+release is StreamingInference.jl's (`StreamingInferenceDeepSpaceTelemetryExt`),
+as the entry on the producer pins under Changed states, not MilliHertzBase.jl's,
+as the migration notes and the Changed entry on the two packages say;
+MilliHertzBase.jl carries the CurvatureDistinguishability extension
+(`MilliHertzBaseCurvatureDistinguishabilityExt`).*
 
 ### Migration from 2.0.1
 
@@ -76,17 +218,12 @@ What a user of 2.0.1 must change:
   streaming configuration.
 - A confirmation tier of the alerts: `[telemetry]
   alert_confirmation_persistence = 11` in every configuration that
-  replays a mission (0 disables it). The windows overlap tenfold, so a
-  transient shorter than a step can alarm ten consecutive windows and pass
-  any persistence up to ten; an alert is confirmed by the arrival that
-  completes eleven consecutive alarmed windows touching the credited span,
-  which needs alarms on windows sharing no sample. The value follows from
-  the window geometry and is not fitted. `scripts/infer_telemetry.jl`
-  passes it to `alert_latency_table` (StreamingInference `d59c63a`),
+  replays a mission (0 disables it): an alert is confirmed by the arrival
+  that completes eleven consecutive alarmed windows touching the credited
+  span. `scripts/infer_telemetry.jl` passes it to `alert_latency_table`,
   whose table gains the confirmation columns; the preliminary alert and
   its columns are unchanged. The alert figure marks the confirmations,
-  its labels clear of them (StreamingInference `efd441a`, pinned with
-  MilliHertzBase `5ec9137`).
+  its labels clear of them.
 - `scripts/label_ldc.jl --record-file`: the observed record whose
   whitening PSD conditions the truth stream under `[ldc] psd_model =
   "record"` (MilliHertzBase.jl), with the key `[ldc] record_file`; the
@@ -190,7 +327,7 @@ What a user of 2.0.1 must change:
   `q8_b6_s001_ae_harmonic.toml`.
 
 ### Changed
-- The README and the manual are written for a reader new to the project:
+- The README and the manual are restructured:
   the README opens with what the package does, on which data, its
   principal results and its principal limit; every row of the summary
   tables is defined beneath them (label spans, signal onset and credited
@@ -728,7 +865,9 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v3.1.0
+[3.0.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v3.0.0
 [2.0.1]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.1
 [2.0.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.0
 [1.2.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v1.2.0

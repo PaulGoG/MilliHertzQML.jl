@@ -11,10 +11,10 @@ The two halves share one time base, fixed by the fragment: payload row ``r`` is 
 
 ## Payload export
 
-`export_telemetry_payload(config; h5_file, tdi_group, catalog, output_prefix)` (script `scripts/export_telemetry_payload.jl`) reads the Michelson variables of the product (`read_tdi`), forms ``A = (Z - X)/\sqrt{2}`` (`tdi_to_aet`; in the mode AE also ``E``), and writes under the `[paths] inputs` root:
+`export_telemetry_payload(config; h5_file, tdi_group, catalog, output_prefix, channels)` (script `scripts/export_telemetry_payload.jl`) reads the Michelson variables of the product (`read_tdi`), forms ``A = (Z - X)/\sqrt{2}`` (`tdi_to_aet`; in the mode AE also ``E``), and writes under the `[paths] inputs` root:
 
-- `<output_prefix>_payload.csv` — single precision, one row per sample: in the mode A one column `Amplitude`; in the mode AE (`[tdi] channels = "AE"`, prefix ending in `_ae`) the two columns `A` and `E`, which the fragment names in `external_data_columns` so that the producer carries them as one payload. The file the producer ingests.
-- `<output_prefix>_scenario.toml` — the fragment: `[physics]` (`data_source = "external"`, `external_data_path` relative to the package root, `sample_rate` ``= 1/\Delta t`` of the file, `segment_duration_sec`, `batch_size`); `[simulation]` (`start_sim_time`); `[[events.markers]]` from the event catalogue when one is given, one entry `{time, label = "mbhb_<id>"}` per event, the time being `start_sim_time` plus the coalescence time measured from the first record sample, rounded to the millisecond; `[[labels]]` with the `label_start_index`/`label_end_index` span of every event when the catalogue carries these columns (the simulator catalogue always does; the LISA Data Challenge (LDC) event table does for `label_span = "fixed"`), so that the point-wise labels can be rebuilt on the consumer side; `[payload]` (source, group, row count, catalog, rows per batch, number of complete batches); and the git and hardware provenance every snapshot carries.
+- `<output_prefix><suffix>_payload.csv` — single precision, one row per sample: in the mode A (no suffix) one column `Amplitude`; in the mode AE (`[tdi] channels = "AE"`, suffix `_ae`) the two columns `A` and `E`, which the fragment names in `external_data_columns` so that the producer carries them as one payload. The file the producer ingests.
+- `<output_prefix><suffix>_scenario.toml` — the fragment: `[physics]` (`data_source = "external"`, `external_data_path` relative to the package root, `sample_rate` ``= 1/\Delta t`` of the file, `segment_duration_sec`, `batch_size`); `[simulation]` (`start_sim_time`); `[[events.markers]]` from the event catalogue when one is given, one entry `{time, label = "mbhb_<id>"}` per event, the time being `start_sim_time` plus the coalescence time measured from the first record sample, rounded to the millisecond; `[[labels]]` with the `label_start_index`/`label_end_index` span of every event when the catalogue carries these columns (the simulator catalogue always does; the LISA Data Challenge (LDC) event table does for `label_span = "fixed"`), so that the point-wise labels can be rebuilt on the consumer side; `[payload]` (source, group, row count, catalog, rows per batch, number of complete batches); and the git and hardware provenance every snapshot carries.
 
 The catalogue is either the simulator's `<stem>_events.csv` (columns `event_id`, `t_c_sec`) or the LDC event table of the labelling stage (`event`, `merger_time_s`). A catalogue whose coalescences fall outside the record, or whose label spans exceed it, is rejected as not belonging to the product.
 
@@ -28,11 +28,11 @@ The catalogue is either the simulator's `<stem>_events.csv` (columns `event_id`,
 P = f_s \, T_\mathrm{seg} \, B,
 ```
 
-where ``T_\mathrm{seg}`` is `segment_duration_sec` and ``B`` is `batch_size`. A segment must hold a whole number of samples (``f_s T_\mathrm{seg} \in \mathbb{N}``), the record must hold at least one full batch (``n_\mathrm{rows} \ge P``), and the stage refuses to start otherwise; `samples_per_batch(sample_rate, segment_duration_sec, batch_size)` evaluates ``P``.
+where ``T_\mathrm{seg}`` is `segment_duration_sec` and ``B`` is `batch_size`. A batch must hold a whole number of samples (``f_s T_\mathrm{seg} B \in \mathbb{N}``), the record must hold at least one full batch (``n_\mathrm{rows} \ge P``), and the stage refuses to start otherwise; `MilliHertzBase.samples_per_batch(sample_rate, segment_duration_sec, batch_size)` evaluates ``P``.
 
 **Default geometry.** At ``f_s = 0.2`` Hz the defaults ``T_\mathrm{seg} = 50`` s and ``B = 10`` give ``P = 100`` rows per batch, which is exactly the window step of the pre-processor (`[preprocessing] step_size = 100`): every batch advances the sliding window by one step, a window of 1000 samples spans ten consecutive batches, and the ``k``-th window of the feature table becomes evaluable when batch ``k + 9`` has arrived. The marker of an event coalescing at row ``r_c`` falls in batch ``\lceil r_c / P \rceil``.
 
-**Configuration.** The `[telemetry]` section holds `segment_duration_sec` (> 0, default 50), `batch_size` (>= 1, default 10), `start_sim_time` (ISO-8601 date-time string, default `"2035-01-01T00:00:00"`), and `output_prefix` (default `"telemetry"`); the product and group default to `[preprocessing] h5_file` and `tdi_group`.
+**Configuration.** The `[telemetry]` section holds `segment_duration_sec` (> 0, default 50), `batch_size` (>= 1, default 10), `start_sim_time` (ISO-8601 date-time string, default `"2035-01-01T00:00:00"`), and `output_prefix` (default `"telemetry"`); the product defaults to `[preprocessing] h5_file` and the group to the record of `[preprocessing]`, its components `tdi_components` when given, else `tdi_group`.
 
 ```bash
 julia scripts/export_telemetry_payload.jl configs/default.toml \
@@ -43,10 +43,17 @@ julia scripts/export_telemetry_payload.jl configs/default.toml \
 
 ## Replay and alerts
 
-`scripts/infer_telemetry.jl` replays a producer run directory, or follows
-it live with `--live`, and writes `telemetry_windows.csv` (one row per
-scored window), `alert_latency.csv` (one row per event of `--events`), a
-snapshot of the `[telemetry]` settings, and the alert figure:
+The replay stage, `replay_classifier(config; model, run_id, run_dir,
+events, tdi_file, tdi_group, tdi_first_row, live, link_volume_channels,
+on_window)`, scores a producer run directory as it arrives with the
+detector of a trained model (`detector_from_run`), replayed from its
+arrival feed (`replay_run`) or followed live (`follow_run`, `live = true`).
+It writes into `<results>/run_<run_id>` the scored windows
+(`telemetry_windows.csv`, one row per window), the alert table
+(`alert_latency.csv`, one row per event of `events`) and the snapshot of
+the replay (`config_telemetry.toml`), and returns the windows, the alert
+table and the snapshot. `scripts/infer_telemetry.jl` adds the command line
+and the alert figure:
 
 ```bash
 julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTelemetry run directory> \
@@ -59,37 +66,35 @@ julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTeleme
 The consumer never writes into a producer run directory. It reads the
 directory through the producer's reference run adapter, which is
 versioned with the run-directory contract, in the extension of
-StreamingInference.jl that loads with DeepSpaceTelemetry.jl 2.6 or later
-(`open_telemetry_run`), so that a change of the contract surfaces as a
-version bump, checked against `[telemetry] producer_compat`, rather than
-as silent format drift. The run exposes its geometry (`run_geometry`:
-sampling rate, segment length, batch size, samples per batch, mission
-epoch, producer version), its batches (`list_batches`: delivered, lost or
+StreamingInference.jl that loads with DeepSpaceTelemetryReader.jl 3.1, the
+reader package of DeepSpaceTelemetry.jl (`open_telemetry_run`), so that a
+change of the contract surfaces as a version bump, checked against
+`[telemetry] producer_compat`, rather than as silent format drift. The run
+exposes its geometry (`run_geometry`: sampling rate, segment length,
+batch size, samples per batch, mission epoch, producer version), its batches (`list_batches`: delivered, lost or
 pruned, each with the payload rows it covers), the payload of a delivered
 batch (`read_batch`), the arrival feed in mission-time order
 (`arrival_events`), the holes the producer declares (`declared_holes`),
 the lifecycle state (`run_state`) and whether the record is final
 (`record_final`), and the producer's own identity of the run
 (`run_descriptor`, its `descriptor.toml`). The rows of a batch are the payload
-row the producer stamps on it (`payload_row`, from DeepSpaceTelemetry
-2.1.0), checked against its content epoch, or else the row of that epoch;
-never its stored index, since the two differ once the producer discards
+row the producer stamps on it (`payload_row`), checked against its content
+epoch; never its stored index, since the two differ once the producer discards
 production (`list_batches` warns when they do). Payload rows are counted
 from the mission epoch, and a run whose payload starts elsewhere (an
-initial downtime) is refused. So is an external-payload run of
-DeepSpaceTelemetry 2.0.1 or earlier that holds a scheduled generation gap
-or an emitter restart: those versions read the payload sequentially, so
-after such an event every batch carries rows other than those of its
-content epoch.
+initial downtime) is refused, as is a run of a producer before 2.6.0, the
+first with the declared-hole feed and the payload-row stamps the adapter
+reads.
 
 A run may carry several payload columns under one link accounting
 (DeepSpaceTelemetry 2.6.0): one batch, one transfer, one loss for all of
-them. `scripts/infer_telemetry.jl` serves a model the channels it was
-trained on from those columns when the run carries them
-(`telemetry_run_columns`), and the A column to a model of the A channel. A
-mission that carried the A channel alone serves the other channels of
-every delivered batch from the TDI record its payload was exported from
-(`--tdi-file`, `ScheduledRecordRun`, which refuses a record whose A
+them. The replay stage serves a model the channels it was trained on from
+those columns when the run carries them (`telemetry_run_columns`), and the
+A column to a model of the A channel. A mission that carried the A channel
+alone serves the other channels of every delivered batch from the TDI
+record its payload was exported from (`--tdi-file`, read at `--tdi-group`,
+by default the record of `[preprocessing]`: `tdi_components` when given,
+else `tdi_group`; `ScheduledRecordRun`, which refuses a record whose A
 channel is not the payload the mission delivered). The snapshot
 `config_telemetry.toml` records the columns the run carries and those
 served, and, under `[producer]`, the producer's identity of the run: its
@@ -148,10 +153,9 @@ records `release_at` beside `complete_at`, and alerts are timed by it
 `windows_table` and `gaps_table` are read. Rows the producer never
 generated (a scheduled generation gap, a full recorder, an emitter
 restart) or never delivered by the end of the run reach the consumer as
-holes the producer declares with their cause (`declared_holes`: the
-declared-hole feed of DeepSpaceTelemetry 2.6.0, and for earlier producers
-the generation gaps of their event logs, each known from the end of the
-gap). A stateful estimator is told of the windows such a hole settles when
+holes the producer declares with their cause (`declared_holes`, the
+producer's declared-hole feed, each hole known from the instant it was
+declared). A stateful estimator is told of the windows such a hole settles when
 it is declared, with the producer's cause (`:scheduled`, `:recorder`,
 `:stream`, `:undelivered`, `:not_generated`), and the later windows are
 released as they complete.
@@ -186,8 +190,8 @@ static PSD).
 
 ### Choosing the PSD and the context
 
-Both settings must be chosen for the record being scored rather than left
-at their defaults. A whitening PSD calibrates the record it whitens:
+Both settings must be chosen for the record being scored. A whitening PSD
+calibrates the record it whitens:
 whitening one observation record with the PSD estimated from another
 mis-scales every band power wherever the noise is not stationary between
 them, and the annually modulated Galactic foreground makes that the
@@ -202,8 +206,8 @@ Welch estimate the streamed scores match the batch pipeline only from
 about twenty window lengths of context upward, and not monotonically
 below that; with the same estimate smoothed by 0.01 dex in log-frequency
 they match from one window length on (see the benchmark page). The
-agreement has to be measured for the whitening in use rather than
-assumed. The look-ahead is a property of the filter, not a tuning choice:
+agreement has to be measured for the whitening in use. The look-ahead
+follows from the filter:
 the whitening is zero-phase, so a window's conditioned features depend on
 the data after it as much as on the data before it, and a detector that
 scores each window as soon as its own samples are delivered detects two
@@ -295,8 +299,8 @@ and give identical tables.
 
 ### Gaps and figures
 
-The coupling excludes delivery holes from scoring rather than scoring
-across them, follows a producer that discarded production, and pools the
+The coupling excludes delivery holes from scoring, follows a producer
+that discarded production, and pools the
 causal PSD estimate over the delivered runs around the holes; no masked
 or Lomb–Scargle features are implemented. The effect of the exclusion is
 measured on the [benchmark page](benchmark.md) over seventeen missions:
@@ -317,4 +321,4 @@ distance from the edge of the data is the availability latency.
 
 ## Testing
 
-The suite of this package tests the classifier as the window scorer of the streaming detector on an in-memory run (`MemoryTelemetryRun`): the scores and decisions of a replay under out-of-order arrival, a window against a direct evaluation on the delivered stretch, and the reconstruction of the detector from a training run directory. The consumer is tested where it lives, with reference scorers in place of the classifier. The unit tests of [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl) cover geometry, coverage algebra under out-of-order arrival, window scheduling, erosion of a lost batch, replay against a direct evaluation, live-mode drainage, and the alert table. The integration test runs a one-day DeepSpaceTelemetry mission at 0.2 Hz on an exported payload in a temporary run root (the producer's `DATA_ROOT` redirected) and replays it with the detector of a classifier through the DeepSpaceTelemetry extension of [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl), whose own suite runs the same mission with a reference scorer; a producer upgrade is checked by both. DeepSpaceTelemetry.jl is a pinned git source of the script and test environments and a weak dependency of MilliHertzBase.jl.
+The suite of this package tests the classifier as the window scorer of the streaming detector on an in-memory run (`MemoryTelemetryRun`): the scores and decisions of a replay under out-of-order arrival, a window against a direct evaluation on the delivered stretch, and the reconstruction of the detector from a training run directory. The consumer is tested in StreamingInference.jl, with reference scorers in place of the classifier. The unit tests of [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl) cover geometry, coverage algebra under out-of-order arrival, window scheduling, erosion of a lost batch, replay against a direct evaluation, live-mode drainage, and the alert table. The integration test runs a one-day DeepSpaceTelemetry mission at 0.2 Hz on an exported payload in a temporary run root of its own (`run_mission(...; data_root)`) and replays it with the detector of a classifier through the DeepSpaceTelemetryReader extension of [StreamingInference.jl](https://github.com/PaulGoG/StreamingInference.jl), whose own suite runs the same mission with a reference scorer; a producer upgrade is checked by both. DeepSpaceTelemetry.jl is a pinned git source of the test environment; its reader package, DeepSpaceTelemetryReader.jl, is one of the script environment and a weak dependency of StreamingInference.jl.

@@ -23,13 +23,10 @@ alerts of three consecutive alarmed windows, timed at the ground station.
 The [Sangria Benchmark](benchmark.md) page defines every row under the
 same table.
 
-Alerts are credited to a coalescence only from its signal onset, the first
-window in which its signal reaches a norm of 3. The norm is that, over one
-1000-sample window, of the signal-only truth stream high-passed and
-whitened as the record is: the optimal single-window signal-to-noise ratio
-against the record's own noise. Releases up to 2.0.1 credited alerts by
-other onset rules and replayed a mission paced by the wall clock; see
-[Corrections to earlier releases](benchmark.md#Corrections-to-earlier-releases).
+Alerts are credited to a coalescence only from its signal onset, defined
+under the table of the [Sangria Benchmark](benchmark.md) page; releases up
+to 2.0.1 used other onset rules and a wall-clock mission
+([Corrections to earlier releases](benchmark.md#Corrections-to-earlier-releases)).
 
 ## The completed blind year
 
@@ -114,7 +111,7 @@ false-alarm episodes per 30 days.*
 
 *Seventeen 30-day missions, each differing from a lossless reference in
 one property of the channel or the spacecraft, replayed with the selected
-model. Scattered permanent loss is what removes windows; bursts,
+model. Scattered permanent loss removes windows; bursts,
 retransmission and outages remove few or none. The streaming
 configuration, whose conditioning stretch is 50 batches, scores 81 % of
 the record at 0.43 % loss and alerts both coalescences in every

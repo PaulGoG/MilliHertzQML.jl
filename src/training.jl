@@ -59,35 +59,6 @@ function predict_probability(model::VariationalQuantumClassifier, x)
 end
 
 """
-    predict(model, x) -> Int
-
-Class decision for a single feature vector `x` at the fixed probability
-threshold 0.5: `1` when `predict_probability(model, x) > 0.5`, else `0`.
-Run-specific thresholds fitted on the calibration block live in the
-training stage, not here.
-"""
-function predict(model::VariationalQuantumClassifier, x)
-    prob = predict_probability(model, x)
-    return prob > 0.5f0 ? 1 : 0
-end
-
-"""
-    accuracy(model, X, y) -> Float64
-
-Fraction of the rows of the feature matrix `X` (samples along the first
-dimension) whose `predict` decision equals the corresponding label in `y`.
-"""
-function accuracy(model::VariationalQuantumClassifier, X, y)
-    correct = 0
-    for i in 1:size(X, 1)
-        if predict(model, @view(X[i, :])) == y[i]
-            correct += 1
-        end
-    end
-    return correct / length(y)
-end
-
-"""
     weighted_bce(p, y; positive_weight = 1) -> Float32
 
 Binary cross-entropy of the probability `p` against the label `y` (0 or

@@ -7,8 +7,11 @@ include(joinpath(@__DIR__, "common.jl"))
 
 using ArgParse
 using CairoMakie: CairoMakie
+using CSV: CSV
 using DataFrames: DataFrame, nrow
 using Dates: Dates, DateTime, Millisecond
+using StreamingInference: credited_span_label, credited_span_times
+using TOML: TOML
 
 function parse_commandline()
     s = ArgParseSettings(
@@ -55,7 +58,7 @@ function training_animation(
     out_dir::AbstractString,
     run_id::AbstractString,
 )
-    table = MilliHertzQML.CSV.read(joinpath(run_dir, "history.csv"), DataFrame)
+    table = CSV.read(joinpath(run_dir, "history.csv"), DataFrame)
     history = (
         epochs = table.epochs,
         train_loss = table.train_loss,
@@ -68,12 +71,13 @@ function training_animation(
 end
 
 """
-    replay_geometry(windows) -> NamedTuple
+    replay_geometry(windows) -> RunGeometry
 
-Mission epoch and sample interval [s] of a scored-window table: the
-interval from the extent of the first window, the epoch from the time of
-its first row. The table describes its own geometry, so an animation of a
-replay needs neither the run directory nor the producer.
+Run geometry of a scored-window table as the row times of the replay need
+it ([`row_time`](@ref)): the sample interval from the extent of the first
+window, the epoch from the time of its first row. The table describes its
+own geometry, so an animation of a replay needs neither the run directory
+nor the producer.
 """
 function replay_geometry(windows::DataFrame)
     nrow(windows) >= 1 || throw(ArgumentError("the windows table is empty."))
@@ -85,40 +89,34 @@ function replay_geometry(windows::DataFrame)
         (row.row_end - row.row_start)
     epoch =
         row.content_start - Millisecond(round(Int, 1000 * interval * (row.row_start - 1)))
-    return (epoch = epoch, sample_interval = interval)
+    # One sample per batch: the geometry carries the sampling rate and the epoch
+    return RunGeometry(1 / interval, interval, 1, epoch)
 end
 
 """
-    replay_spans(results_dir, geometry, crediting) -> Union{Nothing, Vector{Tuple{DateTime,DateTime}}}
+    replay_spans(results_dir, settings, geometry, crediting)
+        -> Union{Nothing, Vector{Tuple{DateTime,DateTime}}}
 
-Spans a replay credits alerts to, in mission time: the payload rows from
-the signal onset (`crediting = :signal`) or the label start (`:label`) to
-`label_end_index` of the event table recorded in `config_telemetry.toml`,
-or, when that table is out of reach, the hour before every merger of
+Spans a replay credits alerts to, in mission time
+([`credited_span_times`](@ref) of the event table `events_csv` recorded in
+the `[telemetry]` `settings` of `config_telemetry.toml`), or, when that
+table is out of reach, the hour before every merger of
 `alert_latency.csv`. `nothing` when the results directory holds neither.
 """
-function replay_spans(results_dir::AbstractString, geometry::NamedTuple, crediting::Symbol)
-    settings = section(
-        MilliHertzQML.TOML.parsefile(joinpath(results_dir, "config_telemetry.toml")),
-        "telemetry",
-    )
+function replay_spans(
+    results_dir::AbstractString,
+    settings::AbstractDict,
+    geometry::RunGeometry,
+    crediting::Symbol,
+)
     events_path = cfgget(settings, "events_csv", ""; type = String)
-    row_time(index) =
-        geometry.epoch +
-        Millisecond(round(Int, 1000 * geometry.sample_interval * (index - 1)))
     if !isempty(events_path) && isfile(resolvepath(events_path))
-        events = MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame)
-        starts = MilliHertzQML.StreamingInference.credited_span_starts(events, crediting)
-        if starts !== nothing
-            return [
-                (row_time(s), row_time(Int(e))) for
-                (s, e) in zip(starts, events.label_end_index)
-            ]
-        end
+        events = CSV.read(resolvepath(events_path), DataFrame)
+        return credited_span_times(events, geometry; crediting = crediting)
     end
     latency_path = joinpath(results_dir, "alert_latency.csv")
     isfile(latency_path) || return nothing
-    latencies = MilliHertzQML.CSV.read(latency_path, DataFrame)
+    latencies = CSV.read(latency_path, DataFrame)
     nrow(latencies) == 0 && return nothing
     # Without the event table the span is unknown; the hour before the
     # merger is the convention of the alert figure.
@@ -141,7 +139,7 @@ function replay_animation(
 )
     # Instants are read as DateTime, the type the replay wrote: CSV.jl 1.1
     # infers a timestamp type of its own
-    windows = MilliHertzQML.CSV.read(
+    windows = CSV.read(
         joinpath(results_dir, "telemetry_windows.csv"),
         DataFrame;
         types = Dict(
@@ -151,25 +149,24 @@ function replay_animation(
             "completing_batch" => String,
         ),
     )
-    settings = section(
-        MilliHertzQML.TOML.parsefile(joinpath(results_dir, "config_telemetry.toml")),
-        "telemetry",
-    )
-    threshold = cfgget(settings, "threshold", NaN; type = Float64)
-    isfinite(threshold) ||
-        throw(ArgumentError("config_telemetry.toml of $results_dir records no threshold."))
+    settings =
+        section(TOML.parsefile(joinpath(results_dir, "config_telemetry.toml")), "telemetry")
+    for key in ("threshold", "alert_crediting")
+        haskey(settings, key) ||
+            throw(ArgumentError("config_telemetry.toml of $results_dir records no $key."))
+    end
+    threshold = cfgget(settings, "threshold", nothing; type = Float64)
+    crediting = Symbol(cfgget(settings, "alert_crediting", nothing; type = String))
     geometry = replay_geometry(windows)
-    # Replays written before the key existed credited the whole label span
-    crediting = Symbol(cfgget(settings, "alert_crediting", "label"; type = String))
-    spans = replay_spans(results_dir, geometry, crediting)
+    spans = replay_spans(results_dir, settings, geometry, crediting)
     return save_animation(joinpath(out_dir, "mission_replay"); run_id = run_id) do path
         animate_mission_replay(
             windows,
             threshold,
             path;
-            epoch = geometry.epoch,
+            epoch = geometry.start_sim_time,
             label_spans = spans,
-            span_label = MilliHertzQML.StreamingInference.credited_span_label(crediting),
+            span_label = credited_span_label(crediting),
             CLASSIFIER_SCORE_AXIS...,
         )
     end
@@ -214,4 +211,4 @@ function main()
     return nothing
 end
 
-with_pipeline_root(main, config_root(config_argument()))
+with_pipeline_root(main, config_root(config_argument(DEFAULT_CONFIG)))

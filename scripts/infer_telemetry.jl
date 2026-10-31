@@ -1,20 +1,16 @@
-# scripts/infer_telemetry.jl — dispatcher of the telemetry coupling: replay
-# (or follow live) a DeepSpaceTelemetry run directory with a trained
-# classifier, write the scored-window table and the alert-latency table,
-# and draw the alert figure. The consumer only reads the run directory. A
-# model trained on several channels reads them from the payload columns of a
-# mission that carried them (DeepSpaceTelemetry 2.6 or later); a mission that
-# carried the A channel alone is served the channels of every delivered batch
-# from the TDI record its payload was exported from (--tdi-file, and
-# --tdi-first-row when the payload starts later in the record).
+# scripts/infer_telemetry.jl — dispatcher of the telemetry replay stage:
+# command line and the alert figure. The stage itself is
+# `replay_classifier` in the package: it replays (or follows live) a
+# DeepSpaceTelemetry run directory with a trained classifier and writes the
+# scored-window table, the alert-latency table and the snapshot.
 
 include(joinpath(@__DIR__, "common.jl"))
 
 using ArgParse
 using CairoMakie: CairoMakie
-using DeepSpaceTelemetry: DeepSpaceTelemetry
-using DataFrames: DataFrame, nrow
-using Dates: Dates, DateTime, Millisecond
+using DeepSpaceTelemetryReader: DeepSpaceTelemetryReader
+using DataFrames: nrow
+using StreamingInference: credited_span_label
 
 function parse_commandline()
     s = ArgParseSettings(
@@ -41,7 +37,7 @@ function parse_commandline()
         help = "TDI record (HDF5) the payload of the mission was exported from; serves the channels of a model trained on several when the run does not carry them as payload columns"
         default = nothing
         "--tdi-group"
-        help = "TDI group of --tdi-file (default: [preprocessing] tdi_group)"
+        help = "TDI group of --tdi-file (default: the component groups of [preprocessing], tdi_components or tdi_group)"
         default = nothing
         "--link-volume-channels"
         help = "Number of channels the production rate of the mission was scaled for (recorded in the snapshot)"
@@ -58,275 +54,40 @@ function parse_commandline()
     return parse_args(s)
 end
 
-"""
-    label_span_times(events, geometry; crediting) -> Vector{Tuple{DateTime,DateTime}}
-
-Mission-time intervals of the spans alerts are credited to under
-`crediting` (payload rows from `signal_start_index` or `label_start_index`
-to `label_end_index`), or one window around each merger when the table
-carries no spans.
-"""
-function label_span_times(events::DataFrame, geometry::RunGeometry; crediting::Symbol)
-    spans = Tuple{DateTime,DateTime}[]
-    starts = MilliHertzQML.StreamingInference.credited_span_starts(events, crediting)
-    has_span = starts !== nothing
-    times = event_merger_times(events)
-    for (i, row) in enumerate(eachrow(events))
-        if has_span
-            push!(
-                spans,
-                (
-                    row_time(geometry, starts[i]),
-                    row_time(geometry, Int(row.label_end_index)),
-                ),
-            )
-        else
-            t = geometry.start_sim_time + Millisecond(round(Int, 1000 * times[i]))
-            push!(spans, (t - Dates.Hour(1), t))
-        end
-    end
-    return spans
-end
-
 function main()
     args = parse_commandline()
     config = load_config(args["config"])
-    settings = telemetry_settings(config)
-    paths = pipeline_paths(config)
-    run_dir = override(args["run-dir"], settings.run_dir)
-    isempty(run_dir) &&
-        throw(ArgumentError("no run directory: pass --run-dir or set [telemetry] run_dir."))
-    run_dir = resolvepath(run_dir)
-    run_id = isempty(args["run-id"]) ? new_run_id() : args["run-id"]
-    args["link-volume-channels"] >= 1 ||
-        throw(ArgumentError("--link-volume-channels must be at least 1."))
-    results_dir = joinpath(paths.results, "run_$run_id")
-    plot_dir = joinpath(paths.plots, "run_$run_id")
-    startswith(abspath(results_dir), abspath(run_dir)) &&
-        throw(ArgumentError("the output directory must lie outside the run directory."))
-    mkpath(results_dir)
-    mkpath(plot_dir)
-
-    # The channels the model reads: a producer run (DeepSpaceTelemetry 2.6 or
-    # later) may carry them as payload columns of one mission; a mission that
-    # carried the A channel alone, or a replay given the record explicitly,
-    # takes the channels of every delivered batch from the record the payload
-    # was exported from (--tdi-file)
-    channels = MilliHertzQML.run_channels(dirname(resolvepath(args["model"])))
-    wanted = [String(c) for c in channel_names(channels)]
-    carried = telemetry_run_columns(run_dir)
-    from_record =
-        channels != "A" && (args["tdi-file"] !== nothing || !issubset(wanted, carried))
-    # The A channel is the one column of a one-column run, else the column A
-    columns =
-        length(carried) == 1 ? nothing : (channels == "A" || from_record ? "A" : wanted)
-    run = open_telemetry_run(
-        run_dir;
-        producer_compat = settings.producer_compat,
-        columns = columns,
+    result = replay_classifier(
+        config;
+        model = args["model"],
+        run_id = isempty(args["run-id"]) ? new_run_id() : args["run-id"],
+        run_dir = args["run-dir"],
+        events = args["events"],
+        tdi_file = args["tdi-file"],
+        tdi_group = args["tdi-group"],
+        tdi_first_row = args["tdi-first-row"],
+        live = args["live"],
+        link_volume_channels = args["link-volume-channels"],
     )
-    geometry = run_geometry(run)
-    psd_sidecar = settings.psd_sidecar
-    if settings.psd_mode == "trailing"
-        # Causal whitening, with a PSD estimated only from data already
-        # delivered to the ground station: the estimate follows the delivered
-        # record, and a sidecar PSD of the whole record would make it
-        # non-causal.
-        isempty(psd_sidecar) ||
-            @warn "psd_sidecar is ignored under psd_mode = \"trailing\"" psd_sidecar
-        psd_sidecar = ""
-    end
-    detector = detector_from_run(
-        resolvepath(args["model"]);
-        context_windows = settings.context_windows,
-        psd_sidecar = psd_sidecar,
-    )
-    tdi_file = ""
-    if from_record
-        args["tdi-file"] === nothing && throw(
-            ArgumentError(
-                "the model was trained on the channels $channels and the run carries " *
-                "the payload columns $(join(carried, ", ")); pass --tdi-file, the " *
-                "record the payload of the mission was exported from.",
-            ),
-        )
-        tdi_file = resolvepath(args["tdi-file"])
-        record, record_rate = channel_record(
-            tdi_file;
-            group = override(args["tdi-group"], preprocessing_settings(config).tdi_group),
-            channels = channels,
-        )
-        isapprox(record_rate, geometry.sample_rate; rtol = 1e-9) || throw(
-            ArgumentError(
-                "$tdi_file samples at $record_rate Hz, the mission at $(geometry.sample_rate) Hz.",
-            ),
-        )
-        first_row = args["tdi-first-row"]
-        1 <= first_row <= size(record, 1) || throw(
-            ArgumentError(
-                "--tdi-first-row = $first_row; the record holds $(size(record, 1)) rows.",
-            ),
-        )
-        first_row > 1 && (record = record[first_row:end, :])
-        run = ScheduledRecordRun(run, record)
-    end
-    trailing = nothing
-    if settings.psd_mode == "trailing"
-        rows_per_day = 86400 * geometry.sample_rate
-        # The high-pass rings at the ends of every delivered run; the
-        # transient is trimmed over a few cutoff periods
-        edge_rows =
-            detector.highpass_cutoff_hz > 0 ?
-            round(
-                Int,
-                settings.psd_edge_periods * geometry.sample_rate /
-                detector.highpass_cutoff_hz,
-            ) : 0
-        trailing = TrailingWelch(
-            round(Int, settings.psd_trailing_days * rows_per_day),
-            round(Int, settings.psd_refresh_days * rows_per_day),
-            settings.psd_segment_length;
-            edge_rows = edge_rows,
-            # Smoothed as the batch estimate that whitened the model's features
-            smoothing_dex = preprocessing_settings(config).psd_smoothing_dex,
-        )
-    end
-    @info "telemetry run opened" run_dir state = run_state(run) sample_rate =
-        geometry.sample_rate points_per_batch = geometry.points_per_batch producer =
-        geometry.package_version
-    live = args["live"] || settings.mode == "live"
-    n_alarms = Ref(0)
-    on_window =
-        record -> begin
-            record.decision == 1 && (n_alarms[] += 1)
-            record.window % 100 == 0 && @info "scored" window = record.window score =
-                round(record.score; digits = 3) complete_at = record.complete_at alarms =
-                n_alarms[]
-        end
-    windows = begin
-        if live
-            follow_run(
-                run,
-                detector;
-                poll_interval_sec = settings.poll_interval_sec,
-                min_coverage = settings.min_coverage,
-                tdi_gap_dilation_sec = settings.tdi_gap_dilation_sec,
-                trailing_psd = trailing,
-                on_window = on_window,
-            )
-        else
-            replay_run(
-                run,
-                detector;
-                min_coverage = settings.min_coverage,
-                tdi_gap_dilation_sec = settings.tdi_gap_dilation_sec,
-                trailing_psd = trailing,
-                on_window = on_window,
-            )
-        end
-    end
-    write_csv(joinpath(results_dir, "telemetry_windows.csv"), windows)
-    @info "windows scored" n_windows = nrow(windows) alarms = n_alarms[]
-
-    events_path = override(args["events"], settings.events_csv)
-    latencies = nothing
-    spans = nothing
-    if !isempty(events_path)
-        # Alerts are credited from the onset of the channels the detector reads
-        events = mode_events(
-            MilliHertzQML.CSV.read(resolvepath(events_path), DataFrame),
-            channels,
-        )
-        latencies = alert_latency_table(
-            windows,
-            events,
-            geometry;
-            processing_latency_hours = settings.processing_latency_hours,
-            persistence = settings.alert_persistence,
-            crediting = Symbol(settings.alert_crediting),
-            confirmation_persistence = settings.alert_confirmation_persistence,
-        )
-        write_csv(joinpath(results_dir, "alert_latency.csv"), latencies)
-        spans =
-            label_span_times(events, geometry; crediting = Symbol(settings.alert_crediting))
-        for row in eachrow(latencies)
-            if row.detected
-                @info "event detected" label = row.label latency_data_h =
-                    round(row.latency_data_h; digits = 2) latency_total_h =
-                    round(row.latency_total_h; digits = 2)
-            else
-                @info "event missed" label = row.label
-            end
-            if settings.alert_confirmation_persistence > 0 && row.confirmed
-                @info "alert confirmed" label = row.label confirmation_latency_data_h =
-                    round(row.confirmation_latency_data_h; digits = 2)
-            end
-        end
-    end
-    write_toml(
-        joinpath(results_dir, "config_telemetry.toml"),
-        Dict{String,Any}(
-            "telemetry" => Dict{String,Any}(
-                "run_dir" => provenance_path(run_dir),
-                "producer_version" => geometry.package_version,
-                "run_state" => String(run_state(run)),
-                "mode" => live ? "live" : "replay",
-                "model" => rootrelative(resolvepath(args["model"])),
-                "channels" => channels,
-                "payload_columns" => carried,
-                "served_columns" =>
-                    columns === nothing ? carried :
-                    columns isa AbstractString ? [columns] : columns,
-                # The volume the producer's link was sized for is stated by
-                # the caller
-                "link_volume_channels" => args["link-volume-channels"],
-                "tdi_file" => isempty(tdi_file) ? "" : provenance_path(tdi_file),
-                "tdi_first_row" => args["tdi-first-row"],
-                "threshold" => Float64(detector.threshold),
-                "min_coverage" => settings.min_coverage,
-                "tdi_gap_dilation_sec" => settings.tdi_gap_dilation_sec,
-                "context_windows" => settings.context_windows,
-                "psd_mode" => settings.psd_mode,
-                "psd_sidecar" => isempty(psd_sidecar) ? "" : rootrelative(psd_sidecar),
-                "psd_trailing_days" => settings.psd_trailing_days,
-                "psd_refresh_days" => settings.psd_refresh_days,
-                "psd_segment_length" => settings.psd_segment_length,
-                "processing_latency_hours" => settings.processing_latency_hours,
-                "alert_persistence" => settings.alert_persistence,
-                "alert_confirmation_persistence" =>
-                    settings.alert_confirmation_persistence,
-                "alert_crediting" => settings.alert_crediting,
-                "events_csv" =>
-                    isempty(events_path) ? "" : rootrelative(resolvepath(events_path)),
-                "run_id" => run_id,
-                "n_windows" => nrow(windows),
-                "n_alarms" => n_alarms[],
-            ),
-            # The producer's own identity of the run (descriptor.toml)
-            "producer" => run_descriptor(run),
-        ),
-    )
-    if nrow(windows) > 0
+    if nrow(result.windows) > 0
         save_figure(
             figure_telemetry_alerts(
-                windows,
-                detector.threshold;
-                epoch = geometry.start_sim_time,
-                label_spans = spans,
-                latencies = latencies,
-                span_label = MilliHertzQML.StreamingInference.credited_span_label(
-                    Symbol(settings.alert_crediting),
-                ),
+                result.windows,
+                result.threshold;
+                epoch = result.geometry.start_sim_time,
+                label_spans = result.spans,
+                latencies = result.latencies,
+                span_label = credited_span_label(result.crediting),
                 event_label = "Merger",
                 CLASSIFIER_SCORE_AXIS...,
             ),
-            joinpath(plot_dir, "telemetry_alerts");
-            run_id = run_id,
+            joinpath(result.plot_dir, "telemetry_alerts");
+            run_id = result.run_id,
         )
     end
-    println("Telemetry results in $results_dir; figures in $plot_dir")
+    println("Telemetry results in $(result.results_dir); figures in $(result.plot_dir)")
     report_timing()
     return nothing
 end
 
-with_pipeline_root(main, config_root(config_argument()))
+with_pipeline_root(main, config_root(config_argument(DEFAULT_CONFIG)))

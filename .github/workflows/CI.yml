@@ -36,11 +36,11 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v3
       # The suite activates and instantiates test/ itself, resolving the
-      # package by path and the two producers by their release tags. The
-      # package is loaded by path, outside the active project, so coverage
-      # names the repository directory rather than the "user" set; the
-      # processing step reports src/ and ext/, and the scripts the smoke
-      # test starts inherit the flag.
+      # package by path, the two layers and the producer by their pinned
+      # commits. The package is loaded by path, outside the active project,
+      # so coverage names the repository directory rather than the "user"
+      # set; the processing step reports src/ and ext/, and the scripts the
+      # smoke test starts inherit the flag.
       - name: Test suite
         run: julia --color=yes -t auto ${{ matrix.coverage && format('--code-coverage=@{0}', github.workspace) || '' }} test/runtests.jl
       - uses: julia-actions/julia-processcoverage@v1
@@ -62,5 +62,5 @@ jobs:
         with:
           version: "1"
       - run: |
-          julia --color=yes -e 'using Pkg; Pkg.add("JuliaFormatter"); using JuliaFormatter;
+          julia --color=yes -e 'using Pkg; Pkg.add(name = "JuliaFormatter", version = "2"); using JuliaFormatter;
                     format(".", verbose = false) || error("Formatting check failed: run JuliaFormatter over the repository.")'

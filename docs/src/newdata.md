@@ -1,16 +1,17 @@
 # New data sets
 
-This page describes how a classifier trained on one record is applied to
-another: a later stretch of the same mission, a record of another data
-challenge, or a background record without coalescences.
+A classifier trained on one record can be applied to another: a later
+stretch of the same mission, a record of another data challenge, or a
+background record without coalescences.
 
 ## Why an operating point does not transfer
 
 A training run carries two fitted quantities beside the parameters of the
 classifier. The feature scaler maps the per-feature quantiles of the
 training partition onto the encoding interval ``[0, \phi]``; the decision
-threshold is fitted on the calibration block to a false-alarm target
-(`[training] threshold_criterion`, `target_far_per_30d`). Both are
+threshold is fitted to a false-alarm target on the threshold-fitting block
+(`[training] threshold_block`, `threshold_criterion`,
+`target_far_per_30d`). Both are
 statements about the training noise. Applied to a record whose noise
 differs, the scaler places that noise elsewhere on the encoding interval,
 and the threshold no longer corresponds to the false-alarm rate it was
@@ -30,7 +31,7 @@ stay those of the training run.
 
 1. **Describe the record** in a configuration under `configs/experiments/`:
    the HDF5 object of the record (`[preprocessing] tdi_group`), or, for a
-   product shipped as component streams, the list of components summed
+   product distributed as component streams, the list of components summed
    into the record (`[preprocessing] tdi_components`); the sampling rate
    (`[preprocessing] sample_rate`); the TDI generation (`[ldc] tdi2`); the
    output prefix of the products (`[preprocessing] output_prefix`); and
@@ -110,9 +111,9 @@ The tail candidates make the rates between one episode and that step
 reachable.
 
 The calibration block and the evaluation block are disjoint: the
-operating point is fitted on the first and judged on the second, as the
-training run fits its threshold on the validation block and judges it on
-the test block.
+operating point is fitted on the first and judged on the second, as a
+training run under `threshold_block = "validation"` fits its threshold on
+the validation block and judges it on the test block.
 
 ## The scaler rules
 
@@ -156,8 +157,8 @@ so it reproduces the training encoding only when the calibration block
 holds a comparable mixture, as on a labelled record with coalescences; on
 a background record its upper bound is a quantile of the noise alone.
 
-**`keep`** keeps the parent's scaler and refits the threshold only. It
-measures what the threshold alone repairs.
+**`keep`** keeps the parent's scaler and refits the threshold only, which
+isolates the effect of the threshold.
 
 ## The calibration run directory
 
@@ -203,7 +204,7 @@ not fitted on.
 ### Yorsh
 
 The LDC-1b (Yorsh) record holds two years sampled at 5 s, in
-second-generation TDI, without gaps or glitches. It is shipped as
+second-generation TDI, without gaps or glitches. It is distributed as
 thirteen component streams, which the pre-processing sums into the
 record (`[preprocessing] tdi_components`): instrument noise, confusion
 noise, eight stellar-origin binary black holes and three
@@ -230,8 +231,8 @@ that the smoothed whitening leaves in the features; under the Sangria
 scaler the median of the Yorsh noise lies between a tenth and a sixth of
 the encoding interval in those bands, where the Sangria noise lay between
 a quarter and a third, and its 0.99 quantile stays below the middle where
-Sangria's reached the top. Nothing enters the region the circuit learned
-to alarm on.
+Sangria's reached the top, outside the region the circuit learned to
+alarm on.
 
 **Calibration.** Each of the 32 runs was calibrated on the first 30 % of
 the record (219 days) under the three scaler rules at the training target
@@ -278,10 +279,9 @@ the controls 0.8 to 1.5, and no run of the 96 confirms a single alert in
 days at 1.5 to 2.8 episodes, the kept scaler 0.3 to 1.2 alerts at 4 to 6
 episodes.
 
-Two numbers of this record carry over to the procedure. A background
+Two findings of this record carry over to the procedure. A background
 record cannot be calibrated on the quantile grid alone: the candidates
-added to the tail are what let the fit reach a target below a quarter of
-a percent of the windows. And the matched scaler, not the threshold, is
-what transfers the operating point: it recovers the Sangria threshold on
-a record whose raw features sit elsewhere, and the threshold alone, kept
-or moved, does not.
+added to the tail let the fit reach a target below a quarter of a
+percent of the windows. The matched scaler transfers the operating
+point: it recovers the Sangria threshold on a record whose raw features
+sit elsewhere, and the threshold alone, kept or moved, does not.

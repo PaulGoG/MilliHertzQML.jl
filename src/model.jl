@@ -1,4 +1,4 @@
-# src/model.jl
+# src/model.jl — the classifier supertype and the variational circuit.
 
 """
     AbstractClassifier
@@ -63,7 +63,6 @@ function VariationalQuantumClassifier(
     n_params_per_layer = nparameters(layers[1])
     total_params = n_params_per_layer * n_layers
 
-    # Initialise with Float32 for type stability
     p = randn(rng, Float32, total_params) * 0.5f0
 
     idx = 1
@@ -75,5 +74,3 @@ function VariationalQuantumClassifier(
 
     return VariationalQuantumClassifier(n_qubits, n_layers, p, layers)
 end
-
-Functors.@functor VariationalQuantumClassifier (params,)

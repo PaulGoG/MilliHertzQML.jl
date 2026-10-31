@@ -1,20 +1,33 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CurvatureDistinguishability = "023135ff-521e-423d-a4c9-75a9bc432dee"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-DeepSpaceTelemetry = "d178d3ae-5836-4a75-9bfd-2e34bfeccb6b"
-Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
-LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+DeepSpaceTelemetryReader = "e55ec139-ac3a-4c75-8569-7dfdf846ff66"
 MilliHertzBase = "4a1e2e3e-48c7-4c7a-8dfb-6ff8a58d7de2"
 MilliHertzQML = "1b93d537-8815-46aa-bd42-498c40b9911e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 StreamingInference = "16c4c904-5ec2-451a-8da3-97d89c4aed49"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [sources]
-CurvatureDistinguishability = {rev = "66a15a133ce09351d00c0df2f02aaac94854369a", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
-DeepSpaceTelemetry = {rev = "4352f565558d485c8d6cdd624e9ec6f40936aa24", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git"}
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "a2a41357ac469e8e9cf6fd31fa7c812e6d3375a1"}
+CurvatureDistinguishability = {rev = "fbd810ffadf36e5f8ef38522c273199ee112ce2c", url = "https://github.com/PaulGoG/CurvatureDistinguishability.jl.git"}
+DeepSpaceTelemetryReader = {rev = "c5d419e4d725c3465d01b0513f215855382f7f03", url = "https://github.com/PaulGoG/DeepSpaceTelemetry.jl.git", subdir = "reader"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "1e473a44479893f3420f196f9c367884e6daa1b2"}
 MilliHertzQML = {path = ".."}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "86b91d2732cd808d996bf1e1b1f0f7e1ae8fba8b"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"}
+
+[compat]
+ArgParse = "1"
+CSV = "0.10, 1.1"
+CairoMakie = "0.15"
+CurvatureDistinguishability = "2.1"
+DataFrames = "1"
+Dates = "1"
+DeepSpaceTelemetryReader = "3.1"
+Printf = "1"
+TOML = "1"
+UnicodePlots = "3"

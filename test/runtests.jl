@@ -16,6 +16,18 @@ using CairoMakie: CairoMakie
 using DeepSpaceTelemetry: DeepSpaceTelemetry
 
 const PROJECT_ROOT = dirname(@__DIR__)
+# The conditioning keys of the feature sidecars of the fixtures, at the
+# defaults of [preprocessing]
+const BANDS = let p = preprocessing_settings(Dict{String,Any}())
+    (low_band = p.low_band_hz, high_band = p.high_band_hz, band_edges = p.band_edges_hz)
+end
+const SIDECAR_CONDITIONING = Dict{String,Any}(
+    "low_band_hz" => collect(BANDS.low_band),
+    "high_band_hz" => collect(BANDS.high_band),
+    "band_edges_hz" => collect(BANDS.band_edges),
+    "highpass_cutoff_hz" => 5e-4,
+    "highpass_order" => 8,
+)
 # The pipeline root of the whole run, child processes included: a sandboxed
 # test environment (Pkg.test) lies outside the repository
 ENV["STREAMINGINFERENCE_ROOT"] = PROJECT_ROOT
@@ -25,8 +37,7 @@ ENV["STREAMINGINFERENCE_ROOT"] = PROJECT_ROOT
     # package dependency graph is exactly what src/ loads and the stale-deps
     # check runs unexempted. The persistent-tasks check precompiles a wrapper
     # package against the live registry; it is gated off CI, where it fails
-    # for environmental reasons (see the sibling package's record), and runs
-    # locally.
+    # for environmental reasons, and runs locally.
     Aqua.test_all(MilliHertzQML; persistent_tasks = get(ENV, "CI", "") != "true")
 end
 
@@ -49,6 +60,72 @@ end
     # Reports are restricted to this package; its dependencies, the two
     # layers included, are analysed but not reported against.
     JET.test_package(MilliHertzQML; target_modules = (MilliHertzQML,))
+end
+
+@testset "Re-exported layer names" begin
+    # Every name the two layers export is exported here. The names they
+    # declare public without exporting are reached through the modules
+    # (`MilliHertzQML.StreamingInference.dense_log_ticks`), and the modules
+    # themselves are bound as names of this one.
+    not_reexported = Set([
+        :StreamingInference,
+        :MilliHertzBase,
+        # StreamingInference: figure constants and helpers, the band check,
+        # window counts, the timestamp format, the credited spans, intervals
+        :ANIMATION_PX_PER_UNIT,
+        :ANNOTATION_FONTSIZE,
+        :FIGURE_FONTSIZE,
+        :LEGEND_STYLE,
+        :TICK_FONTSIZE,
+        :TIMESTAMP_FORMAT,
+        :check_band_edges,
+        :check_frame_scale,
+        :check_gif_path,
+        :credited_span_label,
+        :credited_span_times,
+        :days_since,
+        :decade_label,
+        :decimation,
+        :dense_log_ticks,
+        :edge_margin_windows,
+        :frame_schedule,
+        :hours_between,
+        :label_bands!,
+        :log_ticks,
+        :score_limits,
+        :top_legend!,
+        :window_count,
+        # MilliHertzBase: constants, building blocks of the waveforms, the
+        # response, the generator and the stages
+        :C_LIGHT,
+        :F_STAR,
+        :L_ARM,
+        :catalog_events,
+        :channel_catalog,
+        :channel_count,
+        :draw_extrinsic,
+        :inverse_segment,
+        :phenoma_amplitude,
+        :phenoma_group_delay,
+        :phenoma_phase,
+        :phenoma_start_frequency,
+        :project_series,
+        :project_spectrum,
+        :record_groups,
+        :samples_per_batch,
+        :source_frame,
+        :whitened_window_snr,
+    ])
+    layers = (MilliHertzQML.StreamingInference, MilliHertzQML.MilliHertzBase)
+    layer_names = union((names(m) for m in layers)...)
+    @test Set(setdiff(layer_names, names(MilliHertzQML))) == not_reexported
+    # The excluded names are public in their layer and not exported there
+    @test all(
+        n ->
+            n in (:StreamingInference, :MilliHertzBase) ||
+            any(m -> n in names(m) && !Base.isexported(m, n), layers),
+        not_reexported,
+    )
 end
 
 @testset "MilliHertzQML Tests (Multi-Qubit VQC)" begin
@@ -177,51 +254,13 @@ end
         )
         @test loss_val ≈ loss_function(model, X_big, y_big; positive_weight = 2.0) rtol =
             1e-5
-        @test acc_val ≈ accuracy(model, X_big, y_big)
+        @test acc_val ≈ count((p_serial .> 0.5f0) .== (y_big .== 1)) / length(y_big)
         @test_throws DimensionMismatch MilliHertzQML.epoch_validation(
             model,
             X_big,
             y_big[1:5];
             positive_weight = 1.0,
         )
-    end
-
-    @testset "Feature Extraction" begin
-        # Pure 2 mHz sine wave (milliHertz regime)
-        fs = 0.2
-        t = range(0, 5000, length = 1000)
-        signal = sin.(2π * 0.002 * t)
-
-        p_low, p_high, ent, std_psd = extract_features(signal, fs)
-
-        @test p_low > p_high # 2 mHz lies in the low band (1-5 mHz)
-        @test ent > 0.0
-        @test std_psd isa Float32
-    end
-
-    @testset "Data Loading" begin
-        mktempdir() do dir
-            feat_path = joinpath(dir, "test_feats.csv")
-            lab_path = joinpath(dir, "test_labs.csv")
-            df_f = DataFrame(
-                p_low = [0.5, 3.0, 1.0],
-                p_high = [1.0, 0.9, 1.1],
-                spectral_entropy = [0.95, 0.6, 0.9],
-                log_power_std = [0.0, 0.8, 0.1],
-            )
-            CSV.write(feat_path, df_f)
-            CSV.write(lab_path, DataFrame(Label = [0, 1, 0], SNR = [0.0, 12.0, 0.0]))
-
-            X, y, df_l = load_data(feat_path, lab_path)
-            @test X == Matrix{Float32}(df_f)
-            @test y == [0, 1, 0]
-            @test df_l.SNR == [0.0, 12.0, 0.0]
-            # The label-free path yields the identical raw matrix
-            @test load_features(feat_path) == X
-
-            CSV.write(lab_path, DataFrame(Label = [0, 1]))
-            @test_throws DimensionMismatch load_data(feat_path, lab_path)
-        end
     end
 
     @testset "Input Validation" begin
@@ -240,15 +279,6 @@ end
             rand(rng, Float32, 4, 4),
             [0, 1],
         )
-
-        # 16 samples at 0.2 Hz resolve no bins inside the 1-5 mHz band
-        @test_throws ArgumentError extract_features(randn(rng, 16), 0.2)
-    end
-
-    @testset "Feature Edge Cases" begin
-        # A constant (zero) signal yields finite features
-        feats = extract_features(zeros(Float64, 1000), 0.2)
-        @test all(isfinite, feats)
     end
 
     @testset "Model Persistence" begin
@@ -275,29 +305,13 @@ end
             wide = FeatureScaler(scaler.lower, scaler.upper; phase_span = 2π)
             save_model(joinpath(dir, "wide.jld2"), model; scaler = wide)
             @test load_model(joinpath(dir, "wide.jld2"))[3].phase_span == Float32(2π)
-            # An artifact written before the span was persisted restores the
-            # full period its scaler was trained with, and says so
-            legacy = joinpath(dir, "legacy.jld2")
-            MilliHertzQML.JLD2.jldsave(
-                legacy;
-                n_qubits = model.n_qubits,
-                n_layers = model.n_layers,
-                params = model.params,
-                scaler_lower = scaler.lower,
-                scaler_upper = scaler.upper,
-                metadata = Dict{String,Any}("run_id" => "old"),
-            )
-            _, meta_legacy, scaler_legacy =
-                @test_logs (:warn, r"predates the persisted phase-encoding span") load_model(
-                    legacy,
-                )
-            @test meta_legacy["run_id"] == "old"
-            @test scaler_legacy.phase_span == Float32(2π)
 
-            # Artifacts without a scaler load with `nothing`
+            # Artifacts without a scaler load with `nothing`, which the stages refuse
             bare = joinpath(dir, "bare.jld2")
             save_model(bare, model)
             @test load_model(bare)[3] === nothing
+            @test_throws ArgumentError MilliHertzQML.require_scaler(nothing, bare)
+            @test MilliHertzQML.require_scaler(scaler, path) === scaler
         end
     end
 end
@@ -374,37 +388,6 @@ include("circuit_tests.jl")
         X_new;
         quantiles = (0.99, 0.5),
     )
-end
-
-@testset "Threshold file migration" begin
-    info = Dict{String,Any}(
-        "value" => 0.5,
-        "validation_recall" => 1.0,
-        "validation_windows" => 10,
-        "fit_fpr" => 0.0,
-        "validation_fpr" => 0.1,
-    )
-    @test_logs (:info, r"predates the configurable fitting block") MilliHertzQML.migrate_threshold_info!(
-        info,
-    )
-    @test info["fit_recall"] == 1.0 && info["fit_windows"] == 10
-    @test !haskey(info, "validation_recall") && !haskey(info, "validation_windows")
-    # A key already present under its current name is kept as it is
-    @test info["fit_fpr"] == 0.0 && info["validation_fpr"] == 0.1
-    @test_logs MilliHertzQML.migrate_threshold_info!(Dict{String,Any}("value" => 0.5))
-    mktempdir() do dir
-        open(joinpath(dir, "threshold.toml"), "w") do io
-            TOML.print(
-                io,
-                Dict(
-                    "threshold" =>
-                        Dict("value" => 0.42, "validation_false_alarms_per_30d" => 1.5),
-                ),
-            )
-        end
-        thr, old = MilliHertzQML.load_threshold(dir)
-        @test thr == 0.42f0 && old["fit_false_alarms_per_30d"] == 1.5
-    end
 end
 
 @testset "Class-weighted loss" begin
@@ -569,7 +552,6 @@ end
 @testset "Channel modes (classifier)" begin
     # A feature table of the A and E network, trained on and scored only
     # under a configuration and a model of the same mode
-    @test MilliHertzQML.run_channels(joinpath(tempdir(), "absent_run")) == "A"
     mktempdir() do dir
         rng = StableRNG(17)
         n = 600
@@ -582,12 +564,15 @@ end
             CSV.write(path, table)
             CSV.write(joinpath(dir, stem * "_labels.csv"), DataFrame(Label = labels))
             sidecar = Dict{String,Any}(
-                "features" => Dict{String,Any}(
-                    "window_size" => 1000,
-                    "step_size" => 100,
-                    "sample_rate" => 0.2,
-                    "psd" => "none",
-                    "feature_set" => "whitened",
+                "features" => merge(
+                    Dict{String,Any}(
+                        "window_size" => 1000,
+                        "step_size" => 100,
+                        "sample_rate" => 0.2,
+                        "psd" => "none",
+                        "feature_set" => "whitened",
+                    ),
+                    SIDECAR_CONDITIONING,
                 ),
             )
             if channels !== nothing
@@ -630,7 +615,7 @@ end
             run_id = "refused",
         )
         run = train_classifier(config(pair, "AE"); run_id = "pair")
-        @test MilliHertzQML.run_channels(run.run_dir) == "AE"
+        @test run_channels(run.run_dir; default = "A") == "AE"
         @test TOML.parsefile(joinpath(run.run_dir, "config.toml"))["features"]["channels"] ==
               "AE"
         # Scoring: features of the mode the model was trained on, or none
@@ -682,7 +667,7 @@ end
         @test w.score == score_window(detector, stretch, offset)
         conditioned = condition_window(detector, stretch, offset)
         @test size(conditioned) == (1000, 2)
-        features = extract_features(conditioned, fs; combination = :max)
+        features = extract_features(detector.scorer.features, conditioned, fs)
         model, _, scaler = load_model(run.model_path)
         @test w.score == predict_probability(
             model,
@@ -1021,7 +1006,7 @@ end
         @test batch_gradient(model, X, y; positive_weight = 2.5)[1] < before
     end
 
-    # Persistence: the kind is recorded for a control and absent for a circuit
+    # Persistence: the kind is recorded for either classifier
     mktempdir() do dir
         scaler = FeatureScaler([0.0, 0.0, -1.0], [3.0, 1.0, 1.0])
         control = ClassicalControl(3, 4; rng = StableRNG(3))
@@ -1039,8 +1024,26 @@ end
         @test reloaded.harmonic && reloaded.params == periodic.params
         circuit = VariationalQuantumClassifier(3, 1; rng = StableRNG(3))
         circuit_path = save_model(joinpath(dir, "circuit.jld2"), circuit; scaler = scaler)
-        @test !haskey(MilliHertzQML.JLD2.load(circuit_path), "kind")
+        @test MilliHertzQML.JLD2.load(circuit_path)["kind"] == "circuit"
         @test load_model(circuit_path)[1] isa VariationalQuantumClassifier
+        # The stored artifacts of earlier releases: circuits without a kind,
+        # controls of the control study without the harmonic flag
+        stored = MilliHertzQML.JLD2.load(circuit_path)
+        delete!(stored, "kind")
+        unkinded = joinpath(dir, "unkinded.jld2")
+        MilliHertzQML.JLD2.jldsave(unkinded; (Symbol(k) => v for (k, v) in stored)...)
+        @test load_model(unkinded)[1].params == circuit.params
+        stored = MilliHertzQML.JLD2.load(path)
+        delete!(stored, "harmonic")
+        unflagged = joinpath(dir, "unflagged.jld2")
+        MilliHertzQML.JLD2.jldsave(unflagged; (Symbol(k) => v for (k, v) in stored)...)
+        @test !load_model(unflagged)[1].harmonic
+        # The legend names of the classifiers
+        @test model_label(circuit) == "Circuit"
+        @test model_label(ClassicalControl(3, 0; rng = StableRNG(1))) ==
+              "Logistic regression"
+        @test model_label(control) == "Network of 4 units"
+        @test model_label(periodic) == "Harmonic control"
     end
 
     # The classifier of the [model] section, drawn from the seeded default stream
@@ -1081,12 +1084,16 @@ end
             TOML.print(
                 io,
                 Dict{String,Any}(
-                    "features" => Dict{String,Any}(
-                        "window_size" => 1000,
-                        "step_size" => 100,
-                        "sample_rate" => 0.2,
-                        "psd" => "none",
-                        "feature_set" => "whitened",
+                    "features" => merge(
+                        Dict{String,Any}(
+                            "window_size" => 1000,
+                            "step_size" => 100,
+                            "sample_rate" => 0.2,
+                            "psd" => "none",
+                            "feature_set" => "whitened",
+                            "channels" => "A",
+                        ),
+                        SIDECAR_CONDITIONING,
                     ),
                 ),
             )
@@ -1137,7 +1144,7 @@ end
             detector = detector_from_run(run.model_path; context_windows = 1)
             @test detector.scorer isa ClassifierScorer{ClassicalControl}
             window = randn(rng, 1000)
-            f = extract_features(window, 0.2)
+            f = extract_features(detector.scorer.features, window, 0.2)
             @test window_score(detector.scorer, window, 0.2) == predict_probability(
                 model,
                 vec(encode_features(scaler, reshape(collect(Float32.(f)), 1, :))),
@@ -1198,7 +1205,7 @@ end
                 ),
             ],
         )
-        @test !MilliHertzQML.gapped_product(whole) && MilliHertzQML.gapped_product(gapped)
+        @test !gapped_product(whole) && gapped_product(gapped)
         @test window_indices(gapped) == vcat(21:290, 1001:1330)
         config(features) = Dict{String,Any}(
             "paths" => Dict{String,Any}(
@@ -1248,6 +1255,14 @@ end
         @test split.metrics["n_detected"] == expected.n_detected
         @test split.metrics["n_false_alarm_episodes"] >=
               plain.metrics["n_false_alarm_episodes"]
+        # The post-hoc sweep ends events and episodes at the gap alike
+        @test split.sweep == threshold_sweep(
+            labels,
+            split.probabilities;
+            step_size = 100,
+            sample_rate = 0.2,
+            windows = window_indices(gapped),
+        )
     end
 end
 
@@ -1314,8 +1329,13 @@ if isfile(SANGRIA_FILE)
         # checked below the null; the Welch estimate whitens the full band.
         starts = round.(Int, range(1, length(white) - 1000; length = 400))
         feats = [
-            extract_features(view(white, s:(s+999)), fs; high_band = (5e-3, 4e-2)) for
-            s in starts
+            extract_features(
+                view(white, s:(s+999)),
+                fs;
+                low_band = BANDS.low_band,
+                high_band = (5e-3, 4e-2),
+                band_edges = BANDS.band_edges,
+            ) for s in starts
         ]
         @test isapprox(mean(first.(feats)), 1.0; atol = 0.25)
         @test isapprox(mean(getindex.(feats, 2)), 1.0; atol = 0.25)
@@ -1324,7 +1344,8 @@ if isfile(SANGRIA_FILE)
             fs;
             psd = interpolated_psd(fw, sw),
         )
-        feats_welch = [extract_features(view(white_welch, s:(s+999)), fs) for s in starts]
+        feats_welch =
+            [extract_features(view(white_welch, s:(s+999)), fs; BANDS...) for s in starts]
         @test isapprox(mean(first.(feats_welch)), 1.0; atol = 0.15)
         @test isapprox(mean(getindex.(feats_welch, 2)), 1.0; atol = 0.15)
     end

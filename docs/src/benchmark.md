@@ -1,6 +1,6 @@
 # Sangria benchmark
 
-This page reports the results of the classifier on the LISA Data Challenge
+The classifier is evaluated here on the LISA Data Challenge
 (LDC) 2a "Sangria" data set: one year of simulated LISA telemetry for
 training and a second, blind year for evaluation, whose source catalogue
 was withheld until evaluation. The blind year is scored twice:
@@ -16,8 +16,6 @@ ground.
 | Streamed year: false alarms per 30 d | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
 | Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
-
-The rows of the table read as follows.
 
 - **Label spans.** The blind year holds six coalescences. Events 1 and 2
   merge 29.5 hours apart and share one label span, so the rows of the
@@ -89,7 +87,7 @@ gate (see the encoding paragraph of the protocol).
 
 ## Data and labels
 
-LDC2a Sangria provides two one-year records of the time-delay-interferometry
+LDC-2a Sangria provides two one-year records of the time-delay-interferometry
 (TDI) variables ``X``, ``Y``, ``Z`` at
 0.2 Hz: a training product with its source catalogue and truth streams, and
 a blind product whose MBHB catalogue is released separately. Both are read
@@ -117,9 +115,6 @@ eight numbers, one per qubit (`feature_set = "bands"`). The whitening PSD
 is a Welch estimate of the record being processed.
 
 ## Protocol
-
-The interpretation of the results depends on the evaluation protocol,
-which is therefore stated in full.
 
 **Blocks.** Windows overlap by 90 %, so any random split would place copies
 of the same signal in both partitions. The training year is cut
@@ -407,9 +402,9 @@ The selected run therefore owes its 1.57 per 30 days to its configuration
 and its seed together. The configuration recovers every event at every
 seed with a median of 2.68, the lowest median among the configurations
 that always recover five events, but not distinguishable from `q6_b4` on
-four seeds each. The tables are built by `alert_latency`-independent
-metrics of each run: the validation block of its training and the blind
-year of its inference.
+four seeds each. The tables use metrics of each run that do not depend
+on the alert table: those of the validation block of its training and of
+the blind year of its inference.
 
 ## Against the published method
 
@@ -464,7 +459,7 @@ chance level.
 The improvement therefore does not lie in the quantum classifier: the
 register and the ansatz perform the same function in both runs. **The
 operating point results from the conditioning of the data.** Whitening
-the record and partitioning the milliHertz decade into six bands reduces
+the record and partitioning the millihertz decade into six bands reduces
 the false-alarm rate by a factor of twenty and raises the highest-SNR
 event from the edge of the threshold to well above it, at twice the
 parameter count the paper reports for its own circuit.
@@ -485,7 +480,7 @@ preprocessing script; window 1000), which amounts to 6.3 million
 transforms for each of ten channel-years, and the spectral-entropy series
 for X, Y and Z were not available.
 
-Inspection of its artifacts establishes the following:
+Its artifacts show:
 
 - **The model.** `Flatten → Dense(128, relu) → Dense(128, relu) →
   Dropout(0.2) → Dense(1, sigmoid)` over a 10 × 10 input — ten timesteps
@@ -600,9 +595,6 @@ available for scoring, the wait for its conditioning stretch (1.16 days)
 plus the downlink delay of the batch that completes it (up to 18 hours),
 and, for every coalescence, the alert time relative to the merger.
 
-The definition of an alert determines the latencies and is therefore
-stated explicitly.
-
 **Crediting.** An alarm is credited to a coalescence only where the
 signal of the coalescence can be seen. The label span, four days before
 to 27 minutes after the merger, is the training convention of Isfan et
@@ -628,10 +620,6 @@ event 1. An alert is credited from the onset to the end of the label span
 (`alert_crediting = "signal"`; the labelling stage writes the onset as
 `signal_start_index`), and alarm runs earlier in the label span count as
 false alarms.
-
-Releases up to 2.0.1 credited alerts by other onset rules and replayed a
-mission paced by the wall clock; see [Corrections to earlier
-releases](#Corrections-to-earlier-releases).
 
 **Persistence.** An isolated alarmed window cannot be distinguished from
 the false-alarm population, so an alert is raised by the arrival that
@@ -846,6 +834,10 @@ windows, and both events are still detected.
 
 The two generation-gap missions were regenerated on 30 September 2026;
 see [Corrections to earlier releases](#Corrections-to-earlier-releases).
+From release 3.1.0 the replay opens runs of DeepSpaceTelemetry.jl 2.6.0
+and later only, so the seventeen missions, recorded with 2.0.0 and 2.1.1,
+are replayed with release 3.0.0 of this package, while the year missions
+of this page, recorded with 2.6.2, open unchanged.
 
 **Admitting a partially delivered stretch scores every window and brings
 the alerts forward.** With the stretch admitted at 75 or 50 % delivered

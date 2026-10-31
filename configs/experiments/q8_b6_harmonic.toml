@@ -1,11 +1,7 @@
-# Sangria experiment `q8_b6_harmonic`: the configuration `q8_b6` with a
-# logistic regression on the first harmonics (cosine and sine) of the encoded
-# angles in place of the circuit, bounded and periodic in every feature as the
-# circuit is, a classical control on the same features under the same protocol
-# (2 × 8 + 1 parameters against the 64 of the circuit). Keys absent here take
-# the defaults documented in configs/default.toml (the settings functions
-# under src/); the HDF5 products are passed on the command line. Paths are
-# resolved relative to the project root.
+# Sangria experiment `q8_b6_harmonic`: `q8_b6` with `[model] kind = "harmonic"`.
+# Keys absent here take the defaults of the settings functions; configs/default.toml is
+# the simulator configuration.
+# Paths are resolved relative to the project root.
 
 [paths]
 inputs = "data/inputs"              # telemetry records, feature, label and PSD CSVs
@@ -31,7 +27,7 @@ edge_margin = 10.0              # windows dropped at each record end, in window 
 output_prefix = "sangria_b6_train"   # prefix of the output feature/label CSVs
 
 [model]
-n_qubits = 8    # VQC register size; >= 2, <= 24; must equal the feature dimension
+n_qubits = 8    # register size of the circuit and feature dimension of every kind; >= 2, <= 24
 n_layers = 4    # data re-uploading layers; >= 1
 kind = "harmonic"   # classifier; one of: "circuit" (variational quantum classifier) | "logistic" (logistic regression) | "perceptron" (one hidden tanh layer) | "harmonic" (logistic regression on the first harmonics of the encoded angles)
 
@@ -46,13 +42,13 @@ patience = 12              # early-stopping patience [epochs]; >= 1
 train_fraction = 0.7       # chronological training block; in (0, 1)
 validation_fraction = 0.15 # chronological validation block (early stopping, threshold); in (0, 1); the rest is the test block
 class_weight = "balanced"  # positive-class loss weight; one of: "balanced" (negative/positive count ratio) | "none"
-threshold_criterion = "far"  # criterion fitting the threshold on the calibration block; one of: "far" | "fpr" | "youden"
-threshold_block = "held_out"  # calibration block of the threshold; one of: "validation" | "held_out" (validation and test pooled)
+threshold_criterion = "far"  # criterion of the threshold fit on the threshold-fitting block; one of: "far" | "fpr" | "youden"
+threshold_block = "held_out"  # threshold-fitting block; one of: "validation" | "held_out" (validation and test pooled)
 target_far_per_30d = 3.0   # false-alarm episodes per 30 mission days admitted by "far"; >= 0
 target_fpr = 0.05          # window false-positive rate admitted by "fpr" and bounding the alarm duty cycle under "far"; in [0, 1]
 scaler_quantiles = [0.005, 0.995]  # feature-scaler bounds as training-partition quantiles; ascending, in [0, 1]
 phase_span = 1.0           # phase-encoding interval [0, phase_span π] of the feature scaler; in (0, 2]
-min_fit_episodes = 5       # false-alarm episodes on the calibration block below which the training stage warns; >= 0
+min_fit_episodes = 5       # false-alarm episodes on the threshold-fitting block below which the training stage warns; >= 0
 test_mode_samples = 5000   # sample cap under --test-mode; >= 1
 test_mode_epochs = 2       # epoch cap under --test-mode; >= 1
 threaded = true            # batch gradients and forward passes over the Julia threads; one of: true | false
@@ -62,7 +58,7 @@ seed = 9999                # RNG seed for the data split and initialisation; non
 [inference]
 features = "data/inputs/sangria_b6_blind_features.csv"   # inference feature CSV
 labels = "data/inputs/sangria_b6_blind_labels.csv"       # inference label CSV; "" for blind mode
-block = "all"        # rows evaluated when the features are the training table; one of: "all" | "validation" | "test"
+block = "all"        # rows evaluated; "all", or a block named in the scored run's split.toml ("validation" | "test" of a training run, "calibration" | "evaluation" of a calibration run)
 
 [ldc]
 truth_group = "sky/mbhb/tdi"    # compound dataset of the signal-only TDI
@@ -97,7 +93,7 @@ tdi_gap_dilation_sec = 100.0    # erosion on each side of a lost or pruned batch
 context_windows = 20            # window lengths of delivered context on each side used for whitening; >= 0
 psd_sidecar = "data/inputs/sangria_b6_blind_features.toml"   # feature sidecar supplying the whitening PSD of the record being scored; "" uses the training run's
 poll_interval_sec = 1.0         # live-mode polling period of the arrival feed [s]; > 0
-producer_compat = "1.0"         # accepted DeepSpaceTelemetry version lower bound (semver string)
+producer_compat = "2.6"         # oldest DeepSpaceTelemetry producer version accepted (semver string); 2.6.0 is the floor
 processing_latency_hours = 1.0  # ground processing budget added to every alert latency [h]; >= 0
 alert_persistence = 3           # consecutive alarmed windows that raise an alert; >= 1
 alert_confirmation_persistence = 11   # consecutive alarmed windows that confirm an alert; 0 (none) or > alert_persistence and > window_size ÷ step_size
