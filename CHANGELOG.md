@@ -6,6 +6,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The scripts environment bounds FFTA to 0.3.1: release 0.3.2 makes every
+  real transform ambiguous with FFTW when both are loaded
+  (JuliaMath/FFTA.jl#146); the bound goes when a fixed release is out.
+
 ## [3.1.0] — 2026-10-31
 
 ### Breaking
