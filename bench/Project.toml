@@ -14,6 +14,7 @@ MilliHertzQML = {path = ".."}
 StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"}
 
 [compat]
+julia = "1.13"
 BenchmarkTools = "1"
 LinearAlgebra = "1"
 Optimisers = "0.4"

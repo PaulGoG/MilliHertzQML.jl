@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "julia"
-    directory: "/"
+    directories:
+      - "/"
+      - "/test"
+      - "/docs"
     schedule:
       interval: "weekly"
+    # One pull request per directory and week, not one per package.
+    groups:
+      julia:
+        patterns:
+          - "*"
