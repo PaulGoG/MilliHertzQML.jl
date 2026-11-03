@@ -1,4 +1,4 @@
-written_at = "2026-11-03T18:03:52.687"
+written_at = "2026-11-03T18:39:22.068"
 
 [[layers]]
 version = "0.2.0"
@@ -15,7 +15,7 @@ revision = "1e473a44479893f3420f196f9c367884e6daa1b2"
 [[layers]]
 path = "."
 version = "3.1.0"
-git_commit = "v3.1.0-6-gb11132b"
+git_commit = "v3.1.0-8-ge61f8e1"
 name = "MilliHertzQML"
 git_dirty = false
 
@@ -26,7 +26,7 @@ active_project = "test/Project.toml"
 [figure]
 files = ["gap_study.pdf", "gap_study.png"]
 run_id = "gap_study"
-size_pt = [1200, 832]
+size_pt = [1200, 904]
 px_per_unit = 4
 
 [hardware]
@@ -42,7 +42,7 @@ cpu_threads_logical = 22
 julia_version = "1.13.3"
 
 [git]
-git_commit = "v3.1.0-6-gb11132b"
+git_commit = "v3.1.0-8-ge61f8e1"
 git_dirty = false
 streaminference_version = "0.2.0"
-package_version = "3.1.0"
+package_version = "3.1.1"
