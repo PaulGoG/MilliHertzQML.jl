@@ -15,6 +15,9 @@ versioning follows [Semantic Versioning](https://semver.org/).
   clean, as 3.1.0 did not; 3.1.2 changes documentation only). The
   CurvatureDistinguishability pin of the scripts environment names the
   commit of v2.1.1 rather than its tag object.
+- The loss-survival figure of the manual is re-rendered from the gap-study
+  table on the current figure code: its logarithmic loss axis is ticked at
+  0.05, 0.1, 0.2 and 0.5 per cent; the data are unchanged.
 
 ## [3.1.0] — 2026-10-31
 
