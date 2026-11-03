@@ -1,13 +1,32 @@
-written_at = "2026-09-30T23:39:36.380"
+written_at = "2026-11-03T18:03:52.687"
+
+[[layers]]
+version = "0.2.0"
+name = "StreamingInference"
+tree_hash = "d1329d87a59fa7b3b3cce56232cee8f882dce050"
+url = "https://github.com/PaulGoG/StreamingInference.jl.git"
+revision = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"
+[[layers]]
+version = "0.2.0"
+name = "MilliHertzBase"
+tree_hash = "cc9b223dc09438f04a00fdd27d287b290d2511dd"
+url = "https://github.com/PaulGoG/MilliHertzBase.jl.git"
+revision = "1e473a44479893f3420f196f9c367884e6daa1b2"
+[[layers]]
+path = "."
+version = "3.1.0"
+git_commit = "v3.1.0-6-gb11132b"
+name = "MilliHertzQML"
+git_dirty = false
 
 [environment]
-manifest_sha256 = "b8c7d2a3421224c12a9fae6afb5f895e13afd5afeee407510110ce628662c65f"
+manifest_sha256 = "b4ef7b71b8c025c4664c9d72c81051076e75e2f81ecb869c099ad853c1e546a4"
 active_project = "test/Project.toml"
 
 [figure]
 files = ["gap_study.pdf", "gap_study.png"]
 run_id = "gap_study"
-size_pt = [1200, 904]
+size_pt = [1200, 832]
 px_per_unit = 4
 
 [hardware]
@@ -17,12 +36,13 @@ blas_threads = 6
 distributed_workers = 1
 machine_id = "10f031174590"
 kernel = "Linux"
-versioninfo = """Julia Version 1.13.1\nCommit 96ca370cf0e (2026-09-25 19:34 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_NUM_THREADS = 12\n"""
+versioninfo = """Julia Version 1.13.3\nCommit 67ac47b9cd8 (2026-10-25 15:28 UTC)\nBuild Info:\n  Official https://julialang.org release\nPlatform Info:\n  OS: Linux (x86_64-linux-gnu)\n  CPU: 22 × Intel(R) Core(TM) Ultra 7 155H\n  WORD_SIZE: 64\n  LLVM: libLLVM-20.1.8 (ORCJIT, meteorlake)\n  GC: Built with stock GC\nThreads: 12 default, 1 interactive, 12 GC (on 22 virtual cores)\nEnvironment:\n  JULIA_PKG_USE_CLI_GIT = true\n  JULIA_NUM_THREADS = 12\n"""
 julia_threads = 12
 cpu_threads_logical = 22
-julia_version = "1.13.1"
+julia_version = "1.13.3"
 
 [git]
-git_commit = "v2.0.0-4-g14eaf6e"
+git_commit = "v3.1.0-6-gb11132b"
 git_dirty = false
-package_version = "2.0.0"
+streaminference_version = "0.2.0"
+package_version = "3.1.0"
