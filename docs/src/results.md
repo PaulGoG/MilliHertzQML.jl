@@ -113,7 +113,7 @@ false-alarm episodes per 30 days.*
 one property of the channel or the spacecraft, replayed with the selected
 model. Scattered permanent loss removes windows; bursts,
 retransmission and outages remove few or none. The streaming
-configuration, whose conditioning stretch is 50 batches, scores 81 % of
+configuration, whose conditioning stretch is 50 batches, scores 80 % of
 the record at 0.43 % loss and alerts both coalescences in every
 mission.* See the [effect of a lossy
 link](benchmark.md#Effect-of-a-lossy-link).

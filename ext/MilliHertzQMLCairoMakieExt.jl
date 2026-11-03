@@ -482,7 +482,8 @@ function figure_gap_study(
             );
             init = 0.0,
         )
-        xlims!(ax_far, 0.0, top > 0 ? 1.15 * top : 1.0)
+        # A small margin on the left keeps a mission without false alarms off the spine
+        xlims!(ax_far, top > 0 ? -0.04 * top : -0.05, top > 0 ? 1.15 * top : 1.0)
         if reference_far !== nothing
             vlines!(
                 ax_far,

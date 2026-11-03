@@ -70,7 +70,7 @@ from 1.16 days to 2.8 hours and makes the causal replay usable.
 | Streamed year: alert time at the ground station, relative to the merger | 1.6 h before to 40 h after | **11 to 29 h before** |
 | Streamed year: false alarms per 30 days | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Conditioning lag (data after a window needed before it can be scored) | 1.16 days | **2.8 hours** |
-| Part of the record scored when 0.43 % of the batches are lost | 9 % | **81 %** |
+| Part of the record scored when 0.43 % of the batches are lost | 14 % | **80 %** |
 
 - **Label spans.** The blind year holds six coalescences. Events 1 and 2
   merge 29.5 hours apart and share one label span, so the rows of the
@@ -307,7 +307,7 @@ page describes.
   noise where the glitches have their power.
 - **Scattered permanent loss.** A window whose conditioning stretch
   contains a delivery hole is not scored: the selected configuration
-  tolerates about 0.2 % of lost batches, the streaming one 0.43 % with 81 %
+  tolerates about 0.2 % of lost batches, the streaming one 0.43 % with 80 %
   of the record scored. A record with gaps is scored stretch by stretch;
   the classifier is trained on gapless records only.
 - **One year, one direction.** The threshold comes from the earlier year of

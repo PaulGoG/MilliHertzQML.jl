@@ -18,6 +18,21 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The loss-survival figure of the manual is re-rendered from the gap-study
   table on the current figure code: its logarithmic loss axis is ticked at
   0.05, 0.1, 0.2 and 0.5 per cent; the data are unchanged.
+- The lossy-link study of the manual is regenerated: the seventeen 30-day
+  missions run again on the tick clock of DeepSpaceTelemetry 3.1.2 from the
+  September scenarios, seed and payload (the same batches generated and
+  lost, the scattered losses on other batches), and the 160 replays of the
+  selected, the smoothed and the A and E models repeated. The tables,
+  figures and text of the lossy-link, smoothed-whitening and A-and-E
+  sections carry the new values, and the corrections section states what
+  moved: the windows the selected model scores under scattered loss, its
+  alerts with one retransmission and under a partially delivered stretch,
+  and the streaming configuration's 80 % of the record at 0.43 % loss
+  (81 % before). The missions open under the 3.1 adapter, which the
+  September ones did not.
+- The false-alarm axis of the gap-study overview figure keeps a margin on
+  the left, so that a mission without false alarms is not drawn on the
+  spine.
 
 ## [3.1.0] — 2026-10-31
 

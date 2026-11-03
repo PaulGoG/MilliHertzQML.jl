@@ -733,9 +733,9 @@ shorter kernel can be used only by a model trained on smoothed features.
 ## Effect of a lossy link
 
 The year-long mission delivered every batch, so the handling of delivery
-holes was not exercised. Seventeen 30-day missions on DeepSpaceTelemetry.jl
-2.0.0 (the two generation-gap missions on 2.1.1) measure the effect of a
-link that does lose data. They share the same payload window — days 65
+holes was not exercised. Seventeen 30-day missions on the tick clock of
+DeepSpaceTelemetry.jl 3.1.2 measure the effect of a link that does lose
+data. They share the same payload window — days 65
 to 95 of the blind year, which contains coalescences 1 and 2 — and the
 same pass schedule; each mission differs
 from a lossless reference in one property of the channel or of the
@@ -743,7 +743,7 @@ spacecraft and was replayed once by the selected model under the causal
 whitening of `configs/experiments/q8_b6.toml` (persistence 3,
 `context_windows = 20`, alerts credited from the signal onset) and, for
 five of them, under the full-record PSD of the whole blind year. The
-reference replay scores 4,945 windows, alerts both coalescences, each after
+reference replay scores 4,946 windows, alerts both coalescences, each after
 its merger, and counts 3.1 false-alarm episodes per 30 days; under the
 full-record PSD it counts 1.0. The difference arises from the initial
 interval of the trailing estimate on a 30-day record, before one Welch
@@ -755,25 +755,25 @@ scale against which the rows below are read.
 
 | Channel or spacecraft | Batches lost | Windows scored | Events | False alarms per 30 d | Full-record PSD |
 |---|---|---|---|---|---|
-| lossless reference | 0 | 4945 | 2 of 2 | 3.1 | 1.0, 2 of 2 |
-| scattered permanent loss, 0.04 % realised | 2 | 4285 | 2 of 2 | 13.3 | |
-| scattered permanent loss, 0.08 % | 4 | 3772 | 2 of 2 | 6.9 | 1.4, 2 of 2 |
-| scattered permanent loss, 0.19 % | 10 | 2120 | 0 of 2 | 12.2 | 2.4, 2 of 2 |
-| scattered permanent loss, 0.43 % | 22 | 426 | 2 of 2 | 12.2 | |
-| bursty loss, mean 0.3 %, bursts of 4 | 21 | 3485 | 2 of 2 | 4.5 | 1.5, 2 of 2 |
-| bursty loss, mean 0.3 %, bursts of 20 | 9 | 4475 | 2 of 2 | 3.5 | |
-| bursty loss, mean 0.3 %, bursts of 50 | 0 | 4945 | 2 of 2 | 3.1 | |
-| 3 % loss, one retransmission | 6 | 2475 | 0 of 2 | 6.3 | 0.0, 2 of 2 |
+| lossless reference | 0 | 4946 | 2 of 2 | 3.1 | 1.0, 2 of 2 |
+| scattered permanent loss, 0.04 % realised | 2 | 4239 | 2 of 2 | 20.8 | |
+| scattered permanent loss, 0.08 % | 4 | 3772 | 2 of 2 | 6.9 | 0.0, 2 of 2 |
+| scattered permanent loss, 0.19 % | 10 | 2228 | 0 of 2 | 20.9 | 0.0, 2 of 2 |
+| scattered permanent loss, 0.43 % | 22 | 695 | 2 of 2 | 0.0 | |
+| bursty loss, mean 0.3 %, bursts of 4 | 21 | 3589 | 2 of 2 | 4.3 | 1.4, 2 of 2 |
+| bursty loss, mean 0.3 %, bursts of 20 | 9 | 4476 | 2 of 2 | 3.5 | |
+| bursty loss, mean 0.3 %, bursts of 50 | 0 | 4946 | 2 of 2 | 3.1 | |
+| 3 % loss, one retransmission | 5 | 3463 | 2 of 2 | 9.0 | 0.0, 2 of 2 |
 | 3 % loss, three retransmissions | 0 | 4946 | 2 of 2 | 3.1 | |
 | link outage 6 h, day 3 | 0 | 4946 | 2 of 2 | 3.1 | |
 | link outage 24 h, day 3 | 0 | 4946 | 2 of 2 | 3.1 | |
-| link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 9.4 | |
-| link outage 24 h astride merger 1 | 0 | 4946 | 2 of 2 | 2.1 | |
+| link outage 72 h, day 3 | 0 | 4946 | 2 of 2 | 6.3 | |
+| link outage 24 h astride merger 1 | 0 | 4946 | 2 of 2 | 3.1 | |
 | no data produced for 15 min, day 3 | 0 | 4533 | 2 of 2 | 8.0 | |
-| no data produced for 2 h astride merger 1 | 0 | 4521 | 0 of 2 | 3.4 | |
-| two-day recorder with a 72 h outage | 0 | 4277 | 2 of 2 | 3.6 | |
-| 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5028 | 2 of 2 | 4.1 | |
-| 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5030 | 2 of 2 | 2.1 | |
+| no data produced for 2 h astride merger 1 | 0 | 4520 | 0 of 2 | 3.4 | |
+| two-day recorder with a 72 h outage | 0 | 4275 | 2 of 2 | 3.6 | |
+| 0.19 % loss, stretch admitted at 75 % delivered | 10 | 5026 | 1 of 2 | 4.1 | |
+| 0.19 % loss, stretch admitted at 50 % delivered | 10 | 5033 | 2 of 2 | 4.1 | |
 
 **Scattered permanent loss is the property that reduces the scored
 record, and its effect is not proportional to the loss.** A window is
@@ -789,63 +789,70 @@ approaches the stretch: above `1/410 ≈ 0.24 %` an uninterrupted run of
 410 batches is rare rather than typical. Whether a coalescence is detected
 depends on where the holes fall, not on the rate alone: both are alerted
 at 0.04, 0.08 and 0.43 % and neither at 0.19 %, where the replay under
-the full-record PSD still alerts both, a day after each merger, on the
-few windows remaining around them.
+the full-record PSD still alerts both, 21 and 16 hours after their
+mergers, on the few windows remaining around them.
 
 ![Windows a replay can score, and the events it still detects, against the permanent batch loss the channel realised](assets/benchmark_loss_survival.png)
 
 **The same losses, clustered in bursts, remove far fewer windows.**
-Twenty-one batches lost in bursts of mean length four remove 30 % of the
-windows; twenty-two scattered losses remove 91 %. One burst of nine
+Twenty-one batches lost in bursts of mean length four remove 27 % of the
+windows; twenty-two scattered losses remove 86 %. One burst of nine
 removes 10 %. The survival is set by the number of holes, each of which
 excludes the windows whose conditioning stretch contains it, and not by
 the number of batches.
 
 **Retransmission removes the effect.** A 3 % channel with one retry leaves
-six permanent holes, and the replay scores half the windows and detects
-neither coalescence; with three retries it leaves none, and the replay
-reproduces the reference to within one window.
+five permanent holes, and the replay scores 70 % of the windows and alerts
+both coalescences, event 1 2.4 h before its merger, at 9.0 false alarms
+per 30 days; with three retries it leaves none, and the replay scores the
+windows of the reference at its false-alarm count, the second alert 0.3 h
+later with the arrivals.
 
 **A link outage increases the latency and removes no window.** The
 recorder holds the backlog, and every window is scored once its stretch
 has been delivered.
-An outage of 24 h astride merger 1 delays its alert to 73 h after the
+An outage of 24 h astride merger 1 delays its alert to 51 h after the
 merger — the data reached the ground after the outage and its backlog —
-and the second alert to 20 h after merger 2. The delivery order after an
+and the second alert to 17 h after merger 2. The delivery order after an
 outage does change the causal estimate, which is a function of what has
-been delivered: the 72 h outage replay differs from the reference in every
-score (9.4 false alarms per 30 days, among them an alarm run 50 h before
-merger 1), although it received the same batches.
+been delivered: the 72 h outage replay differs from the reference in its
+scores (6.3 false alarms per 30 days against 3.1), although it received
+the same batches.
 
 **A generation gap removes the stretch around it, and with the selected
 model's long stretch a neighbouring coalescence too.** Fifteen minutes
-without data on day 3 remove 412 windows, the stretch around the hole;
+without data on day 3 remove 413 windows, the stretch around the hole;
 the hole also enters the 30-day trailing estimate of every later window
-and shifts the later scores by 0.02 in the median, so that the replay
-counts 8.0 false alarms per 30 days against 3.1 and alerts event 1 2.7 h
-before its merger instead of 1.8 h after. Two hours without data centred
-on merger 1 remove 424 windows and both coalescences: the stretch of
+and moves the later scores, so that the replay counts 8.0 false alarms
+per 30 days against 3.1 and alerts event 1 2.7 h before its merger
+instead of 1.8 h after. Two hours without data centred on merger 1
+remove 426 windows and both coalescences: the stretch of
 twenty window lengths (27.8 h) on each side of the hole reaches past
 merger 2, 29.5 h later, and contains the windows that carried both alerts
 of the reference. The smoothed model of the next section, whose stretch
 is two window lengths on each side, alerts both. A two-day recorder that overflows
-during a 72 h outage discards 260 batches of production and removes 668
-windows, and both events are still detected.
+during a 72 h outage discards 260 batches of production and removes 671
+windows, and both events are still detected, event 1 2.7 h before its
+merger.
 
-The two generation-gap missions were regenerated on 30 September 2026;
-see [Corrections to earlier releases](#Corrections-to-earlier-releases).
-From release 3.1.0 the replay opens runs of DeepSpaceTelemetry.jl 2.6.0
-and later only, so the seventeen missions, recorded with 2.0.0 and 2.1.1,
-are replayed with release 3.0.0 of this package, while the year missions
-of this page, recorded with 2.6.2, open unchanged.
+The seventeen missions were first recorded in September 2026 on a
+wall-paced producer (DeepSpaceTelemetry.jl 2.0.0, the two generation-gap
+missions 2.1.1) and were run again on 3 November 2026 on the tick clock of
+3.1.2 from the same scenarios, seed and payload: the same batches are
+generated and lost (one permanent loss fewer in the single-retry mission),
+the positions of the scattered losses differ, and every replay of this
+section and of the lossy-link tables of the two sections below is that of
+the new missions; see [Corrections to earlier
+releases](#Corrections-to-earlier-releases) for what moved.
 
 **Admitting a partially delivered stretch scores every window and brings
 the alerts forward.** With the stretch admitted at 75 or 50 % delivered
-the replay scores 5,028 and 5,030 windows (more than the reference,
-because edge windows now qualify) at 4.1 and 2.1 false alarms per 30
-days, and alerts both coalescences, event 1 6.7 and 23.2 h before its
-merger, after its signal onset, on windows conditioned on a partial
-stretch.
+the replay scores 5,026 and 5,033 windows (more than the reference,
+because edge windows now qualify) at 4.1 false alarms per 30 days in
+both. At 50 % it alerts both coalescences, event 1 4.3 h and event 2
+11.0 h before their mergers, after their signal onsets, on windows
+conditioned on a partial stretch; at 75 % it alerts event 1 alone, 5.6 h
+before its merger.
 
 The operating requirement is on **scattered permanent** loss, and it is
 strict: about a fifth of a per cent for scoring most of the record, and
@@ -969,22 +976,24 @@ from the signal onset; seed 9999 against the selected model:
 
 | Mission, nominal loss | Permanent loss, realised | Windows scored, selected | Windows scored, smoothed | Coalescences alerted, selected | Coalescences alerted, smoothed |
 |---|---|---|---|---|---|
-| Lossless reference | 0 | 4,945 | 5,125 | 2, after the mergers | 2, before the mergers |
-| Bernoulli 0.1 % | 0.04 % | 4,285 (0.87) | 5,024 (0.98) | 2 | 2 |
-| Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,926 (0.96) | 2 | 2 |
-| Bernoulli 0.3 % | 0.19 % | 2,120 (0.43) | 4,636 (0.90) | 0 | 2 |
-| Bernoulli 0.5 % | 0.43 % | 426 (0.09) | 4,142 (0.81) | 2 | 2 |
+| Lossless reference | 0 | 4,946 | 5,126 | 2, after the mergers | 2, before the mergers |
+| Bernoulli 0.1 % | 0.04 % | 4,239 (0.86) | 5,024 (0.98) | 2 | 2 |
+| Bernoulli 0.2 % | 0.08 % | 3,772 (0.76) | 4,922 (0.96) | 2 | 2 |
+| Bernoulli 0.3 % | 0.19 % | 2,228 (0.45) | 4,614 (0.90) | 0 | 2 |
+| Bernoulli 0.5 % | 0.43 % | 695 (0.14) | 4,126 (0.80) | 2 | 2 |
 
 The fraction of the reference record the smoothed model scores follows the
-independent-batch estimate `(1 − p)^50` (0.98, 0.96, 0.91, 0.81). Over all
-seventeen missions every seed alerts both coalescences on their own and
-before their merger, event 1 6 to 29 hours and event 2 10 to 11 hours
-ahead, at 0 to 7.1 false-alarm episodes per 30 days (means of 0.65 to
-2.49 per seed), where the selected model counts 2.1 to 13.3, alerts after
-the merger, and misses at least one coalescence in three missions. The
-false alarms fall because the long kernel of the unsmoothed whitening
-produced the alarm tails after each merger. The replay results are those
-of the `gapreplay_<mission>_s001[_s<seed>]` runs.
+independent-batch estimate `(1 − p)^50` (0.98, 0.96, 0.91, 0.81; measured
+0.98, 0.96, 0.90, 0.80). Over all seventeen missions every seed alerts
+both coalescences on their own and before their merger, event 1 6 to 29
+hours and event 2 10 to 12 hours ahead, at 0 to 4.3 false-alarm episodes
+per 30 days (means of 0.52 to 2.10 per seed), where the selected model
+counts 0 to 20.9, alerts event 1 before its merger in five missions only
+and event 2 after it in every mission, and misses both coalescences in
+two missions. The false alarms fall because the long kernel of the
+unsmoothed whitening produced the alarm tails after each merger. The
+replay results are those of the `gapreplay_tick_<mission>_s001[_s<seed>]`
+runs.
 
 The selected configuration of the batch benchmark is unchanged. For
 streamed operation and for a link that loses data, the smoothed
@@ -1125,14 +1134,15 @@ channel of days 65 to 95, so the record is served from its row 1,123,201
 (`--tdi-first-row`). The delivery is that of the A replays and the windows
 scored are the same, mission by mission. Every seed alerts both
 coalescences before their mergers in every mission: event 1 22.5 to 29.3
-hours ahead, and 5.5 hours in the mission with the recorder of two days at
-one seed, where two of the A runs alert at 5.6 hours; event 2 9.5 to 11.6
-hours ahead, as the A runs do. The false-alarm rate over these thirty days
-is 0 to 3.1 episodes per 30 days at two seeds, 1.0 to 8.1 at a third, and
-2.5 to 12.3 at seed 1009 (means of 1.12, 7.15, 2.14 and 1.49 for seeds
-9999, 1009, 2027 and 3041, against 1.05, 0.65, 2.49 and 1.64 for A): the
-run with the highest rate over the year has the highest here. The replay
-results are those of the `gapreplay_<mission>_s001_ae[_s<seed>]` runs.
+hours ahead, and 5.9 hours in the mission with the recorder of two days at
+seed 2027, where the A runs of seeds 2027 and 3041 alert at 6.0 hours;
+event 2 9.9 to 11.7 hours ahead, as the A runs do. The false-alarm rate
+over these thirty days is 0 to 3.1 episodes per 30 days at seeds 9999 and
+3041, 1.0 to 4.0 at seed 2027, and 6.1 to 32.7 at seed 1009 (means of
+1.05, 9.20, 1.74 and 1.42 for seeds 9999, 1009, 2027 and 3041, against
+0.99, 0.52, 2.10 and 1.38 for A): the run with the highest rate over the
+year has the highest here. The replay results are those of the
+`gapreplay_tick_<mission>_s001_ae[_s<seed>]` runs.
 
 The A and E network is a mode of the package; the streaming configuration
 is unchanged. Its gain on this year is the weakest coalescence, alerted at
@@ -1517,6 +1527,41 @@ same missions: alert times within 1.7 hours, false-alarm rates within
 three episodes of the year per seed; the logistic regression on A and E
 counts two or three more at every seed, 0.58 to 0.66 per 30 days
 (previously 0.41 to 0.49).
+
+**Regeneration of the lossy-link study, 3 November 2026.** The seventeen
+30-day missions of [Effect of a lossy link](#Effect-of-a-lossy-link) were
+recorded in September 2026 by DeepSpaceTelemetry.jl 2.0.0 and 2.1.1 paced
+against the wall clock, which the adapter of release 3.1.0 no longer
+opens. They were run again on the tick clock of DeepSpaceTelemetry.jl
+3.1.2 from the same scenarios, seed and payload, and every replay of the
+study was repeated: the selected model, causal and full-record, the
+smoothed configuration and the A and E network at their four seeds. The
+new missions generate and lose the same batches (the single-retry mission
+loses five instead of six, and every mission ends with one batch fewer on
+board), but the scattered losses fall on other batches, and the windows a
+replay can score move with them. The selected model scores 4,239, 3,772,
+2,228 and 695 windows at 0.04, 0.08, 0.19 and 0.43 % loss (previously
+4,285, 3,772, 2,120 and 426) and counts 20.8, 6.9, 20.9 and 0.0 false
+alarms per 30 days there (previously 13.3, 6.9, 12.2 and 12.2); with one
+retransmission it scores 3,463 windows and alerts both coalescences
+(previously 2,475 and neither); after the 72 h outage it counts 6.3 per
+30 days (9.4) and after the outage astride merger 1 3.1 (2.1), with the
+alert of that merger 51 h after it (73 h); with the stretch admitted at
+75 % delivered it alerts event 1 alone (previously both), at 50 % both at
+4.1 per 30 days (2.1). The lossless reference, the bursty missions of 20
+and 50, the three-retry, outage, generation-gap and recorder missions
+reproduce their windows to within two and their false-alarm counts; the
+bursts of four score 3,589 windows at 4.3 per 30 days (3,485 at 4.5); the
+alert times of the reference move by up to 3.5 hours with the arrivals.
+The smoothed configuration scores 5,126, 5,024, 4,922, 4,614 and 4,126
+windows on the reference and the four scattered-loss missions (previously
+5,125, 5,024, 4,926, 4,636 and 4,142), that is 80 % of the record at
+0.43 % loss (81 %), and alerts both coalescences before their mergers in
+every mission at every seed, as before, at means of 0.99, 0.52, 2.10 and
+1.38 false alarms per 30 days (previously 1.05, 0.65, 2.49 and 1.64); the
+A and E network likewise, at means of 1.05, 9.20, 1.74 and 1.42 (previously
+1.12, 7.15, 2.14 and 1.49). The tables, figures and text of the three
+sections carry the new values; the replay runs are `gapreplay_tick_*`.
 
 ## Reproducing
 
