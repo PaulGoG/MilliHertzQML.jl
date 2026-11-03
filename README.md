@@ -201,7 +201,7 @@ entry point includes its own first, so the commands below run as written.
 The auxiliary environments consume the package by path; `Manifest.toml`
 files are not tracked. The test environment also pins
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v3.1.2`, the telemetry producer whose missions the streaming path
+`v3.2.0`, the telemetry producer whose missions the streaming path
 replays, and the script environment its reader package alone (`subdir =
 "reader"`: the run adapter without the figure stack) and
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)

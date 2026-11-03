@@ -6,6 +6,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The test environment pins DeepSpaceTelemetry 3.2.0 and the scripts
+  environment its reader at the same commit; 3.2.0 adds the reader accessors
+  StreamingInference's extension uses from its next release.
+
 ## [3.1.1] — 2026-11-03
 
 ### Changed
