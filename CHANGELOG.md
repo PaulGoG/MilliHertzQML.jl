@@ -10,9 +10,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 - The scripts environment bounds FFTA to 0.3.1: release 0.3.2 makes every
   real transform ambiguous with FFTW when both are loaded
   (JuliaMath/FFTA.jl#146); the bound goes when a fixed release is out.
-- The test environment pins DeepSpaceTelemetry 3.1.1 and the scripts
-  environment its reader at the same commit; 3.1.1 stamps installed copies
-  clean, as 3.1.0 did not.
+- The test environment pins DeepSpaceTelemetry 3.1.2 and the scripts
+  environment its reader at the same commit (3.1.1 stamps installed copies
+  clean, as 3.1.0 did not; 3.1.2 changes documentation only). The
+  CurvatureDistinguishability pin of the scripts environment names the
+  commit of v2.1.1 rather than its tag object.
 
 ## [3.1.0] — 2026-10-31
 
