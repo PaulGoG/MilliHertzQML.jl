@@ -6,30 +6,33 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.1.1] — 2026-11-03
+
 ### Changed
-- The scripts environment bounds FFTA to 0.3.1: release 0.3.2 makes every
-  real transform ambiguous with FFTW when both are loaded
-  (JuliaMath/FFTA.jl#146); the bound goes when a fixed release is out.
+- The lossy-link study of the manual is regenerated. The seventeen 30-day
+  missions were run again on the tick clock of DeepSpaceTelemetry 3.1.2
+  from the September scenarios, seed and payload: they generate and lose
+  the same batches, but the scattered losses fall on other batches. The
+  160 replays of the selected, the smoothed and the A and E models were
+  repeated. The tables, figures and text of the lossy-link,
+  smoothed-whitening and A-and-E sections carry the new values, and the
+  corrections section states what moved: the windows the selected model
+  scores under scattered loss, its alerts with one retransmission and under
+  a partially delivered stretch, and the streaming configuration's 80 % of
+  the record at 0.43 % loss (81 % before). The missions open under the 3.1
+  adapter, which the September ones did not, so the study is reproducible
+  with this release. The logarithmic loss axis of the loss-survival figure
+  is ticked at 0.05, 0.1, 0.2 and 0.5 per cent.
 - The test environment pins DeepSpaceTelemetry 3.1.2 and the scripts
   environment its reader at the same commit (3.1.1 stamps installed copies
   clean, as 3.1.0 did not; 3.1.2 changes documentation only). The
   CurvatureDistinguishability pin of the scripts environment names the
   commit of v2.1.1 rather than its tag object.
-- The loss-survival figure of the manual is re-rendered from the gap-study
-  table on the current figure code: its logarithmic loss axis is ticked at
-  0.05, 0.1, 0.2 and 0.5 per cent; the data are unchanged.
-- The lossy-link study of the manual is regenerated: the seventeen 30-day
-  missions run again on the tick clock of DeepSpaceTelemetry 3.1.2 from the
-  September scenarios, seed and payload (the same batches generated and
-  lost, the scattered losses on other batches), and the 160 replays of the
-  selected, the smoothed and the A and E models repeated. The tables,
-  figures and text of the lossy-link, smoothed-whitening and A-and-E
-  sections carry the new values, and the corrections section states what
-  moved: the windows the selected model scores under scattered loss, its
-  alerts with one retransmission and under a partially delivered stretch,
-  and the streaming configuration's 80 % of the record at 0.43 % loss
-  (81 % before). The missions open under the 3.1 adapter, which the
-  September ones did not.
+- The scripts environment bounds FFTA to 0.3.1: release 0.3.2 makes every
+  real transform ambiguous with FFTW when both are loaded
+  (JuliaMath/FFTA.jl#146); the bound goes when a fixed release is out.
+
+### Fixed
 - The false-alarm axis of the gap-study overview figure keeps a margin on
   the left, so that a mission without false alarms is not drawn on the
   spine.
@@ -893,7 +896,8 @@ spread and is reported as unresolved.
 - The LISA conventions document is cited by its public version (Baghi et
   al. 2026, arXiv:2603.22377) with its DOI.
 
-[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/PaulGoG/MilliHertzQML.jl/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v3.1.1
 [3.1.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v3.1.0
 [3.0.0]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v3.0.0
 [2.0.1]: https://github.com/PaulGoG/MilliHertzQML.jl/releases/tag/v2.0.1

@@ -166,7 +166,7 @@ The full tree is at the end of this page.
 
 ## Installation
 
-This README describes release 3.1.0. Its manual is at
+This README describes release 3.1.1. Its manual is at
 [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); the
 manual of `main` is at
 [`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/), and the links
@@ -175,7 +175,7 @@ a user of 2.0.1 must change.
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
 of packages added by URL, and is not registered in the General registry.
-Release 3.1.0 builds on StreamingInference.jl 0.2.0 and MilliHertzBase.jl
+Release 3.1.1 builds on StreamingInference.jl 0.2.0 and MilliHertzBase.jl
 0.2.0, pinned by URL and commit in every environment, so a downstream
 environment adds this package alone, at the release tag or following
 `main`. Continuous integration runs the suite on Julia 1.13 and on the
@@ -183,7 +183,7 @@ current release.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.1.0")  # the release
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.1.1")  # the release
 Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl")                  # main
 ```
 
@@ -201,7 +201,7 @@ entry point includes its own first, so the commands below run as written.
 The auxiliary environments consume the package by path; `Manifest.toml`
 files are not tracked. The test environment also pins
 [DeepSpaceTelemetry.jl](https://github.com/PaulGoG/DeepSpaceTelemetry.jl)
-`v3.1.0`, the telemetry producer whose missions the streaming path
+`v3.1.2`, the telemetry producer whose missions the streaming path
 replays, and the script environment its reader package alone (`subdir =
 "reader"`: the run adapter without the figure stack) and
 [CurvatureDistinguishability.jl](https://github.com/PaulGoG/CurvatureDistinguishability.jl)
@@ -413,7 +413,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {3.1.0},
+  version = {3.1.1},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }
