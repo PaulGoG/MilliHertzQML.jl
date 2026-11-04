@@ -7,8 +7,8 @@ authors:
   - family-names: "Gogîță"
     given-names: "Paul-Adrian"
     email: "gogitapaul@yahoo.ro"
-version: 3.1.1
-date-released: 2026-11-03
+version: 3.1.2
+date-released: 2026-11-04
 license: MIT
 repository-code: "https://github.com/PaulGoG/MilliHertzQML.jl"
 keywords:

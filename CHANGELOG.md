@@ -6,10 +6,16 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.1.2] — 2026-11-04
+
 ### Changed
+- StreamingInference 0.2.1 and MilliHertzBase 0.2.1 in every environment:
+  the streaming replay reads a DeepSpaceTelemetry run through the accessors
+  of DeepSpaceTelemetryReader 3.2 alone. The outputs of every pipeline
+  stage, the replays of the gap study and of the tick-clock year included,
+  are unchanged.
 - The test environment pins DeepSpaceTelemetry 3.2.0 and the scripts
-  environment its reader at the same commit; 3.2.0 adds the reader accessors
-  StreamingInference's extension uses from its next release.
+  environment its reader at the same commit.
 
 ## [3.1.1] — 2026-11-03
 

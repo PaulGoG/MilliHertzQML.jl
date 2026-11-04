@@ -66,7 +66,7 @@ julia scripts/infer_telemetry.jl configs/default.toml --run-dir <DeepSpaceTeleme
 The consumer never writes into a producer run directory. It reads the
 directory through the producer's reference run adapter, which is
 versioned with the run-directory contract, in the extension of
-StreamingInference.jl that loads with DeepSpaceTelemetryReader.jl 3.1, the
+StreamingInference.jl that loads with DeepSpaceTelemetryReader.jl 3.2, the
 reader package of DeepSpaceTelemetry.jl (`open_telemetry_run`), so that a
 change of the contract surfaces as a version bump, checked against
 `[telemetry] producer_compat`, rather than as silent format drift. The run

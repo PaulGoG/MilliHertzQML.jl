@@ -1,6 +1,6 @@
 name = "MilliHertzQML"
 uuid = "1b93d537-8815-46aa-bd42-498c40b9911e"
-version = "3.1.1"
+version = "3.1.2"
 authors = ["Paul-Adrian Gogîță <gogitapaul@yahoo.ro>"]
 
 [deps]
@@ -26,8 +26,8 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 MilliHertzQMLCairoMakieExt = "CairoMakie"
 
 [sources]
-MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "1e473a44479893f3420f196f9c367884e6daa1b2"}
-StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "6f5680efacee4464e8f1af0be4999f8f1bf27d45"}
+MilliHertzBase = {url = "https://github.com/PaulGoG/MilliHertzBase.jl.git", rev = "31132d7a9f11df1d01c2504aac0b80a0d82a626a"}
+StreamingInference = {url = "https://github.com/PaulGoG/StreamingInference.jl.git", rev = "90b790f39b3e5f095bd9eb554b6b83263263b8c7"}
 
 [compat]
 CairoMakie = "0.15"

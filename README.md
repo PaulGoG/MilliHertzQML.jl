@@ -166,7 +166,7 @@ The full tree is at the end of this page.
 
 ## Installation
 
-This README describes release 3.1.1. Its manual is at
+This README describes release 3.1.2. Its manual is at
 [`/stable`](https://PaulGoG.github.io/MilliHertzQML.jl/stable/); the
 manual of `main` is at
 [`/dev`](https://PaulGoG.github.io/MilliHertzQML.jl/dev/), and the links
@@ -175,15 +175,15 @@ a user of 2.0.1 must change.
 
 The package requires Julia 1.13 or later, which collects the `[sources]`
 of packages added by URL, and is not registered in the General registry.
-Release 3.1.1 builds on StreamingInference.jl 0.2.0 and MilliHertzBase.jl
-0.2.0, pinned by URL and commit in every environment, so a downstream
+Release 3.1.2 builds on StreamingInference.jl 0.2.1 and MilliHertzBase.jl
+0.2.1, pinned by URL and commit in every environment, so a downstream
 environment adds this package alone, at the release tag or following
 `main`. Continuous integration runs the suite on Julia 1.13 and on the
 current release.
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.1.1")  # the release
+Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl", rev = "v3.1.2")  # the release
 Pkg.add(url = "https://github.com/PaulGoG/MilliHertzQML.jl")                  # main
 ```
 
@@ -413,7 +413,7 @@ Cite the software through `CITATION.cff`, or with:
 @software{Gogita_MilliHertzQML,
   author  = {Gogîță, Paul-Adrian},
   title   = {MilliHertzQML.jl},
-  version = {3.1.1},
+  version = {3.1.2},
   year    = {2026},
   url     = {https://github.com/PaulGoG/MilliHertzQML.jl}
 }
