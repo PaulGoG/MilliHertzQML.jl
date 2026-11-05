@@ -6,6 +6,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- StreamingInference 0.2.2 in every environment (the shared label of alert
+  markers drawn over one another in the telemetry alert figure; the
+  outputs of every stage are unchanged).
+
 ### Fixed
 - The lossy-link row of the headline tables of the manual's front page,
   results page and benchmark page carried the September values, 9 % and
