@@ -6,6 +6,17 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The lossy-link row of the headline tables of the manual's front page,
+  results page and benchmark page carried the September values, 9 % and
+  81 % of the record scored at 0.43 % scattered batch loss, after the
+  study had been regenerated on the tick clock in 3.1.1; the README and
+  the body of the benchmark page carried the regenerated values
+  throughout. The row now reads 14 % and 80 %, the values of the
+  regenerated tables, and the corrections section of the benchmark page
+  records the change. The published pages of 3.1.1 and 3.1.2 were rebuilt
+  in place with the same correction; the tags are untouched.
+
 ## [3.1.2] — 2026-11-04
 
 ### Changed

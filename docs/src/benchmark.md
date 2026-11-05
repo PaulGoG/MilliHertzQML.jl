@@ -15,7 +15,7 @@ ground.
 | Alert time at the ground station | 1.6 h before to 40 h after the merger | **11 to 29 h before** |
 | Streamed year: false alarms per 30 d | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
-| Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+| Record scored at 0.43 % scattered batch loss | 14 % | **80 %** |
 
 - **Label spans.** The blind year holds six coalescences. Events 1 and 2
   merge 29.5 hours apart and share one label span, so the rows of the
@@ -1562,6 +1562,22 @@ every mission at every seed, as before, at means of 0.99, 0.52, 2.10 and
 A and E network likewise, at means of 1.05, 9.20, 1.74 and 1.42 (previously
 1.12, 7.15, 2.14 and 1.49). The tables, figures and text of the three
 sections carry the new values; the replay runs are `gapreplay_tick_*`.
+
+**Correction, 5 November 2026.** Releases 3.1.1 and 3.1.2 kept the
+September values of the lossy-link row in the headline tables of the
+manual's front page, results page and benchmark page, 9 % of the record
+scored at 0.43 % scattered batch loss by the selected configuration and
+81 % by the streaming one, after the study had been regenerated on the
+tick clock in 3.1.1 (the preceding entry); the README and the body of
+this page carried the regenerated values throughout. The row follows from
+the regenerated tables of [Effect of a lossy link](#Effect-of-a-lossy-link)
+and [Smoothed whitening](#Smoothed-whitening) by the rule stated under
+the headline table, the windows scored on the 0.43 % mission relative to
+the lossless one: 695 of 4,946 for the selected configuration, 14 %
+(previously 426 of 4,945, 9 %), and 4,126 of 5,126 for the streaming
+configuration, 80 % (previously 4,142 of 5,125, 81 %). The three rows are
+corrected on this page and on the published pages of 3.1.1 and 3.1.2,
+rebuilt in place.
 
 ## Reproducing
 

@@ -12,7 +12,7 @@ are fitted on the training year and applied unchanged to the blind year.
 | Alert time at the ground station | 1.6 h before to 40 h after the merger | **11 to 29 h before** |
 | Streamed year: false alarms per 30 d | 0.74 | **0.41** (0.99 to 1.40 at the further seeds) |
 | Conditioning lag of every alert | 1.16 days | **2.8 hours** |
-| Record scored at 0.43 % scattered batch loss | 9 % | **81 %** |
+| Record scored at 0.43 % scattered batch loss | 14 % | **80 %** |
 
 Events 1 and 2 of the six coalescences merge 29.5 hours apart and share
 one label span, so the completed blind year counts five label spans. A

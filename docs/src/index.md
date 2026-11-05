@@ -16,7 +16,7 @@ fitted on the training year and applied unchanged:
 |---|---|---|
 | Completed blind year | 5 of 5 labelled events, 1.57 false alarms per 30 days | 5 of 5, 2.97 per 30 days |
 | Streamed year, causal whitening | 6 of 6 coalescences alerted, one 1.6 hours before its merger and five after, 0.74 per 30 days | 5 of 6, each 11 to 29 hours before its merger, 0.41 per 30 days |
-| Record scored at 0.43 % scattered batch loss | 9 % | 81 % |
+| Record scored at 0.43 % scattered batch loss | 14 % | 80 % |
 
 Events 1 and 2 of the six coalescences merge 29.5 hours apart and share
 one label span, so the completed blind year counts five labelled events.
